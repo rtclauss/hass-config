@@ -19,7 +19,7 @@ ROOM_INTENT_PATH = ROOT / "docs" / "room_intent.yaml"
 README_PATH = ROOT / "README.md"
 VACUUM_PATH = ROOT / "packages" / "xiaomi_robot_vacuum.yaml"
 VALIDATE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "validate-config.yml"
-Z2M_PATH = ROOT / "zigbee2mqtt" / "configuration.yaml"
+Z2M_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 OWNER_SUITE_TILE_PATH = ROOT / "lovelace" / "tiles" / "tiles_master_bedroom.yaml"
 GUEST_ROOM_TILE_PATH = ROOT / "lovelace" / "tiles" / "tiles_guest_room.yaml"
 
@@ -87,7 +87,7 @@ def test_room_name_registry_covers_legacy_room_mapping() -> None:
     assert resolve_room_key("Dining Room") == "dining_room"
 
 
-def test_room_name_registry_covers_current_zigbee2mqtt_room_prefixes() -> None:
+def test_room_name_registry_covers_example_zigbee2mqtt_room_prefixes() -> None:
     assert _zigbee2mqtt_prefixes() <= allowed_zigbee2mqtt_namespaces()
 
 
@@ -131,7 +131,7 @@ def test_room_name_registry_is_documented_in_readme() -> None:
 def test_validate_config_workflow_runs_pytest_for_room_name_enforcement() -> None:
     text = VALIDATE_WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "name: Pytest" in text
-    assert "uv run --with pytest pytest" in text
+    assert "uv run --with pytest --with pyyaml --with jinja2 pytest" in text
 
 
 def test_room_name_registry_keys_are_unique() -> None:

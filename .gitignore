@@ -13,17 +13,33 @@
 ########################################
 !*.yaml
 !*.yml
+!zigbee2mqtt/external_converters/parasoll.js
 !AGENTS.md
 !esphome/tikiroom_effects.h
 !.python-version
+!pyproject.toml
 !README.md
 !inventory.md
+!specs/
+!specs/*.allium
+!specs/*.json
 !docs/
 !docs/*.md
+!docs/**/*.md
+!docs/**/*.yaml
+!docs/**/*.json
+!deploy/
+!deploy/**/*.service
+!media/vacuum_stalls/.gitkeep
+!inky_display/
+!inky_display/**/*.py
+!inky_display/**/*.json
 !.githooks/
 !.githooks/**
 !scripts/
 !scripts/*.py
+!examples/*.json
+!private_templates/*.tmpl
 !scripts/*.sh
 !scripts/*.example
 !scripts/*.conf.example
@@ -32,31 +48,69 @@
 !appdaemon/**
 !tests/
 !tests/*.py
+!tests/fixtures/*.json
+!custom_templates/
+!custom_templates/*.jinja
 !appdaemon/
 appdaemon/*
 !appdaemon/apps/
 appdaemon/apps/*
 !appdaemon/apps/vacuum_stall_monitor.py
-!appdaemon/apps/vacuum_stall_monitor.yaml
+!appdaemon/apps/rtlsdr_watchdog.py
 
 ########################################
 # Explicitly ignore sensitive files
 ########################################
 AGENTS.local.md
 secrets.yaml
+automations.yaml
+travis_secrets.yaml
 known_devices.yaml
 ip_bans.yaml
 trusted_networks.yaml
 google_calendars.yaml
+zigbee2mqtt/*.yaml
+!zigbee2mqtt/*.example.yaml
+packages/z2m_availability.yaml
+packages/media_player.yaml
+packages/zone.yaml
+packages/alerts.yaml
+packages/template.yaml
+packages/workday.yaml
+packages/home_analyst.yaml
+packages/desk.yaml
+packages/adaptive_lighting.yaml
+packages/curling.yaml
+packages/xiaomi_robot_vacuum.yaml
+packages/guest.yaml
+packages/climate.yaml
+packages/water_softener.yaml
+packages/car.yaml
+packages/room_confidence.yaml
+packages/trips.yaml
+packages/inky_displays.yaml
+packages/light.yaml
+packages/weather.yaml
+packages/flight_status.yaml
+packages/utilities.yaml
+packages/plants.yaml
+ui-guest.yaml
+lovelace/tiles/tiles_tesla_charging.yaml
+lovelace/tiles/tiles_tesla_location.yaml
+appdaemon/apps/apps.yaml
+appdaemon/apps/vacuum_stall_monitor.yaml
+appdaemon/apps/schedy_heating.yaml
+appdaemon/apps/schedy_heating.yaml.1107_23rd
+appdaemon/apps/bed_history.py
+appdaemon.bak/
+appdaemon/apps/* copy.py
+appdaemon/apps/bed_occupancy.py.*
+.private-runtime-config/
 
 ########################################
 # Ignore HA runtime & auth data
 ########################################
-.storage/*
-!.storage/lovelace*
-!.storage/lovelace_dashboards*
-!.storage/lovelace_resources*
-!.storage/lovelace.*
+.storage/
 
 ########################################
 # Ignore backups, logs, databases
@@ -67,10 +121,12 @@ google_calendars.yaml
 *.db-wal
 .backup/
 .backups/
+/.private-runtime-backup/
 cloud/
 tts/
 deps/
 __pycache__/
+.venv/
 appdaemon/compiled/
 appdaemon/namespaces/
 appdaemon/web/
@@ -86,3 +142,17 @@ appdaemon/drift_model_data.csv
 .vscode/*
 !.vscode/settings.json
 .vscode/
+
+########################################
+# HACS-managed integrations are not tracked (#1097)
+# Only hand-written stubs stay in git; see docs/custom_components.md.
+# Keep this block LAST: later global allow rules such as !*.yaml would otherwise re-include these.
+########################################
+custom_components/*
+!custom_components/mass_queue/
+custom_components/mass_queue/*
+!custom_components/mass_queue/services.yaml
+
+# Generated from private templates
+/lovelace/views/view_tesla.yaml
+/custom_templates/egress.jinja

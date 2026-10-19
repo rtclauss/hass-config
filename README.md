@@ -1,5 +1,4 @@
-# Example Zone 02 Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/example_owner/hass-config.svg?branch=main)](https://app.travis-ci.com/github/example_owner/hass-config)
+# Home Assistant Configuration 🍺
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -7,8 +6,8 @@
 
 - This repo pins local tooling Python in `.python-version`.
 - CI validates that this pinned version is still compatible with the latest official `homeassistant` release from [PyPI](https://pypi.org/project/homeassistant/).
-- Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
-- As of 2026-03-15, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
+- Config checks run against the pinned Home Assistant image in `.github/workflows/validate-config.yml` so PR validation is deterministic for the current upgrade target.
+- As of 2026-05-06, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
 
 ## Branch Flow
 
@@ -25,18 +24,31 @@
 # Use the pinned interpreter from .python-version (for example via pyenv)
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
-uv run --with pytest pytest
+uv run --with pytest --with pyyaml --with jinja2 pytest
+python scripts/allium_weed_check.py --changed-from origin/develop
 ```
+
+`scripts/allium_weed_check.py` runs `allium check` when the CLI is installed,
+falls back to lightweight structural checks when it is not, and fails protected
+behavior changes that touch implementation scopes without an owner-approved
+update to the governing `.allium` spec or a classified gap in
+`specs/allium_weed_config.json`. Always compare changed behavior to the Allium
+reference first; do not edit `.allium` definitions automatically. CI installs
+Allium CLI 3.2.3 and runs with `--require-allium` so full language validation
+cannot be skipped silently.
 
 ## Music Assistant Media Flow
 
-Music playback automations now target the Music Assistant-backed Sonos entities, which are the `_2` media players:
+Music playback automations target explicitly named Music Assistant-backed Sonos
+entities. Their `ma_` entity IDs distinguish them from native Home Assistant
+Sonos entities, while their entity-registry names remain clean room names for
+the UI, HomeKit, and Siri:
 
-- `media_player.bedroom_sonos_2`
-- `media_player.bathroom_sonos_2`
-- `media_player.office_sonos_2`
-- `media_player.den_sonos_2`
-- `media_player.tiki_room_2`
+- `media_player.ma_bedroom`
+- `media_player.ma_bathroom`
+- `media_player.ma_office`
+- `media_player.ma_den`
+- `media_player.ma_tiki_room`
 
 The reusable media helpers live in `packages/media_player.yaml`:
 
@@ -71,6 +83,7 @@ Accepted playlist values:
 - `https://open.spotify.com/album/...`
 - `https://open.spotify.com/artist/...`
 - `https://open.spotify.com/track/...`
+- Permanent internet radio playlist URLs, such as `https://somafm.com/groovesalad.pls`
 - Music Assistant URIs or plain item names, for mixed lists that call `script.music_assistant_play_item`
 
 If you are creating a brand new script, prefer calling the helper instead of using `media_player.play_media` directly:
@@ -78,13 +91,14 @@ If you are creating a brand new script, prefer calling the helper instead of usi
 ```yaml
 - action: script.music_assistant_play_spotify_uri
   data:
-    entity_id: media_player.bedroom_sonos_2
+    entity_id: media_player.ma_bedroom
     spotify_uri: "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"
 ```
 
 Notes:
 
 - The generic helper now passes Music Assistant URIs and plain item names through directly. Use `media_type` when a name is ambiguous.
+- Prefer explicit URLs or Music Assistant URIs for radio entries so automations do not depend on name search resolution.
 - `script.music_assistant_play_spotify_uri` remains as a compatibility wrapper for Spotify URLs and URIs.
 
 ### Searching and Queuing Music Assistant Items
@@ -99,7 +113,7 @@ The `Music Assistant` section on the dashboard includes a small search flow:
 6. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
 7. Use `script.music_assistant_add_selected_search_result_to_playlist` to append the selected Music Assistant URI to the chosen `plists`-based script and reload scripts.
 
-The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.bedroom_sonos_2`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
+The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.ma_bedroom`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
 
 The supported playlist-script targets are `spotify_bedtime`, `spotify_wake_up`, `spotify_arrival`, and `bedroom_playlist_0` through `bedroom_playlist_5`. Appending a result updates `packages/media_player.yaml` in place and then reloads Home Assistant scripts so the change is immediately available.
 
@@ -109,7 +123,7 @@ Radio wake-up scripts now use Music Assistant item URIs instead of Sonos favorit
 
 Current examples:
 
-- `library://radio/12`
+- `library://radio/21`
 - `tunein--S3NwgspV://radio/s34350`
 - `tunein--S3NwgspV://radio/s20620`
 
@@ -142,22 +156,61 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
   configuration.yaml automations.yaml blueprints packages zigbee2mqtt
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.8.3 \
   python -m homeassistant --config /config --script check_config
 ```
 
 ## Feature Docs
 
+- [Available Device Inventory](inventory.md)
 - [House Transition Framework](docs/house_transition_framework.md)
+- [Home Assistant Label Model](docs/ha_labels.md)
+- [Inovelli Scene Action Map](docs/inovelli_scene_actions.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
+- [Built-In Security Dashboard](docs/security_dashboard.md)
+- [Inky E-Ink Displays](docs/inky_displays.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
 
+## E-Ink Display Capability
+
+This repo includes MQTT-backed e-ink display support for low-frequency,
+room-aware Home Assistant status surfaces. Home Assistant publishes compact
+desired-state payloads; Raspberry Pi services render, cache, suppress duplicate
+payloads, and refresh the physical panels.
+
+Current deployment:
+
+- `owner_suite`: Pimoroni Inky wHAT red/black/white `400x300`, driven by a
+  Raspberry Pi Zero W on `home/inky/owner_suite/state`.
+- The owner-suite panel reports as `Red wHAT (SSD1683)`, so the Pi service uses
+  `INKY_PANEL_TYPE=auto`.
+
+Use e-ink for information that should persist calmly between meaningful Home
+Assistant events: wake status, weather, door/garage exceptions, trip/vacation
+state, guest-safe info, and similar low-frequency status. Do not use these
+panels for clocks, animation, minute-level dashboards, or cosmetic updates.
+Tri-color Inky wHAT refreshes are whole-panel, slow, and should be driven only
+by meaningful source changes.
+
+Design criteria:
+
+- Keep layouts readable from about 4 feet away on a `400x300` canvas.
+- Prefer one title, one subtitle, and at most four status rows.
+- Use Material Design Icons names in payloads when possible.
+- Preserve color meaning: red is urgency/exception for owner-suite; yellow is
+  emphasis/hospitality for future office displays.
+- The footer's `Updated HH:MM` value is publish-time metadata and must not add a
+  `sensor.time` trigger or clock-tick redraws.
+
+See [docs/inky_displays.md](docs/inky_displays.md) for the payload contract,
+MQTT topics, renderer tests, Pi setup, and physical verification workflow.
+
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
-I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/example_owner/hass-config/blob/main/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
+I use the new dashboards in 0.107 to create a [dashboard for guests](private_templates/ui-guest.yaml.tmpl) on an Amazon Fire Tab running Fully Kiosk Browser.
 
 Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
@@ -168,13 +221,13 @@ Software on the NUC:
   * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/example_owner/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/example_owner/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/example_owner/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
+  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](private_templates/water_softener.yaml.tmpl), and [BLE Proxy](esphome/bluetoothproxy1.yaml)
+  * [Uplift Desk custom component](https://github.com/Bennett-Wendorf/hass-uplift-desk) - Upstream v2.0.0 supplies standing desk entities and controls in `packages/desk.yaml`. See [migration and verification notes](docs/uplift_desk.md).
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
   * [Matter Server](https://github.com/home-assistant/addons/tree/master/matter_server)
-* Running elsewhere
-  * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects ~~electrical~~ gas utility info.
+  * [rtlamr2mqtt](https://github.com/allangood/rtlamr2mqtt) - Local HA add-on (RTLAMR to MQTT bridge) that reads the gas utility meter via a USB RTL-SDR dongle and publishes to MQTT. Exposes `sensor.raw_house_gas_meter_reading` (and `..._last_seen`).
   * [Zigbee2MQTT](https://zigbee2mqtt.io/) - Zigbee control over MQTT
 
 ## Device Audit (2026-03-29)
@@ -184,8 +237,6 @@ hardware that has been retired from service and device families that are
 verifiably live in the current Home Assistant instance. When an older device was
 replaced rather than simply removed, the retired row links to the live
 replacement below.
-
-Follow-up for item-level and model-level inventory work: [Issue #247](https://github.com/example_owner/hass-config/issues/247).
 
 ## Retired Devices
 
@@ -224,19 +275,20 @@ Follow-up for item-level and model-level inventory work: [Issue #247](https://gi
 | <a id="live-aqara"></a>Aqara | Motion, temperature/humidity, leak, contact, vibration, button, and cube devices on Zigbee2MQTT, plus an Aqara Motion and Light Sensor P2 on Matter. |
 | <a id="live-ikea"></a>IKEA | FYRTUR blinds, PARASOLL contact sensors, TRADFRI outlets and remotes, SOMRIG shortcut buttons, SYMFONISK sound remotes, and a RODRET dimmer. |
 | <a id="live-inovelli"></a>Inovelli | Multiple Zigbee 2-in-1 switches and dimmers used for room lighting and smart-bulb mode control. |
-| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT. |
+| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT with native Hue control enabled for devices. |
 | <a id="live-eaton-halo"></a>Eaton / Halo | Halo Zigbee downlights in hallway and bathroom areas. |
 | <a id="live-sengled"></a>Sengled | Energy-monitoring smart plugs used for the CPAP and sump pump. |
 | <a id="live-peanut"></a>Securifi / Peanut Smart Plug | A live Peanut Smart Plug remains paired and in service. |
 | <a id="live-ecosmart"></a>EcoSmart | Tunable-white Zigbee bulbs still used in the owner suite lamps. |
 | <a id="live-xiaomi"></a>Xiaomi | Dafang cameras and Xiaomi BLE `MiFlora` plant sensors remain active. |
-| <a id="live-esphome-ratgdo"></a>ESPHome / ratgdo | Water softener sensor, bed load cells and bed presence, Bluetooth proxies, and the `ratgdo` garage-door controller. |
+| <a id="live-esphome-ratgdo"></a>ESPHome / ratgdo | Water softener sensor, bed presence, Bluetooth proxies, and the `ratgdo` garage-door controller. |
 | <a id="live-zigbee-infra"></a>Zigbee / Thread / Matter infrastructure | Zigbee2MQTT on Nabu Casa `ZBT-2`, plus active `SkyConnect`, `Thread`, `OTBR`, and `Matter` integrations. |
 | <a id="live-bond"></a>Bond | Bond Bridge fan control for den, office, guest room, and owner suite fans. |
 | <a id="live-localtuya"></a>LocalTuya / Good Earth | Good Earth / Tuya LED flat panels in kitchen and laundry areas. |
 | <a id="live-rachio"></a>Rachio | Rachio Gen 3 irrigation controller and zone switches. |
 | <a id="live-smartthings"></a>SmartThings | The modified SmartThings Arrival Sensor is still paired via Zigbee2MQTT. |
-| <a id="live-tesla"></a>Tesla | Tesla Model 3 (`Example Vehicle`) on the custom Tesla integration. |
+| <a id="live-uplift-desk"></a>Uplift Desk | Office standing desk using upstream [`Bennett-Wendorf/hass-uplift-desk`](https://github.com/Bennett-Wendorf/hass-uplift-desk) v2.0.0 via the office Bluetooth proxy. [Configuration and verified heights](docs/uplift_desk.md). |
+| <a id="live-tesla"></a>Tesla | Tesla Model 3 on the custom Tesla integration. |
 | <a id="live-unifi"></a>UniFi | The `unifi` integration is active for network entities, WLANs, and device trackers, although exact hardware model inventory is no longer fully represented in Home Assistant. |
 | <a id="live-adaptive-lighting"></a>Adaptive Lighting | Active room-specific Adaptive Lighting instances across the lighting stack. |
 
@@ -257,11 +309,12 @@ Coordinator and protocol note:
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * ~~[Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.~~
 * ~~[Schedy](appdaemon/apps/schedy_heating.yaml) - Replacement for Nest. Work in Progress.~~
-* [Thermostat Stats](https://github.com/example_owner/hass-config/blob/main/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
+* [Thermostat Stats](appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
 
 **Apple Shortcuts**
-* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/example_owner/hass-config/blob/main/packages/workday.yaml#L107)
+* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](private_templates/workday.yaml.tmpl)
 * iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
+* Optional Outlook integration: on iPhone, a separate Shortcut can call the same webhook with `meeting_time` from the Outlook `Next Meeting` shortcut. Home Assistant will convert that meeting start into the existing `next_work_meeting` reminder time by subtracting 5 minutes. If Outlook reports no next meeting, send `{"meeting_enabled": false}` instead. Alarm sync and meeting sync can be sent together or as separate webhook calls.
 
 Shortcut recipe:
 
@@ -300,6 +353,31 @@ Expected payload when there is no alarm:
 }
 ```
 
+Expected payload when Outlook has a next meeting:
+
+```json
+{
+  "meeting_time": "09:00"
+}
+```
+
+Expected payload when Outlook has no next meeting:
+
+```json
+{
+  "meeting_enabled": false
+}
+```
+
+Combined payload example:
+
+```json
+{
+  "alarm_time": "07:30",
+  "meeting_time": "09:00"
+}
+```
+
 Suggested Shortcut action flow:
 
 ```text
@@ -313,6 +391,21 @@ If Find Alarms has any value
 Otherwise
   Dictionary
     alarm_enabled: false
+End If
+Get Contents of URL
+```
+
+Suggested Outlook follow-up Shortcut flow on iPhone:
+
+```text
+Run Shortcut (Next Meeting)
+If Next Meeting has a value
+  Format Date (HH:mm)
+  Dictionary
+    meeting_time: Formatted Date
+Otherwise
+  Dictionary
+    meeting_enabled: false
 End If
 Get Contents of URL
 ```

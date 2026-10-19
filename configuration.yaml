@@ -3,22 +3,24 @@
 # Complex areas: trusted network auth, recorder/influx exclusions, and Lovelace/HACS resources all live here because they affect the whole system.
 
 homeassistant:
-  name: Example Zone 02
-  unit_system: REDACTED
-  currency: USD
-  country: US
-  time_zone: America/Chicago
+  name: !secret private_home_name
+  unit_system: !secret private_unit_system
+  currency: !secret private_currency
+  country: !secret private_country
+  time_zone: !secret private_timezone
   latitude: !secret home_latitude
   longitude: !secret home_longitude
   elevation: !secret home_elevation
   packages: !include_dir_named packages
   external_url: !secret public_url
   internal_url: !secret internal_url
+  allowlist_external_dirs:
+    - /config/media/vacuum_stalls
   auth_providers:
     - type: homeassistant
     - type: trusted_networks
       trusted_networks:
-        - REDACTED
+        - !secret private_trusted_network_legacy
         - !secret private_subnet
         - !secret iot_subnet
         - !secret ipv6_subnet
@@ -31,9 +33,15 @@ ios:
 
 config:
 
+script: !include scripts.yaml
+
 logger:
   #default: warn
   default: warning
+  logs:
+    # Temporary: blind-forensics diagnostic (see packages/blind_forensics.yaml).
+    # Remove once the unexpected Owner Suite blind opener is identified.
+    homeassistant.components.cover: debug
   # logs:
   #   custom_components.adaptive_lighting: debug
   #  default: warn
@@ -53,14 +61,6 @@ logger:
 #    homeassistant.components.alarm_control_panel: debug
 
 system_log:
-
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - !secret fermentor_ipv4
-    - !secret fermentor_ipv6
-  ip_ban_enabled: false
-  #login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
 history:
@@ -90,7 +90,7 @@ tts:
   - platform: google_translate
     service_name: google_say
 
-# example_owner - disable with move to zwave-thermostat
+# Legacy thermostat integration was retired.
 # Re-added temporarily on 17 Dec 21
 # Removed again on 4/21/2022
 # nest:
@@ -112,6 +112,29 @@ recorder:
       - vacuum
     entities:
       - sensor.time
+      # Live Z2M decommission helpers keep large selection maps as attributes.
+      # Recorder cannot persist those attributes and logs repeated size warnings.
+      - sensor.z2m_lifecycle_issues
+      # Raw FlightRadar24 feeds carry full flight lists in attributes.
+      # Keep derived aircraft/travel sensors recorded instead of these oversized feeds.
+      - sensor.flightradar24_additional_tracked
+      - sensor.flightradar24_airport_arrivals
+      - sensor.flightradar24_airport_departures
+      # The raw WeatherAlerts feed carries full alert descriptions and instructions.
+      # Keep the smaller NWS and derived alert sensors recorded instead.
+      - sensor.weatheralerts_dakota_mnz070_mnc037
+      # BirdWeather top-50 feeds carry the full species list in attributes.
+      # Keep smaller current/latest bird summary sensors recorded instead.
+      - sensor.top_50_bird_species
+      - sensor.top_50_bird_species_2
+      # F1 season results carries full race result payloads in attributes.
+      # Keep smaller current/next-session F1 sensors recorded instead.
+      - sensor.f1_season_results
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors recorded instead of these oversized feeds.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 influxdb:
   exclude:
@@ -131,6 +154,14 @@ influxdb:
       - vacuum
     entities:
       - sensor.time
+      # The Garden Birds MQTT sensor carries an attribute named "time"; InfluxDB
+      # rejects fields with that reserved name and drops the entire batch.
+      - sensor.garden_birds
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors shipped to InfluxDB instead.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 cloud:
   alexa:
@@ -169,7 +200,7 @@ panel_custom:
       ingress: core_configurator
 
 lovelace:
-  mode: yaml
+  resource_mode: yaml
   resources:
     - url: /hacsfiles/logbook-card/logbook-card.js
       type: module

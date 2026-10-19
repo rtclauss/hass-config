@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import re
 
 import pytest
 
@@ -51,10 +52,15 @@ def test_append_item_to_playlist_config_appends_once(media_player_config_text: s
 
 
 def test_append_item_to_playlist_config_deduplicates(media_player_config_text: str) -> None:
+    existing = re.search(
+        r'"(https://ice1\.somafm\.com/[^"]+)"',
+        _script_block(media_player_config_text, "spotify_bedtime"),
+    )
+    assert existing is not None
     updated, changed = append_item_to_playlist_config(
         media_player_config_text,
         "spotify_bedtime",
-        "Groove Salad",
+        existing.group(1),
     )
 
     assert changed is False
@@ -68,6 +74,43 @@ def test_append_item_to_playlist_config_rejects_unknown_targets(media_player_con
             "music_assistant_search_music",
             "spotify:playlist:test-addition",
         )
+
+
+@pytest.mark.parametrize(
+    "item_uri",
+    [
+        "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
+        "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+        "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+        "https://open.spotify.com/playlist/37i9dQZEVXcMDffrPenJPl",
+        # Release Radar family (Codex P2 on #679) — same personalized-
+        # resolution problem as Discover Weekly, one letter apart.
+        "spotify:playlist:37i9dQZEVXbMDffrPenJPl",
+    ],
+)
+def test_append_item_to_playlist_config_rejects_personalized_spotify_ids(
+    media_player_config_text: str,
+    item_uri: str,
+) -> None:
+    with pytest.raises(ValueError, match="do not resolve through Music Assistant"):
+        append_item_to_playlist_config(
+            media_player_config_text,
+            "spotify_bedtime",
+            item_uri,
+        )
+
+
+def test_append_item_to_playlist_config_allows_editorial_spotify_ids(
+    media_player_config_text: str,
+) -> None:
+    updated, changed = append_item_to_playlist_config(
+        media_player_config_text,
+        "spotify_bedtime",
+        "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6",
+    )
+
+    assert changed is True
+    assert '"spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"' in _script_block(updated, "spotify_bedtime")
 
 
 def test_supported_playlist_scripts_cover_dashboard_targets() -> None:

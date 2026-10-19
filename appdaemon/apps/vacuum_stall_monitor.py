@@ -21,8 +21,10 @@ except ImportError:  # pragma: no cover - lets pytest import the module locally.
         Hass = _HassBase
 
 
-MEDIA_ROOT = Path("/homeassistant/media")
-DEFAULT_STORAGE_ROOT = MEDIA_ROOT / "vacuum_stalls"
+APPDAEMON_MEDIA_ROOT = Path("/homeassistant/media")
+HOME_ASSISTANT_MEDIA_ROOT = Path("/config/media")
+MEDIA_ROOT = APPDAEMON_MEDIA_ROOT
+DEFAULT_STORAGE_ROOT = APPDAEMON_MEDIA_ROOT / "vacuum_stalls"
 SEGMENT_COLORS = (
     (25, 161, 161, 255),
     (122, 192, 55, 255),
@@ -138,7 +140,7 @@ def normalize_service(service_name: str) -> str:
 
 
 def slug_from_vacuum_entity(entity_id: str) -> str:
-    return entity_id.split(".", 1)[-1]
+    return entity_id.split(".", 1)[-1].removeprefix("valetudo_")
 
 
 def is_active_vacuum_state(state: str | None, active_states: tuple[str, ...] = ("cleaning", "returning")) -> bool:
@@ -497,10 +499,15 @@ def prune_sample_artifacts(samples_dir: Path, keep: int) -> None:
 
 def media_url_for(path: Path) -> str | None:
     try:
-        relative = path.relative_to(MEDIA_ROOT)
+        relative = path.relative_to(APPDAEMON_MEDIA_ROOT)
     except ValueError:
         return None
     return f"/media/local/{relative.as_posix()}"
+
+
+def home_assistant_snapshot_path_for(path: Path) -> str:
+    relative = path.relative_to(APPDAEMON_MEDIA_ROOT)
+    return str(HOME_ASSISTANT_MEDIA_ROOT / relative)
 
 
 class VacuumStallMonitor(hass.Hass):
@@ -512,7 +519,7 @@ class VacuumStallMonitor(hass.Hass):
         self.segments_sensor = self.args["segments_sensor"]
         self.friendly_name = self.args.get("friendly_name", self.vacuum_entity)
         self.notify_service = normalize_service(self.args.get("notify_service", "notify/all"))
-        self.dashboard_url = self.args.get("dashboard_url", "/example-new-mushroom/cleaning-v2")
+        self.dashboard_url = self.args["dashboard_url"]
         self.sample_interval_sec = int(self.args.get("sample_interval_sec", 90))
         self.history_size = int(self.args.get("history_size", 12))
         self.stall_samples = int(self.args.get("stall_samples", 6))
@@ -609,7 +616,7 @@ class VacuumStallMonitor(hass.Hass):
         self.call_service(
             "camera/snapshot",
             entity_id=self.map_camera_entity,
-            filename=str(raw_png_path),
+            filename=home_assistant_snapshot_path_for(raw_png_path),
         )
         if not self._wait_for_file(raw_png_path):
             raise FileNotFoundError(f"Camera snapshot did not create {raw_png_path}")
@@ -628,7 +635,7 @@ class VacuumStallMonitor(hass.Hass):
                 self.call_service(
                     "camera/snapshot",
                     entity_id=self.rendered_camera_entity,
-                    filename=str(rendered_png_path),
+                    filename=home_assistant_snapshot_path_for(rendered_png_path),
                 )
                 if self._wait_for_file(rendered_png_path):
                     rendered_path = rendered_png_path

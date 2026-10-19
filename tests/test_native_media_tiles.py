@@ -26,7 +26,7 @@ def test_basement_media_cards_use_native_tiles() -> None:
 
     assert "custom:mini-media-player" not in text
 
-    apple_tv = _card_block(text, "media_player.basement")
+    apple_tv = _card_block(text, "media_player.basement_great_room_basement_atv")
     assert apple_tv.startswith("  - type: tile\n")
     assert "features_position: bottom" in apple_tv
     assert (

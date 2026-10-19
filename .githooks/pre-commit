@@ -7,6 +7,13 @@ fi
 
 repo_root="$(git rev-parse --show-toplevel)"
 
+# Only auto-sync from the primary checkout. Worktrees are often pinned to older
+# feature branches, and pulling the live add-on tree into them creates
+# unrelated AppDaemon restore commits.
+if [ ! -d "$repo_root/.git" ]; then
+  exit 0
+fi
+
 # Only auto-sync when the repo copy is clean. If the user is already editing
 # appdaemon/ locally, leave their work alone and let them sync deliberately.
 if [ -n "$(git diff --name-only -- appdaemon)" ]; then

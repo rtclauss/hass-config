@@ -61,6 +61,8 @@ input_select:
       - home
       - away
       - night
+      - in_bed
+      - asleep
     initial: home
 
 ########################
@@ -75,9 +77,11 @@ script:
       callers can selectively reapply only media, climate, or travel policy.
     mode: restart
     max: 10
+    trace:
+      stored_traces: 10
     fields:
       mode:
-        description: "Base house mode to apply: home, away, or night."
+        description: "House mode to apply: home, away, night, in_bed, or asleep."
         example: away
       reason:
         description: Optional logbook reason for the transition request.
@@ -118,7 +122,7 @@ script:
     variables:
       requested_mode: >-
         {% set normalized = (mode | default(states('input_select.house_mode'), true) | string | lower | trim) %}
-        {% if normalized in ['away', 'night'] %}
+        {% if normalized in ['away', 'night', 'in_bed', 'asleep'] %}
           {{ normalized }}
         {% else %}
           home
@@ -168,7 +172,8 @@ script:
           Guest Day
         {% endif %}
     sequence:
-      - action: logbook.log
+      - continue_on_error: true
+        action: logbook.log
         data:
           name: House Transition
           entity_id: script.house_transition
@@ -197,9 +202,7 @@ script:
                   - "{{ should_apply_lights and requested_mode == 'away' and not guest_mode_enabled }}"
                 sequence:
                   - continue_on_error: true
-                    action: scene.turn_on
-                    target:
-                      entity_id: scene.leave_home
+                    action: script.leave_home_transition
                   - continue_on_error: true
                     action: script.lights_off_except
                     data:
@@ -238,7 +241,7 @@ script:
                     target:
                       entity_id: scene.turn_on_cameras
               - conditions:
-                  - "{{ should_apply_security and requested_mode in ['home', 'night'] }}"
+                  - "{{ should_apply_security and requested_mode in ['home', 'night', 'in_bed', 'asleep'] }}"
                 sequence:
                   - continue_on_error: true
                     action: switch.turn_off
@@ -257,7 +260,7 @@ script:
                     data:
                       preset_mode: "{{ guest_climate_preset }}"
               - conditions:
-                  - "{{ should_apply_climate and requested_mode in ['home', 'night'] }}"
+                  - "{{ should_apply_climate and requested_mode in ['home', 'night', 'in_bed', 'asleep'] }}"
                 sequence:
                   - continue_on_error: true
                     action: ecobee.resume_program
@@ -268,35 +271,52 @@ script:
               - conditions:
                   - "{{ should_apply_media and guest_mode_enabled }}"
                 sequence:
-                  - continue_on_error: true
-                    action: media_player.unjoin
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                        - media_player.bathroom_sonos_2
-                        - media_player.office_sonos_2
-                        - media_player.den_sonos_2
-                  - continue_on_error: true
-                    action: media_player.join
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                    data:
-                      group_members:
-                        - media_player.bathroom_sonos_2
+                  - alias: "Reform guest-mode group only if not already correctly formed"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.ma_bedroom', 'group_members') | default([]) %}
+                          {{ not ('media_player.ma_bathroom' in members and
+                                  'media_player.ma_office' not in members and
+                                  'media_player.ma_den' not in members) }}
+                    then:
+                      - continue_on_error: true
+                        action: media_player.unjoin
+                        target:
+                          entity_id:
+                            - media_player.ma_bedroom
+                            - media_player.ma_bathroom
+                            - media_player.ma_office
+                      - continue_on_error: true
+                        action: media_player.join
+                        target:
+                          entity_id:
+                            - media_player.ma_bedroom
+                        data:
+                          group_members:
+                            - media_player.ma_bathroom
               - conditions:
                   - "{{ should_apply_media and not guest_mode_enabled }}"
                 sequence:
-                  - continue_on_error: true
-                    action: media_player.join
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                    data:
-                      group_members:
-                        - media_player.bathroom_sonos_2
-                        - media_player.office_sonos_2
-                        - media_player.den_sonos_2
+                  - alias: "Reform full group only if not already correctly formed"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.ma_bedroom', 'group_members') | default([]) %}
+                          {{ not ('media_player.ma_bathroom' in members and
+                                  'media_player.ma_office' in members and
+                                  'media_player.ma_den' in members) }}
+                    then:
+                      - continue_on_error: true
+                        action: media_player.join
+                        target:
+                          entity_id:
+                            - media_player.ma_bedroom
+                        data:
+                          group_members:
+                            - media_player.ma_bathroom
+                            - media_player.ma_office
+                            - media_player.ma_den
           - choose:
               - conditions:
                   - "{{ should_apply_trip_policy and trip_mode_enabled }}"
@@ -334,6 +354,8 @@ script:
       covers, and climate for exceptions.
     mode: queued
     max: 5
+    trace:
+      stored_traces: 50
     fields:
       reason:
         description: Optional reason for the bedtime integrity run.
@@ -343,6 +365,15 @@ script:
       guest_room_occupied: "{{ is_state('binary_sensor.guest_room_occupancy_2', 'on') }}"
       guest_context_enabled: "{{ guest_mode_enabled or guest_room_occupied }}"
     sequence:
+      - action: script.house_transition
+        data:
+          mode: asleep
+          reason: "{{ reason | default('goodnight_integrity', true) }}"
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - parallel:
           - choose:
               - conditions:
@@ -417,13 +448,36 @@ script:
                 - switch.office_red_lava_lamp
                 - switch.northern_light_lava_lamp
           - continue_on_error: true
-            action: media_player.turn_off
+            action: homeassistant.turn_off
             target:
-              entity_id:
-                - media_player.lg_webos_smart_tv
-                - media_player.basement
+              entity_id: group.diffusers
+          - sequence:
+              - variables:
+                  common_area_media_shutdown_targets: >-
+                    {{ expand(
+                      'media_player.lg_webos_smart_tv',
+                      'media_player.basement_great_room_basement_atv'
+                    )
+                      | rejectattr(
+                        'state',
+                        'in',
+                        ['off', 'unavailable', 'unknown']
+                      )
+                      | map(attribute='entity_id')
+                      | list }}
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ common_area_media_shutdown_targets | count > 0 }}
+                then:
+                  - continue_on_error: true
+                    action: media_player.turn_off
+                    target:
+                      entity_id: "{{ common_area_media_shutdown_targets }}"
           - continue_on_error: true
-            action: script.turn_off_owner_suite_inovelli_switch_leds
+            action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: dark
           - choose:
               - conditions:
                   - condition: template
@@ -431,12 +485,12 @@ script:
                 sequence:
                   - variables:
                       bedroom_audio_pause_targets: >-
-                        {%- set bedroom_entity = 'media_player.bedroom_sonos_2' -%}
+                        {%- set bedroom_entity = 'media_player.ma_bedroom' -%}
                         {%- set candidate_players = [
-                          'media_player.bathroom_sonos_2',
-                          'media_player.office_sonos_2',
-                          'media_player.den_sonos_2',
-                          'media_player.tiki_room_2'
+                          'media_player.ma_bathroom',
+                          'media_player.ma_office',
+                          'media_player.ma_den',
+                          'media_player.ma_tiki_room'
                         ] -%}
                         {%- set ns = namespace(
                           protected=[bedroom_entity],

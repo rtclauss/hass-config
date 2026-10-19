@@ -1,4 +1,5 @@
 from pathlib import Path
+from privacy_ids import VEHICLE_ENTITY_SLUG
 
 
 ALERTS_PATH = Path(__file__).resolve().parents[1] / "packages" / "alerts.yaml"
@@ -57,6 +58,28 @@ def _template_sensor_block(path: Path, sensor_name: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _script_block(path: Path, script_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+    needle = f"  {script_id}:"
+
+    for index, line in enumerate(lines):
+        if line == needle:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find script block {script_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  ") and not lines[index].startswith("    "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_motion_detected_on_trip_watches_all_known_window_and_egress_contacts() -> None:
     block = _automation_block(ALERTS_PATH, "motion_detected_on_trip")
 
@@ -71,14 +94,14 @@ def test_motion_detected_on_trip_watches_all_known_window_and_egress_contacts() 
     assert "group.egress_points" not in block
 
 
-def test_doors_open_when_leaving_home_checks_windows_and_doors() -> None:
-    block = _automation_block(ZONE_PATH, "doors_open_when_leaving_home")
+def test_departure_integrity_checks_windows_and_doors_in_final_summary() -> None:
+    block = _script_block(ZONE_PATH, "departure_integrity")
 
-    assert "entity_id: binary_sensor.any_egress_open" in block
-    assert 'state: "on"' in block
+    assert "binary_sensor.any_egress_open" in block
     assert "state_attr('sensor.open_egress_points', 'friendly_names')" in block
-    assert "| default('', true)" in block
-    assert "Door or window left open: {{ open_egress_points }}." in block
+    assert "| default('unknown egress point', true)" in block
+    assert "Door or window remains open:" in block
+    assert "Egress verification is" in block
     assert "group.egress_points" not in block
 
 
@@ -87,17 +110,21 @@ def test_dynamic_egress_sensors_replace_legacy_group() -> None:
 
     assert "default_entity_id: sensor.open_egress_points" in block
     assert "entity_id.endswith('_contact')" not in block
-    assert "device_class in ['door', 'window', 'opening']" in block
+    assert "from 'egress.jinja' import open_egress_entity_ids" in block
+
+    macro = (ZIGBEE_ZWAVE_PATH.parents[1] / "custom_templates" / "egress.jinja").read_text(encoding="utf-8")
+    assert "device_class | default('', true) | lower) in ['door', 'window', 'opening']" in macro
     for entity_id in (
         "binary_sensor.mailbox_contact",
         "binary_sensor.den_doors_contact",
         "binary_sensor.laundry_room_washing_machine_door_contact",
-        "binary_sensor.example_vehicle_windows",
-        "binary_sensor.example_vehicle_doors",
-        "binary_sensor.example_vehicle_trunk",
-        "binary_sensor.example_vehicle_frunk",
     ):
-        assert entity_id in block
+        assert entity_id in macro
+    # Vehicle openings and pressure-trend sensors are excluded by prefix, so no
+    # literal (possibly removed) Tesla trunk/frunk ids are referenced.
+    assert f"startswith('binary_sensor.{VEHICLE_ENTITY_SLUG}_')" in macro
+    assert "startswith('binary_sensor.pressure_')" in macro
+    assert f"binary_sensor.{VEHICLE_ENTITY_SLUG}_trunk" not in block
     assert "group.egress_points" not in block
 
 
@@ -106,3 +133,13 @@ def test_fresh_air_open_reuses_any_window_open_state() -> None:
 
     assert 'default_entity_id: binary_sensor.fresh_air_open' in text
     assert 'state: "{{ is_state(\'binary_sensor.any_window_open\', \'on\') }}"' in text
+
+
+def test_any_window_open_ignores_unavailable_parasoll_contacts() -> None:
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+
+    assert "default_entity_id: binary_sensor.any_window_open" in text
+    assert "{% set availability_entity_id = 'binary_sensor.z2m_' ~ contact_slug ~ '_availability' %}" in text
+    assert "sensor.state == 'on' and is_state(availability_entity_id, 'on')" in text
+    assert "open_windows:" in text
+    assert "open_windows.names | join(', ')" in text

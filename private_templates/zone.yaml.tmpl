@@ -1,0 +1,1705 @@
+# Home Assistant package for core presence and arrival/departure behavior.
+# Complex areas: it builds the canonical home-state sensors and then uses them to drive ETA updates, arrival lighting, open-door reminders, and vacuum-return logic.
+
+################################################################
+## Packages / Zone
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "zone"
+
+      tracked_devices: &tracked_devices
+        <<: *customize
+        devices:
+          - device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+
+      track_ios: &track_ios
+        <<: *customize
+        track_ios: true
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.@@PRIVATE:presence_person_slug@@_arrival_emitter:
+      <<: *customize
+      friendly_name: @@PRIVATE:presence_person_title@@ Arrival Event Emitter
+      icon: mdi:home-import-outline
+    automation.@@PRIVATE:presence_person_slug@@_departure_emitter:
+      <<: *customize
+      friendly_name: @@PRIVATE:presence_person_title@@ Departure Event Emitter
+      icon: mdi:home-export-outline
+    automation.cloudy_home_arrival:
+      <<: *customize
+      friendly_name: Cloudy Day Arrival
+      icon: mdi:weather-cloudy
+    automation.turn_on_lights_at_night_when_i_get_home:
+      <<: *customize
+      friendly_name: Night Arrival
+    automation.turn_on_bedroom_lights_at_night_when_i_get_home:
+      <<: *customize
+      friendly_name: Bedroom Night Arrival
+    automation.run_verified_departure:
+      <<: *customize
+      friendly_name: Verified Departure
+    automation.vacuum_return_home:
+      <<: *customize
+      friendly_name: Stop Vacuuming on Arrival
+      icon: mdi:robot-vacuum
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+    binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home:
+      <<: *customize
+      friendly_name: "Home"
+      device_class: presence
+
+    binary_sensor.diy_store_visit:
+      <<: *customize
+      friendly_name: "At a DIY store"
+      icon: mdi:store-marker
+
+    binary_sensor.test_homeward:
+      <<: *customize
+      friendly_name: "Returning from long road trip (95 minutes)"
+
+      binary_sensor.arrival_sensor_presence:
+        <<: *customize
+        # friendly_name: Zigbee Arrival Sensor
+        #device_class: occupancy
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+    group.bayesian_inputs:
+      <<: *customize
+      friendly_name: Bayesian Presence Entities
+    ################################################
+    ## Input Boolean
+    ################################################
+    input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home:
+      <<: *customize
+      friendly_name: Bayesian Presence Constraint
+    ################################################
+    ## Input Datetime
+    ################################################
+    input_datetime.contextual_arrival_last_empty_at:
+      <<: *customize
+      friendly_name: "Contextual Arrival Last Empty House"
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.departure_integrity:
+      <<: *customize
+      friendly_name: "Departure Integrity"
+      icon: mdi:home-export-outline
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.home_time:
+      <<: *customize
+      friendly_name: "Last Change in Home Dir"
+    sensor.@@PRIVATE:presence_person_slug@@_direction:
+      <<: *customize
+      friendly_name: "@@PRIVATE:presence_person_title@@ Direction"
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+    zone.@@PRIVATE:zone_01_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_01_label@@"
+    zone.home:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_02_label@@"
+      icon: mdi:home
+    zone.@@PRIVATE:zone_04_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_04_label@@"
+      icon: mdi:airplane-landing
+    zone.@@PRIVATE:zone_05_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_05_label@@"
+      icon: mdi:curling
+    zone.@@PRIVATE:zone_07_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_07_label@@"
+      icon: mdi:city-variant
+    zone.@@PRIVATE:zone_08_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_08_label@@"
+      icon: mdi:curling
+    zone.@@PRIVATE:zone_09_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_09_label@@"
+    zone.@@PRIVATE:zone_10_slug@@:
+      <<: *track_ios
+      friendly_name: "@@PRIVATE:zone_10_label@@"
+      icon: mdi:city
+    zone.work:
+      <<: *track_ios
+      friendly_name: "Work"
+      icon: mdi:domain
+
+################################################
+## Automation
+################################################
+automation:
+  - id: @@PRIVATE:presence_person_slug@@_arrival_emitter
+    alias: @@PRIVATE:presence_person_slug@@_arrival_emitter
+    description: >-
+      Own the canonical @@PRIVATE:presence_person_title@@ arrival triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_entered_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.home
+        event: enter
+      - trigger: state
+        id: bayesian_presence_on
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "off"
+        to: "on"
+    action:
+      - event: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+          reason: @@PRIVATE:presence_person_slug@@_arrival
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+          presence_entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+
+  - id: @@PRIVATE:presence_person_slug@@_departure_emitter
+    alias: @@PRIVATE:presence_person_slug@@_departure_emitter
+    description: >-
+      Own the canonical @@PRIVATE:presence_person_title@@ departure triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_left_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.home
+        event: leave
+      - trigger: state
+        id: bayesian_presence_off
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "on"
+        to: "off"
+    action:
+      - event: @@PRIVATE:presence_person_slug@@_departure
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+          reason: @@PRIVATE:presence_person_slug@@_departure
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+          presence_entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+
+  - id: cloudy_home_arrival
+    alias: cloudy_home_arrival
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: cloudy_home_arrival_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      condition: and
+      conditions:
+        - condition: numeric_state
+          entity_id: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_cloud_cover
+          above: 50
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: input_boolean.chatgpt_bed_occupied
+          state: "off"
+          # enabled: false
+    action:
+      - action: script.contextual_arrival_transition
+        data:
+          requested_mode: home
+          reason: cloudy_home_arrival
+          light_scene: scene.cloudy_arrive_home
+          light_transition: 30
+          notify_message: Cloudy day arrival.
+
+  - id: default_arrive_home
+    alias: default_arrive_home
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: default_arrive_home_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      and:
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: input_boolean.chatgpt_bed_occupied
+          state: "off"
+        - alias: "I'm driving home"
+          condition: state
+          entity_id: sensor.wethop_activity
+          state: "Automotive"
+    action:
+      - action: script.contextual_arrival_transition
+        data:
+          requested_mode: home
+          reason: default_arrive_home
+      # - alias: "Notify action"
+      #   action: @@PRIVATE:mobile_notify_service_02@@
+      #   data:
+      #     message: >-
+      #       Arriving home with wethop activity {{ states('sensor.wethop_activity') }}
+
+  - alias: input_boolean_tracker_on
+    id: input_boolean_tracker_on
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        to: "on"
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
+
+  - alias: input_boolean_tracker_off
+    id: input_boolean_tracker_off
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: empty_house_tracker_signal
+        event_type: @@PRIVATE:presence_person_slug@@_departure
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      # Only the emitter's from:on -> off Bayesian source updates the empty-house
+      # timestamp; the GPS zone leave source can fire before the house is empty.
+      - alias: "Only update empty-house timestamp from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.contextual_arrival_last_empty_at
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  - id: play_spotify_when_i_get_home
+    alias: play_spotify_when_i_get_home
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: arrival_music_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      - alias: "Arrival music allowed when guest mode is off"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        # entity_id: input_boolean.chatgpt_bed_occupied
+        state: "off"
+      - alias: "I'm driving home"
+        condition: state
+        entity_id: sensor.wethop_activity
+        state: "Automotive"
+      # - condition: template
+      #   value_template: >-
+@@PRIVATE:zone_private_annotation_001@@
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.spotify_arrival
+      - action: notify.all
+        data:
+          message: "Welcome Home"
+
+  - id: turn_on_lights_at_night_when_i_get_home
+    alias: turn_on_lights_at_night_when_i_get_home
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: event
+        id: night_arrival_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: input_boolean.chatgpt_bed_occupied
+          state: "off"
+          # enabled: false
+        - condition: or
+          conditions:
+            - condition: sun
+              after: sunset
+              after_offset: "-1:00:00"
+            - condition: sun
+              before: sunrise
+    action:
+      - action: script.contextual_arrival_transition
+        data:
+          requested_mode: night
+          reason: night_arrival
+          light_transition: 30
+      - action: vacuum.return_to_base
+        target:
+          entity_id: all
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.long_range_travel
+
+  - id: turn_on_bedroom_lights_at_night_when_i_get_home
+    alias: turn_on_bedroom_lights_at_night_when_i_get_home
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: event
+        id: bedroom_prep_arrival_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: input_boolean.chatgpt_bed_occupied
+          state: "off"
+          # enabled: false
+        - condition: or
+          conditions:
+            - condition: time
+              after: "22:00:00"
+            - condition: sun
+              before: sunrise
+    action:
+      - action: script.contextual_arrival_transition
+        data:
+          requested_mode: night
+          reason: bedroom_prep_arrival
+          extra_scene: scene.bedroom_prep
+      - action: notify.all
+        data:
+          data:
+            url: "/@@PRIVATE:owner_dashboard_slug@@-new-mushroom/owner-suite"
+          message: "Bedroom Prep Activated"
+
+  # Use Ecobee Vacation mode now.
+  # - id: return_from_road_trip
+  #   alias: return_from_road_trip
+  #   trigger:
+  #     - platform: state
+  #       entity_id: binary_sensor.test_homeward
+  #       to: "true"
+  #   action:
+  #     # - action: nest.set_eta
+  #     #   data_template:
+  #     #     eta: '{{states.sensor.time_to_home.state}}'
+  #     #     trip_id: "{{ states.input_select.trip_origin.state }}"
+  #     - action: climate.set_temperature
+  #       data:
+  #         temperature: 70
+  #         # Z-Wave Thermostat
+  #         # entity: climate.glycol_thermostat
+  #         # Nest Thermostat
+  #         entity: climate.my_ecobee
+  #     - action: notify.all
+  #       data_template:
+  #         message: >-
+  #           Turning on HVAC while you drive home from a road trip
+
+  # TODO change implementation
+  - id: return_home_from_specific_location
+    alias: return_home_from_specific_location
+    trace:
+      stored_traces: 10
+    trigger:
+      # - platform: state
+      #   entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+      #   from: '@@PRIVATE:zone_10_label@@'
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_07_slug@@
+        event: leave
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_01_slug@@
+        event: leave
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_09_slug@@
+        event: leave
+    # condition:
+    #   condition: template
+    #   value_template: '{{ 110 <= sensor.@@PRIVATE:presence_person_slug@@_direction <= 260 }}'
+    action:
+      # - action: nest.set_eta
+      #   data_template:
+      #     eta: '{{states.sensor.time_to_home.state}}'
+      #     trip_id: "{{ states.input_select.trip_origin.state }}"
+      # - action: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home" # TODO set this to the correct schedule (Home or Sleep)
+      - action: ecobee.resume_program
+        data:
+          resume_all: true
+          entity_id: climate.my_ecobee
+      - action: notify.all
+        data:
+          data:
+            url: "/@@PRIVATE:owner_dashboard_slug@@-new-mushroom/climate"
+          message: >-
+            Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.@@PRIVATE:presence_person_slug@@_direction') }}. Setting Ecobee Home.
+
+  - id: run_verified_departure
+    alias: run_verified_departure
+    description: Run the verified away transition only after the house is empty.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: departure_house_transition_signal
+        event_type: @@PRIVATE:presence_person_slug@@_departure
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      - alias: "Only start departure integrity from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
+      - alias: "Departure transition allowed when guest mode is off"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      # Gate on the canonical empty-house Bayesian signal, not the derived GPS
+      # tracker: appdaemon/apps/tracker.py only moves the tracker out of the
+      # home zone on a later GPS callback, so at bayesian_presence_off time the
+      # tracker can still read `home`. Requiring the tracker to have left here
+      # made the source check and the tracker check mutually exclusive, so the
+      # away transition never ran (#110, Codex P1).
+      - alias: "House is empty per the Bayesian presence signal"
+        condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - alias: "I'm driving away"
+        enabled: false
+        condition: state
+        entity_id: sensor.wethop_activity
+        state: "Automotive"
+        # Todo add biking here?
+    action:
+      - action: script.departure_integrity
+        data:
+          reason: leave_home
+
+  - alias: Update Bayesian Device tracker on start
+    description: When HA starts up, update bayesian device tracker GPS items
+    id: update_bayesian_device_tracker_on_start
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - delay: "00:01:00"
+      - action: button.press
+        target:
+          entity_id: button.@@PRIVATE:vehicle_entity_slug@@_force_data_update
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - @@PRIVATE:appdaemon_location_source_01@@
+            - @@PRIVATE:appdaemon_location_source_02@@
+            - binary_sensor.arrival_sensor_presence
+            - @@PRIVATE:appdaemon_location_source_01@@_wifi
+
+  - id: update_trip_origin
+    alias: update_trip_origin
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+    condition:
+      - condition: template
+        value_template: >-
+          {{
+            as_timestamp(now(), default=now()) - as_timestamp(states.device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home.last_changed, default=now()) |int > 72000
+            or
+            not is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'not_home')
+          }}
+    action:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.trip_origin
+        data:
+          option: "{{ trigger.to_state.state }}"
+
+  # - id: update_nest_eta
+  #   alias: update_nest_eta
+  #   trigger:
+  #     - platform: zone
+  #       entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+  #       zone: zone.@@PRIVATE:zone_10_slug@@
+  #       event: enter
+  #     - platform: state
+  #       entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+  #       to: "@@PRIVATE:zone_10_label@@"
+  #       from: "Away"
+  #   action:
+  #     # - action: nest.set_eta
+  #     #   data_template:
+  #     #     eta: '{{states.sensor.time_to_home.state}}'
+  #     #     trip_id: "{{ states.input_select.trip_origin.state }}"
+  #     - action: climate.set_temperature
+  #       data:
+  #         temperature: 70
+  #         # Z-Wave Thermostat
+  #         # entity: climate.glycol_thermostat
+  #         # Nest Thermostat
+  #         entity: climate.my_ecobee
+  #     - action: notify.all
+  #       data_template:
+  #         message: >-
+  #           Entering @@PRIVATE:zone_10_label@@ from direction {{ states('sensor.@@PRIVATE:presence_person_slug@@_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
+
+  - id: vacuum_return_home
+    alias: vacuum_return_home
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: vacuum_return_arrival_signal
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    action:
+      - action: vacuum.return_to_base
+        target:
+          entity_id:
+            - vacuum.valetudo_den
+            - vacuum.x40_ultra
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/BasicControlCapability/operation/set
+          payload: HOME
+      - action: switch.turn_off
+        target:
+          entity_id: switch.livingroom_motion_detection
+      - action: switch.turn_off
+        target:
+          entity_id: switch.tiki_room_camera
+
+  - id: vacuum_leave_home
+    alias: vacuum_leave_home
+    description: Run the main and upstairs levels on departure, plus the den when its door is closed.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: vacuum_departure_signal
+        event_type: @@PRIVATE:presence_person_slug@@_departure
+        event_data:
+          person: @@PRIVATE:presence_person_slug@@
+    condition:
+      - alias: "Only start departure vacuum from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
+      - alias: "Departure vacuum allowed when guest mode is off"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+    action:
+      - action: script.vacuum_main_and_upstairs_levels
+        continue_on_error: true
+      - action: script.vacuum_den_pet_safe_start
+        continue_on_error: true
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+  # Working prior to 6/27/2022
+  # - platform: bayesian
+  #   prior: 0.1
+  #   name: bayesian_@@PRIVATE:presence_person_slug@@_home
+  #   probability_threshold: 0.80
+  #   observations:
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_01@@
+  #       prob_given_true: 0.80
+  #       prob_given_false: 0.1
+  #       platform: "state"
+  #       to_state: "home"
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_01@@_wifi
+  #       prob_given_true: 0.70
+  #       prob_given_false: 0.3
+  #       platform: "state"
+  #       to_state: "home"
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_02@@
+  #       prob_given_true: 0.80
+  #       prob_given_false: 0.1
+  #       platform: "state"
+  #       to_state: "home"
+  #     - entity_id: binary_sensor.arrival_sensor_presence
+  #       prob_given_true: 0.99
+  #       prob_given_false: 0.01
+  #       platform: "state"
+  #       to_state: "on"
+  #     ### Try out the speed sensor
+  #     - entity_id: sensor.@@PRIVATE:presence_person_slug@@_speed
+  #       platform: "numeric_state"
+  #       below: 25
+  #       prob_given_true: 0.60
+  #     - platform: template
+  #       prob_given_true: 0.95
+  #       prob_given_false: 0.05
+  #       value_template: >-
+  #         {{ is_state('sensor.wethop_activity', 'Walking') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', '@@PRIVATE:zone_10_label@@')) }}
+  #     - platform: template
+  #       prob_given_true: 0.95
+  #       prob_given_false: 0.05
+  #       value_template: >-
+  #         {{ is_state('sensor.wethop_activity', 'Biking') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', '@@PRIVATE:zone_10_label@@')) }}
+  #     - platform: template
+  #       prob_given_true: 0.05
+  #       prob_given_false: 0.95
+  #       value_template: >-
+  #         {{ is_state('sensor.wethop_activity', 'Automotive') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) >=5) }}
+
+  - platform: bayesian
+    unique_id: bayesian_@@PRIVATE:presence_person_slug@@_home
+    prior: 0.92
+    name: bayesian_@@PRIVATE:presence_person_slug@@_home
+    probability_threshold: 0.80
+    observations:
+      - entity_id: @@PRIVATE:appdaemon_location_source_01@@
+        prob_given_true: .995
+        prob_given_false: 0.0005
+        platform: state
+        to_state: "home"
+      - entity_id: sensor.wethop_ssid
+        prob_given_true: 0.98
+        prob_given_false: 0.60  # brief disconnects common at home; travel router guards false positives
+        platform: state
+        to_state: !secret home_ssid
+      - entity_id: @@PRIVATE:appdaemon_location_source_02@@
+        prob_given_true: 0.95
+        prob_given_false: 0.55  # car stays home when flying; trip observation guards the false positive
+        platform: state
+        to_state: "home"
+      - entity_id: binary_sensor.arrival_sensor_presence
+        prob_given_true: 0.999
+        prob_given_false: 0.05  # sensor is in the car; car at home ≠ @@PRIVATE:presence_person_title@@ home; trip observation guards this
+        platform: state
+        to_state: "on"
+      - entity_id: input_boolean.trip
+        prob_given_true: 0.01   # almost never on a trip when home
+        prob_given_false: 0.15  # most non-home time is daily away (work, errands), not a trip
+        platform: state
+        to_state: "on"
+
+########################
+# Device Trackers
+########################
+device_tracker: []
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  bayesian_@@PRIVATE:presence_person_slug@@_home:
+
+########################
+# Input Numbers
+########################
+input_number: {}
+
+########################
+# Input Datetime
+########################
+input_datetime:
+  contextual_arrival_last_empty_at:
+    name: "Contextual Arrival Last Empty House"
+    has_date: true
+    has_time: true
+
+########################
+# Input Select
+########################
+input_select:
+  trip_origin:
+    name: "Trip Origin"
+    options:
+      - "@@PRIVATE:zone_04_label@@"
+      - "@@PRIVATE:zone_05_label@@"
+      - "@@PRIVATE:zone_08_label@@"
+      - "@@PRIVATE:zone_10_label@@"
+      - "Work"
+      - "home"
+      - "not_home"
+      - "@@PRIVATE:zone_07_label@@"
+      - "Parents"
+      - "Neighborhood"
+    initial: "Work"
+
+########################
+# Groups
+########################
+group:
+  bayesian_inputs:
+    entities:
+      - device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+      - @@PRIVATE:appdaemon_location_source_01@@
+      - sensor.wethop_ssid
+      - binary_sensor.arrival_sensor_presence
+      - input_boolean.trip
+      - sensor.@@PRIVATE:presence_person_slug@@_speed
+      - sensor.wethop_battery_state
+      - sensor.wethop_activity
+      # - binary_sensor.nest_home
+
+########################
+# Scenes
+########################
+scene:
+  - id: arrive_home_quick
+    name: arrive_home_quick
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 150
+
+  - id: arrive_home
+    name: arrive_home
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+      light.kitchen_sink_overhead:
+        state: "on"
+      light.den_all:
+        state: "on"
+      switch.livingroom_motion_detection:
+        state: "off"
+      switch.tiki_room_camera:
+        state: "off"
+
+  - id: arrive_home_full_day
+    name: arrive_home_full_day
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 255
+      light.hall_transition_switch:
+        state: "on"
+        brightness: 220
+      light.kitchen_sink_overhead:
+        state: "on"
+        brightness: 220
+      light.den_all:
+        state: "on"
+      switch.livingroom_motion_detection:
+        state: "off"
+      switch.tiki_room_camera:
+        state: "off"
+
+  - id: arrive_home_multi_day
+    name: arrive_home_multi_day
+    entities:
+      light.hall_all:
+        state: "on"
+        brightness: 255
+      light.kitchen_sink_overhead:
+        state: "on"
+        brightness: 255
+      light.den_all:
+        state: "on"
+      light.outside_front_hue:
+        state: "on"
+        brightness: 220
+      light.outside_front_door:
+        state: "on"
+        brightness: 220
+      switch.livingroom_motion_detection:
+        state: "off"
+      switch.tiki_room_camera:
+        state: "off"
+
+  - id: night_arrive_home_quick
+    name: night_arrive_home_quick
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 120
+      light.outside_front_door:
+        state: "on"
+        brightness: 120
+
+  - id: turn_on_cameras
+    name: turn_on_cameras
+    entities:
+      switch.livingroom_motion_detection:
+        state: "on"
+      switch.tiki_room_camera:
+        state: "on"
+
+  - id: goodnight
+    name: goodnight
+    entities:
+      light.deck_string:
+        state: "off"
+      light.hall_foyer_switch:
+        state: "off"
+      light.hall_stairway:
+        state: "off"
+      media_player.lg_webos_smart_tv:
+        state: "off"
+      light.deck_kitchen_door:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
+
+  - id: leave_home
+    name: leave_home
+    entities:
+      light.owner_suite_bathroom_lights:
+        state: "off"
+      light.deck_kitchen_door:
+        state: "off"
+      light.deck_string:
+        state: "off"
+      light.hall_stairway:
+        state: "off"
+      # switch.humidifier:
+      #   state: "off"
+
+########################
+# Scripts
+########################
+script:
+  departure_integrity:
+    alias: departure_integrity
+    description: >-
+      Apply the empty-house shutdown, retry available stragglers once, and
+      send one actionable notification only when exceptions remain.
+    mode: restart
+    trace:
+      stored_traces: 10
+    fields:
+      reason:
+        description: Optional reason for the departure integrity run.
+        example: leave_home
+    variables:
+      protected_departure_lights:
+        - light.outside_front_hue
+        - light.outside_north_west_garage
+        - light.outside_south_west_garage
+        - light.outside_front_door
+      departure_media_off_targets:
+        - media_player.lg_webos_smart_tv
+        - media_player.basement_great_room_basement_atv
+      departure_ma_targets:
+        - media_player.ma_bedroom
+        - media_player.ma_bathroom
+        - media_player.ma_office
+        - media_player.ma_den
+        - media_player.ma_tiki_room
+      departure_camera_targets:
+        - switch.livingroom_motion_detection
+        - switch.tiki_room_camera
+    sequence:
+      - alias: "Departure integrity is disabled while guest mode is active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      # The Bayesian empty-house sensor is the canonical departure signal. The
+      # derived GPS tracker can still read `home` at this point (it only leaves
+      # the home zone on a later GPS callback), so gating on it here would stall
+      # the away transition (#110, Codex P1).
+      - alias: "Departure integrity requires an empty house"
+        condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - action: script.house_transition
+        data:
+          mode: away
+          reason: "{{ reason | default('departure_integrity', true) }}"
+          apply_trip_policy: true
+      - delay:
+          seconds: 10
+      - alias: "Stop retry work if guest mode became active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "Stop retry work if the resident returned"
+        condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - variables:
+          retry_lock: >-
+            {{ states('lock.front_door_lock') not in ['locked', 'unknown', 'unavailable'] }}
+          retry_garage: >-
+            {{ states('cover.garage_door') not in ['closed', 'closing', 'unknown', 'unavailable'] }}
+          retry_media_off_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_media_off_targets -%}
+              {%- if states(entity_id) not in ['off', 'unknown', 'unavailable'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          retry_ma_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_ma_targets -%}
+              {%- if states(entity_id) in ['playing', 'buffering'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          retry_camera_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_camera_targets -%}
+              {%- if states(entity_id) not in ['on', 'unknown', 'unavailable'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          fans_on: >-
+            {{ states.fan | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | join(', ') }}
+          interior_lights_on: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state == 'on' and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          departure_retry_needed: >-
+            {{ retry_lock or retry_garage
+               or retry_media_off_targets | trim != ''
+               or retry_ma_targets | trim != ''
+               or retry_camera_targets | trim != ''
+               or fans_on | trim != ''
+               or interior_lights_on | trim != '' }}
+      - if:
+          - condition: template
+            value_template: "{{ departure_retry_needed }}"
+        then:
+          - alias: "Retry available departure failures once"
+            parallel:
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_lock }}"
+                then:
+                  - continue_on_error: true
+                    action: lock.lock
+                    target:
+                      entity_id: lock.front_door_lock
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_garage }}"
+                then:
+                  - continue_on_error: true
+                    action: cover.close_cover
+                    target:
+                      entity_id: cover.garage_door
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_media_off_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: media_player.turn_off
+                    target:
+                      entity_id: "{{ retry_media_off_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_ma_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: media_player.media_pause
+                    target:
+                      entity_id: "{{ retry_ma_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_camera_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: switch.turn_on
+                    target:
+                      entity_id: "{{ retry_camera_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ fans_on | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: fan.turn_off
+                    target:
+                      entity_id: "{{ fans_on }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ interior_lights_on | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: script.lights_off_except
+                    data:
+                      exclude_lights: "{{ protected_departure_lights }}"
+                      transition: 0
+          - delay:
+              seconds: 15
+      # Give a normally-slow garage door time to finish closing before the final
+      # check; a door stalled in "closing" times out here and is then reported
+      # by the closed-only verification below (#110, Codex P1).
+      - alias: "Allow the garage door to finish closing before verification"
+        wait_template: "{{ is_state('cover.garage_door', 'closed') }}"
+        timeout:
+          seconds: 30
+        continue_on_timeout: true
+      - alias: "Do not notify if guest mode became active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "Do not notify if the resident returned"
+        condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - variables:
+          final_interior_lights_on: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state == 'on' and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          final_fans_on: >-
+            {{ states.fan | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | join(', ') }}
+          # Fans that are unknown/unavailable were never retried (only 'on' fans
+          # are) and their turn-off could not be verified, so surface them so the
+          # unavailable-target contract holds for bulk fan shutdown (#110, Codex).
+          final_fans_unverified: >-
+            {{ states.fan | selectattr('state', 'in', ['unavailable', 'unknown'])
+               | map(attribute='entity_id') | join(', ') }}
+          # Non-protected lights that are unknown/unavailable, same rationale as
+          # the fans above; reuses the group-aware protected filter.
+          final_interior_lights_unverified: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state in ['unavailable', 'unknown'] and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          departure_integrity_issues: >-
+            {%- set ns = namespace(issues=[]) -%}
+            {%- if not is_state('input_select.house_mode', 'away') -%}
+              {%- set ns.issues = ns.issues + ['House mode is still ' ~ states('input_select.house_mode') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('lock.front_door_lock') != 'locked' -%}
+              {%- set ns.issues = ns.issues + ['Front door lock is ' ~ states('lock.front_door_lock') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('cover.garage_door') != 'closed' -%}
+              {%- set ns.issues = ns.issues + ['Garage door is ' ~ states('cover.garage_door') ~ '.'] -%}
+            {%- endif -%}
+            {%- if is_state('binary_sensor.any_egress_open', 'on') -%}
+              {%- set names = state_attr('sensor.open_egress_points', 'friendly_names') | default('unknown egress point', true) -%}
+              {%- set ns.issues = ns.issues + ['Door or window remains open: ' ~ names ~ '.'] -%}
+            {%- elif states('binary_sensor.any_egress_open') in ['unknown', 'unavailable'] -%}
+              {%- set ns.issues = ns.issues + ['Egress verification is ' ~ states('binary_sensor.any_egress_open') ~ '.'] -%}
+            {%- endif -%}
+            {%- set media_off_states = {'media_player.lg_webos_smart_tv': ['off', 'unavailable']} -%}
+            {%- for entity_id in departure_media_off_targets -%}
+              {%- set ok_states = media_off_states.get(entity_id, ['off']) -%}
+              {%- if states(entity_id) not in ok_states -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for entity_id in departure_ma_targets -%}
+              {%- if states(entity_id) in ['playing', 'buffering', 'unknown', 'unavailable'] -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for entity_id in departure_camera_targets -%}
+              {%- if states(entity_id) != 'on' -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if final_interior_lights_on | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Interior lights still on: ' ~ final_interior_lights_on ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_interior_lights_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Interior lights not verified off (unavailable/unknown): ' ~ final_interior_lights_unverified ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_fans_on | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Fans still on: ' ~ final_fans_on ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_fans_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Fans not verified off (unavailable/unknown): ' ~ final_fans_unverified ~ '.'] -%}
+            {%- endif -%}
+            {%- if is_state('input_boolean.trip', 'on') and not is_state('switch.vacation_simulation', 'on') -%}
+              {%- set ns.issues = ns.issues + ['Vacation simulation is not on while trip mode is on.'] -%}
+            {%- elif is_state('input_boolean.trip', 'off') and is_state('switch.vacation_simulation', 'on') -%}
+              {%- set ns.issues = ns.issues + ['Vacation simulation is still on while trip mode is off.'] -%}
+            {%- endif -%}
+            {{ ns.issues | join('\n') }}
+      - if:
+          - condition: template
+            value_template: "{{ departure_integrity_issues | trim != '' }}"
+        then:
+          - action: notify.all
+            data:
+              message: >-
+                Departure integrity found exceptions{% if reason is defined and reason | string | trim %} ({{ reason }}){% endif %}:
+
+                {{ departure_integrity_issues }}
+
+  contextual_arrival_transition:
+    alias: contextual_arrival_transition
+    description: >-
+      Apply absence-tiered arrival lighting and climate behavior before
+      delegating to the shared house transition script.
+    mode: restart
+    trace:
+      stored_traces: 10
+    fields:
+      requested_mode:
+        description: "Arrival mode to pass to house_transition: home or night."
+        example: home
+      reason:
+        description: Optional logbook reason for the arrival transition.
+        example: default_arrive_home
+      light_scene:
+        description: Optional base scene for half-day arrivals.
+        example: scene.cloudy_arrive_home
+      light_transition:
+        description: Optional base transition seconds.
+        example: 30
+      extra_scene:
+        description: Optional extra scene for non-quick arrivals.
+        example: scene.bedroom_prep
+      notify_message:
+        description: Optional notify.all message for the transition.
+        example: Cloudy day arrival.
+    variables:
+      normalized_mode: >-
+        {% set normalized = (requested_mode | default('home', true) | string | lower | trim) %}
+        {{ 'night' if normalized == 'night' else 'home' }}
+      last_empty_timestamp: >-
+        {% set raw = states('input_datetime.contextual_arrival_last_empty_at') %}
+        {% set parsed = as_timestamp(raw, default=none) %}
+        {{ parsed if parsed is not none else as_timestamp(now()) }}
+      absence_seconds: >-
+        {{ [as_timestamp(now()) - (last_empty_timestamp | float(as_timestamp(now()))), 0] | max | int }}
+      # An arrival automation can re-fire from its GPS zone trigger while the
+      # house is still occupied (e.g. a GPS jitter re-enter). In that case the
+      # house never emptied, so the persisted last_empty timestamp is stale and
+      # would misclassify the re-entry as full/multi day. Treat presence that
+      # has already been established (Bayesian "on" for more than the grace
+      # window) as an occupied re-entry and force the minimal quick tier.
+      seconds_since_presence: >-
+        {% set lc = states.binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home.last_changed %}
+        {{ (as_timestamp(now()) - as_timestamp(lc)) | int if lc is not none else 0 }}
+      occupied_reentry: >-
+        {{ is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on')
+           and (seconds_since_presence | int(0)) > 300 }}
+      arrival_tier: >-
+        {% if occupied_reentry %}
+          quick_errand
+        {% elif absence_seconds < 3600 %}
+          quick_errand
+        {% elif absence_seconds < 28800 %}
+          half_day
+        {% elif absence_seconds < 86400 %}
+          full_day
+        {% else %}
+          multi_day
+        {% endif %}
+      # Reached only when the caller passed no explicit light_scene (the
+      # explicit case is handled first in tier_light_scene).
+      base_light_scene: >-
+        {% if normalized_mode == 'night' %}
+          scene.night_arrive_home
+        {% else %}
+          scene.arrive_home
+        {% endif %}
+      # A caller that passes an explicit light_scene (e.g. the cloudy arrival,
+      # whose whole purpose is a bright dark-house scene) wins over the absence
+      # tier default. Absence tiering only picks the scene when the caller did
+      # not specify one; climate gating below still varies by tier independently.
+      tier_light_scene: >-
+        {% if light_scene is defined and light_scene | string | trim %}
+          {{ light_scene }}
+        {% elif normalized_mode == 'night' and arrival_tier == 'quick_errand' %}
+          scene.night_arrive_home_quick
+        {% elif normalized_mode == 'home' and arrival_tier == 'quick_errand' %}
+          scene.arrive_home_quick
+        {% elif normalized_mode == 'home' and arrival_tier == 'full_day' %}
+          scene.arrive_home_full_day
+        {% elif normalized_mode == 'home' and arrival_tier == 'multi_day' %}
+          scene.arrive_home_multi_day
+        {% else %}
+          {{ base_light_scene }}
+        {% endif %}
+      tier_light_transition: >-
+        {% set base = light_transition | default(30, true) | int(30) %}
+        {% if arrival_tier == 'quick_errand' %}
+          5
+        {% elif arrival_tier == 'multi_day' %}
+          120
+        {% elif arrival_tier == 'full_day' and base < 45 %}
+          45
+        {% else %}
+          {{ base }}
+        {% endif %}
+      tier_extra_scene: >-
+        {% if arrival_tier == 'quick_errand' %}
+          none
+        {% elif extra_scene is defined and extra_scene | string | trim %}
+          {{ extra_scene }}
+        {% else %}
+          none
+        {% endif %}
+      tier_apply_climate: "{{ arrival_tier in ['full_day', 'multi_day'] }}"
+      tier_notify_message: >-
+        {% if notify_message is defined and notify_message | string | trim %}
+          {{ notify_message }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+    sequence:
+      - action: script.house_transition
+        data:
+          mode: "{{ normalized_mode }}"
+          reason: "{{ reason | default('contextual_arrival', true) }}_{{ arrival_tier }}"
+          light_scene: "{{ tier_light_scene }}"
+          light_transition: "{{ tier_light_transition }}"
+          extra_scene: "{{ tier_extra_scene }}"
+          notify_message: "{{ tier_notify_message }}"
+          apply_climate: "{{ tier_apply_climate }}"
+  # update_nest_eta:
+  #   sequence:
+  #     - action: nest.set_eta
+  #       data_template:
+  #         eta: "{{states('sensor.time_to_home.state')}}"
+  #         trip_id: "{{ states('input_select.trip_origin') }}"
+
+########################
+# Sensor
+########################
+sensor:
+  []
+
+  # - platform: places
+  #   name: android
+  #   devicetracker_id: device_tracker.android_1
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
+
+  # - platform: places
+  #   name: wethop
+  #   devicetracker_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
+
+  # - platform: places
+  #   name: honda
+  #   devicetracker_id: device_tracker.honda
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
+
+########################
+# Template
+########################
+template:
+  - sensor:
+      # Per-tracker: which DIY store THIS tracker is at, or "none". Matching
+      # lives in custom_templates/diy_store.jinja; these entities add the hold.
+      #
+      # One sensor per tracker, rather than one combined sensor, because
+      # clearing needs provenance. Trackers move independently: a Tesla parked
+      # at home reports `house` forever, and a Tesla parked in a generic lot
+      # reports `parking` forever. Deciding the hold from all trackers at once
+      # fails in both directions - "any tracker clears" lets a car sitting at
+      # home cancel a visit the phone established, and "every tracker clears"
+      # lets a car sitting in a lot pin the last store indefinitely so a later
+      # visit to it can never trigger. Each tracker holding only its own state
+      # has neither problem.
+      #
+      # The hold keys off information, never a timer. Any timer conflates two
+      # questions: long enough to cover a visit swallows the next store (30
+      # minutes ate a Home Depot arrival 25 minutes after the previous match),
+      # short enough to re-arm re-fires for the same store when a visit
+      # outlasts it.
+      #   matched a store  -> that store's canonical identity
+      #   vague fix        -> hold the previous identity
+      #   anything else    -> none
+      # `this` creates no dependency and every transition is driven by an input
+      # change, so nothing needs re-rendering on a timer; before the first
+      # render it reads `unknown`, which falls through to "none".
+      #
+      # `checked_at` exists to defeat a Home Assistant optimization, not to be
+      # read by anything. HA's state machine skips firing state_changed when a
+      # write's value AND attributes both match the previous state. A tracker
+      # returning to a store it was already holding through vague fixes is
+      # exactly that: same computed identity, no attributes otherwise, so the
+      # write is silently dropped and diy_store_current is never told a fresh
+      # observation happened - the store stays reported as `none` until some
+      # unrelated event happens to wake it. now() in an attribute recomputes on
+      # every render this entity already does for its OWN reasons (it does not
+      # add a time-based trigger of its own) and always differs, so same_attr
+      # is never true and the event always fires. last_changed is unaffected:
+      # HA derives it from same_state alone, so it still advances only when
+      # the identity itself changes, which is what diy_store_current's
+      # recency ranking depends on.
+      - name: diy_store_@@PRIVATE:presence_person_slug@@
+        unique_id: diy_store_@@PRIVATE:presence_person_slug@@
+        default_entity_id: sensor.diy_store_@@PRIVATE:presence_person_slug@@
+        icon: mdi:store-marker
+        state: >-
+          {% from 'diy_store.jinja' import diy_store_identity, diy_place_is_vague %}
+          {%- set matched = diy_store_identity('@@PRIVATE:presence_person_slug@@') | trim -%}
+          {%- set vague = diy_place_is_vague('@@PRIVATE:presence_person_slug@@') | trim == 'true' -%}
+          {%- set previous = this.state
+               if this is defined and this.state not in ['unknown', 'unavailable']
+               else 'none' -%}
+          {%- if matched -%}
+            {{ matched }}
+          {%- elif vague -%}
+            {{ previous }}
+          {%- else -%}
+            none
+          {%- endif -%}
+        attributes:
+          checked_at: "{{ now().timestamp() }}"
+
+      - name: diy_store_tesla
+        unique_id: diy_store_tesla
+        default_entity_id: sensor.diy_store_tesla
+        icon: mdi:store-marker
+        state: >-
+          {% from 'diy_store.jinja' import diy_store_identity, diy_place_is_vague %}
+          {%- set matched = diy_store_identity('tesla') | trim -%}
+          {%- set vague = diy_place_is_vague('tesla') | trim == 'true' -%}
+          {%- set previous = this.state
+               if this is defined and this.state not in ['unknown', 'unavailable']
+               else 'none' -%}
+          {%- if matched -%}
+            {{ matched }}
+          {%- elif vague -%}
+            {{ previous }}
+          {%- else -%}
+            none
+          {%- endif -%}
+        attributes:
+          checked_at: "{{ now().timestamp() }}"
+
+      # What the restock prompts trigger on. Collapsing the trackers to one
+      # identity here means two arriving together cannot race into two prompts.
+      #
+      # The invariant: only a FRESH detection may change which store is
+      # reported. A hold can sustain the current one, never substitute another.
+      #
+      # "Fresh" means a tracker's own store sensor CHANGED, which is why the
+      # clock read here is those sensors' last_changed and not the raw Places
+      # entities'. Places entities are sticky: a phone that stops publishing GPS
+      # keeps matching the last store it saw forever, so any rule based on "does
+      # it match now" lets a frozen reading win repeatedly. The per-tracker
+      # sensors already collapse that to a state machine — each one changes
+      # exactly when its answer changes — so their last_changed is the arrival
+      # time, and it covers every input the identity derives from (osm_dict,
+      # extratags, zone_name) rather than the two scalar sensors alone.
+      #
+      # Nothing here compares against this sensor's own last_changed. Across a
+      # restart that timestamp records when each state was restored, not when
+      # anything was observed, so ranking against it ranks startup ordering.
+      # Only the two per-tracker sensors' timestamps are compared, and those are
+      # meaningful relative to each other.
+      #
+      # A tracker newer than the one currently backing our value is an arrival
+      # and wins. Equal timestamps mean nothing moved, so the current value is
+      # sustained. Losing backing entirely goes to `none` rather than adopting
+      # the other tracker's older hold, which would be a store change with no
+      # arrival behind it.
+      #
+      # Both halves are load-bearing. Fresh has to win, or the phone sitting on
+      # vague fixes holding `ace hardware` while the car resolves to `home
+      # depot` would keep reporting the stale one and never hand the prompts
+      # their transition. But a hold must never be promoted either: picking the
+      # first non-none in tracker order meant that as soon as the car went
+      # vague too, both trackers were holding and `ace hardware` won again, so
+      # one trip sent ace -> home depot -> ace and a third restock prompt.
+      #
+      # Falling to `none` when the reported store is no longer held is
+      # deliberate. Adopting some other tracker's hold instead just moves the
+      # oscillation: whatever is adopted is a store change with no new arrival
+      # behind it. Going quiet costs nothing, because a tracker that really is
+      # at a store will match again on its next informative fix.
+      - name: diy_store_current
+        unique_id: diy_store_current
+        default_entity_id: sensor.diy_store_current
+        icon: mdi:store-marker
+        state: >-
+          {%- set previous = this.state
+               if this is defined and this.state not in ['unknown', 'unavailable']
+               else 'none' -%}
+          {%- set ns = namespace(
+               newest='', newest_at=0, backing_at=0, still_backed=false) -%}
+          {%- for tracker in ['@@PRIVATE:presence_person_slug@@', 'tesla'] -%}
+            {%- set entity = states['sensor.diy_store_' ~ tracker] -%}
+            {%- if entity is not none
+                   and entity.state not in ['none', 'unknown', 'unavailable'] -%}
+              {%- set changed_at = entity.last_changed | as_timestamp(0) -%}
+              {%- if changed_at > ns.newest_at -%}
+                {%- set ns.newest = entity.state -%}
+                {%- set ns.newest_at = changed_at -%}
+              {%- endif -%}
+              {%- if entity.state == previous -%}
+                {%- set ns.still_backed = true -%}
+                {%- if changed_at > ns.backing_at -%}
+                  {%- set ns.backing_at = changed_at -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if ns.still_backed -%}
+            {{ ns.newest if ns.newest_at > ns.backing_at else previous }}
+          {%- elif previous == 'none' -%}
+            {{ ns.newest if ns.newest else 'none' }}
+          {%- else -%}
+            {#- Our store lost its backing. A candidate that arrived after we
+                adopted the current value is a real move to the next store; an
+                older one is just the other tracker's stale hold, so go quiet
+                rather than report a store nobody has just arrived at. Reading
+                this.last_changed is safe here and only here: the branch is
+                unreachable until we have adopted a value post-startup, so the
+                timestamp is an observation rather than a restore time. -#}
+            {%- set established_at = this.last_changed | as_timestamp(0)
+                 if this is defined else 0 -%}
+            {{ ns.newest if ns.newest and ns.newest_at > established_at else 'none' }}
+          {%- endif -%}
+
+  - binary_sensor:
+      # Human-readable companion. Nothing triggers off this; the prompts key on
+      # the identity so they can tell one store from the next.
+      - name: diy_store_visit
+        unique_id: diy_store_visit
+        default_entity_id: binary_sensor.diy_store_visit
+        icon: mdi:store-marker
+        state: >-
+          {{ states('sensor.diy_store_current') not in
+             ['none', 'unknown', 'unavailable'] }}
+
+      - name: test_homeward
+        unique_id: test_homeward
+        availability: >-
+          {{ states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed is defined }}
+        state: >-
+          {% if
+              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed, default=now()))//60) | int > 95) and (states('sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel')=="towards")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+  - sensor:
+      - name: home_time
+        unique_id: home_time
+        state: >-
+          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
+        unit_of_measurement: "minutes"
+      - name: @@PRIVATE:presence_person_slug@@_speed
+        unique_id: @@PRIVATE:presence_person_slug@@_speed
+        unit_of_measurement: "mph"
+        state: >-
+          {{ state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'speed') | int(-1) }}
+      - name: @@PRIVATE:presence_person_slug@@_direction
+        unique_id: @@PRIVATE:presence_person_slug@@_direction
+        state: >-
+          {% if (state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'course') | int(-1)) >=0 -%}
+            {{ state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'course') | int(-1) }}
+          {%- else -%}
+            {{ -1 | int(-1) }}
+          {%- endif %}
+
+########################
+# Zone
+########################
+zone:
+  - name: !secret private_zone_01_name
+    latitude: !secret private_zone_01_latitude
+    longitude: !secret private_zone_01_longitude
+    radius: 150
+    icon: mdi:soccer-field
+
+  - name: !secret private_zone_02_name
+    latitude: !secret home_latitude
+    longitude: !secret home_longitude
+    radius: 250
+
+  - name: !secret private_zone_03_name
+    latitude: !secret home_latitude
+    longitude: !secret home_longitude
+    radius: 1000
+
+  - name: !secret private_zone_04_name
+    latitude: !secret private_zone_04_latitude
+    longitude: !secret private_zone_04_longitude
+    radius: 1850
+
+  - name: !secret private_zone_05_name
+    latitude: !secret private_zone_05_latitude
+    longitude: !secret private_zone_05_longitude
+    radius: 500
+
+  - name: !secret private_zone_06_name
+    latitude: !secret @@PRIVATE:zone_06_latitude_secret_key@@
+    longitude: !secret @@PRIVATE:zone_06_longitude_secret_key@@
+    radius: 20000
+
+  - name: !secret private_zone_07_name
+    latitude: !secret @@PRIVATE:zone_07_latitude_secret_key@@
+    longitude: !secret @@PRIVATE:zone_07_longitude_secret_key@@
+    radius: 10000
+
+  - name: !secret private_zone_08_name
+    latitude: !secret private_zone_08_latitude
+    longitude: !secret private_zone_08_longitude
+    radius: 250
+
+  - name: !secret private_zone_09_name
+    latitude: !secret private_zone_09_latitude
+    longitude: !secret private_zone_09_longitude
+    radius: 300
+    icon: mdi:baseball-diamond-outline
+
+  - name: !secret private_zone_10_name
+    latitude: !secret private_zone_10_latitude
+    longitude: !secret private_zone_10_longitude
+    radius: 35000
+    # Don't use for device tracker location names
+    passive: true
+
+  - name: !secret private_zone_11_name
+    latitude: !secret work_latitude
+    longitude: !secret work_longitude
+    radius: 400

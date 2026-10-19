@@ -65,18 +65,44 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
 
     for token in (
         "sleep-safe state",
+        "script.house_transition",
+        "mode: asleep",
         "script.lights_off_except",
         "switch.office_red_lava_lamp",
         "switch.northern_light_lava_lamp",
         "media_player.lg_webos_smart_tv",
-        "media_player.basement",
-        "script.turn_off_owner_suite_inovelli_switch_leds",
+        "media_player.basement_great_room_basement_atv",
+        "script.apply_owner_suite_inovelli_led_policy",
+        "policy: dark",
         "lock.front_door_lock",
         "cover.garage_door",
         "cover.owner_suite_blinds_ha",
         "climate.my_ecobee",
     ):
         assert token in block
+
+
+def test_goodnight_integrity_skips_inactive_common_area_media_targets() -> None:
+    block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
+    assert (
+        "- sequence:\n              - variables:\n"
+        "                  common_area_media_shutdown_targets:"
+    ) in block
+    media_shutdown = block.split(
+        "common_area_media_shutdown_targets:", maxsplit=1
+    )[1].split("script.apply_owner_suite_inovelli_led_policy", maxsplit=1)[0]
+
+    for token in (
+        "expand(",
+        "'media_player.lg_webos_smart_tv'",
+        "'media_player.basement_great_room_basement_atv'",
+        "['off', 'unavailable', 'unknown']",
+        "common_area_media_shutdown_targets | count > 0",
+        'entity_id: "{{ common_area_media_shutdown_targets }}"',
+    ):
+        assert token in media_shutdown
+
+    assert media_shutdown.count("action: media_player.turn_off") == 1
 
 
 def test_goodnight_integrity_respects_guest_mode_and_guest_room_occupancy() -> None:
@@ -123,31 +149,72 @@ def test_cpap_bedtime_lights_off_still_treats_cpap_as_full_sleep() -> None:
     assert "reason: cpap_sleep" in action_block
 
 
-def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
+def test_bed_lamps_off_routes_through_goodnight_integrity() -> None:
     block = _automation_block(LIGHT_PATH, "turn_off_all_lights_when_bed_off")
 
     assert "sensor.owner_suite_cpap_plug_power" in block
-    assert "script.lights_off_except" in block
-    assert "light.outside_front_hue" in block
-    assert "light.outside_front_door" in block
+
+    # The lamps-off bedtime path now emits the shared goodnight-integrity signal
+    # rather than inlining its own house_transition + lights_off_except, so the
+    # diffuser shutdown stays behind GoodnightIntegrityRequested per
+    # specs/diffusers.allium (TurnOffDiffusersForSleep).
+    assert "script.goodnight_integrity" in block
+    assert "reason: bedside_lamps_off" in block
 
     for token in (
-        "switch.office_red_lava_lamp",
-        "media_player.lg_webos_smart_tv",
-        "media_player.basement",
-        "script.goodnight_integrity",
+        "script.house_transition",
+        "mode: asleep",
+        "script.lights_off_except",
+        "light.outside_front_hue",
     ):
         assert token not in block
+
+
+def test_in_bed_turn_off_other_lights_marks_house_mode_before_dimming_the_rest_of_the_house() -> None:
+    block = _automation_block(LIGHT_PATH, "in_bed_turn_off_other_lights")
+
+    assert "binary_sensor.bayesian_bed_occupancy" in block
+    assert "minutes: 10" in block
+    assert "script.house_transition" in block
+    assert "mode: in_bed" in block
+    assert "reason: bed_occupancy_sustained" in block
+    assert "script.lights_off_except" in block
 
 
 def test_basement_lights_auto_on_respects_plex_basement_playback() -> None:
     block = _automation_block(LIGHT_PATH, "basement_lights_auto_on")
 
-    assert "media_player.basement" in block
+    assert "media_player.basement_great_room_basement_atv" in block
     assert "media_player.plex_basement_apple_tv" in block
     assert "condition: not" in block
     assert "condition: or" in block
-    assert "light.basement_great_room" in block
+    assert "script.turn_on_basement_lights_sequentially" in block
+
+
+def test_turn_on_basement_lights_sequentially_stages_path_lights_before_tv_bias() -> None:
+    block = _script_block(LIGHT_PATH, "turn_on_basement_lights_sequentially")
+
+    assert "Turn on the basement path in stages" in block
+    assert "switch.adaptive_lighting_basement" in block
+    assert "for_each:" in block
+    assert "{{ repeat.item }}" in block
+    # The five path targets are brightness-only Inovelli dimmers. Bootstrapping
+    # them emits a redundant 1% command before the adaptive brightness command,
+    # and delayed Zigbee reports can visibly replay that low level out of order.
+    assert "bootstrap: true" not in block
+
+    ordered_entities = (
+        "light.basement_landing_switch",
+        "light.basement_great_room_landing_switch_2",
+        "light.basement_north_hallway_switch",
+        "light.basement_great_room_east_and_middle_switch",
+        "light.basement_great_room_west_switch",
+        "light.basement_tv_bias",
+    )
+
+    positions = [block.index(entity_id) for entity_id in ordered_entities]
+    assert positions == sorted(positions)
+    assert block.count("seconds: 1") == 1
 
 
 def test_tv_bed_prep_stops_short_of_full_goodnight_shutdown() -> None:

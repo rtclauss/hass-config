@@ -34,11 +34,13 @@ def test_tiki_time_uses_shared_music_assistant_helpers() -> None:
     block = _script_block("tiki_time")
 
     assert "Start the Tiki Time party mode" in block
-    assert "action: script.music_assistant_prepare_house_party_group" in block
     assert "action: script.music_assistant_play_item" in block
-    assert 'media_item: "somafm://radio/tikitime"' in block
-    assert "media_player.den_sonos_2" in block
-    assert "media_player.basement" in block
+    assert "action: script.music_assistant_prepare_house_party_group" not in block
+    assert 'media_item: "https://ice1.somafm.com/tikitime-128-mp3"' in block
+    assert "media_type: radio" in block
+    assert "somafm://radio/tikitime" not in block
+    assert "media_player.ma_group_everywhere" in block
+    assert "media_player.basement_great_room_basement_atv" in block
     assert "source: Photos" in block
     assert "flash: short" in block
     assert "script.tiki_time_tropical_color_cycle" in block
@@ -79,7 +81,7 @@ def test_tiki_time_color_cycle_targets_individual_color_lights() -> None:
         "light.kitchen_overhead_1",
         "light.kitchen_overhead_7",
         "light.kitchen_sink_overhead",
-        "light.east_table_lamp",
+        "light.office_east_table_lamp",
         "light.west_table_lamp",
         "light.tiki_room_floor_lamp",
         "light.tiki_room_lights_tiki_room_strip",

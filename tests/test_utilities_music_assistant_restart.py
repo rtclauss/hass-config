@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from privacy_ids import OWNER_PERSON
 
 
 UTILITIES_PATH = Path(__file__).resolve().parents[1] / "packages" / "utilities.yaml"
@@ -37,15 +38,39 @@ def _automation_block(automation_id: str) -> str:
     return block
 
 
-def test_music_assistant_restart_loop_uses_the_music_assistant_addon() -> None:
+def test_music_assistant_restart_only_runs_when_resident_leaves_home() -> None:
     block = _automation_block("restart_music_assistant_every_12_17_hours")
+
+    for token in (
+        "trigger: zone",
+        f"entity_id: {OWNER_PERSON}",
+        "zone: zone.home",
+        "event: leave",
+        "addon: d5369777_music_assistant",
+    ):
+        assert token in block
 
     for token in (
         "trigger: homeassistant",
         "event: start",
         "repeat:",
         'delay: "12:10:12"',
-        "addon: d5369777_music_assistant",
         "self-rescheduling loop",
     ):
-        assert token in block
+        assert token not in block
+
+
+def test_music_assistant_restart_ignores_false_source_tracker_zone_leave() -> None:
+    block = _automation_block("restart_music_assistant_every_12_17_hours")
+
+    guard = f"""    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: {OWNER_PERSON}
+            state:
+              - home
+              - unknown
+              - unavailable"""
+
+    assert guard in block

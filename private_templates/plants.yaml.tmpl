@@ -1,0 +1,703 @@
+# Home Assistant package for plant monitoring.
+# It collects moisture, light, conductivity, and battery data into plant-centric helpers that are easier to surface in dashboards and reminders.
+
+################################################################
+## Packages / Plants
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "plants"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Frontend
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+    plant.four_inch_nepenthes:
+      <<: *customize
+      friendly_name: "Four Inch Potted Nepenthes"
+
+    plant.monstera:
+      <<: *customize
+      friendly_name: "Monstera"
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.east_hanging_nepenthes_battery:
+      <<: *customize
+      friendly_name: "East Hanging Nepenthes Battery"
+      device_class: battery
+
+    sensor.east_hanging_nepenthes_conductivity:
+      <<: *customize
+      friendly_name: "East Hanging Nepenthes Conductivity"
+      icon: mdi:flash
+
+    sensor.east_hanging_nepenthes_light_intensity:
+      <<: *customize
+      friendly_name: "East Hanging Nepenthes Light Intensity"
+      device_class: illuminance
+
+    sensor.east_hanging_nepenthes_moisture:
+      <<: *customize
+      friendly_name: "East Hanging Nepenthes Moisture"
+      device_class: humidity
+
+    sensor.east_hanging_nepenthes_temperature:
+      <<: *customize
+      friendly_name: "East Hanging Nepenthes Temperature"
+      device_class: temperature
+
+    sensor.monstera_battery:
+      <<: *customize
+      friendly_name: "Monstera Battery"
+      device_class: battery
+
+    sensor.monstera_conductivity:
+      <<: *customize
+      friendly_name: "Monstera Conductivity"
+      icon: mdi:flash
+
+    sensor.monstera_moisture:
+      <<: *customize
+      friendly_name: "Monstera Moisture"
+      device_class: humidity
+
+    sensor.monstera_temperature:
+      <<: *customize
+      friendly_name: "Monstera Temperature"
+      device_class: temperature
+
+    sensor.west_hanging_nepenthes_battery:
+      <<: *customize
+      friendly_name: "West Hanging Nepenthes Battery"
+      device_class: battery
+
+    sensor.west_hanging_nepenthes_conductivity:
+      <<: *customize
+      friendly_name: "West Hanging Nepenthes Conductivity"
+      icon: mdi:flash
+
+    sensor.west_hanging_nepenthes_light_intensity:
+      <<: *customize
+      friendly_name: "West Hanging Nepenthes Light Intensity"
+      device_class: illuminance
+
+    sensor.west_hanging_nepenthes_moisture:
+      <<: *customize
+      friendly_name: "West Hanging Nepenthes Moisture"
+      device_class: humidity
+
+    sensor.west_hanging_nepenthes_temperature:
+      <<: *customize
+      friendly_name: "West Hanging Nepenthes Temperature"
+      device_class: temperature
+
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel: []
+
+########################
+## Automation
+########################
+automation:
+  - id: catnip_grow_light_on
+    alias: catnip_grow_light_on
+    description: >
+      Basement/Grow Light lives in the basement great room, a guest-capable
+      sleeping space (docs/room_intent.yaml). Skip turning it on while guest
+      mode is active so a 260W fixture doesn't intrude on a sleeping guest.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "06:00:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.basement_grow_light
+
+  - id: catnip_grow_light_off
+    alias: catnip_grow_light_off
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "00:00:00"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.basement_grow_light
+
+  - id: catnip_grow_light_reconcile
+    alias: catnip_grow_light_reconcile
+    description: >
+      Periodically restore the intended 06:00-24:00 catnip grow light schedule,
+      self-healing whenever Home Assistant, the switch's integration, or the
+      entity itself was unavailable/nonexistent when the on/off time triggers
+      were due to fire. A periodic sweep covers every such gap without needing
+      a dedicated trigger for each way the switch can miss a transition. Also
+      reacts immediately to guest_mode changes and to any state report from
+      the switch itself (recovering from unavailable, first registration, or
+      a manual toggle): Basement/Grow Light sits in the guest-capable
+      basement great room (docs/room_intent.yaml), so this treats guest mode
+      as an override on the desired state, not just the scheduled on/off
+      automations.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+      - trigger: state
+        entity_id: input_boolean.trip_guest_visit_active
+      - trigger: state
+        entity_id: switch.basement_grow_light
+    action:
+      - variables:
+          should_be_on: >-
+            {{ now().hour >= 6
+               and is_state('input_boolean.guest_mode', 'off')
+               and is_state('input_boolean.trip_guest_visit_active', 'off') }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ should_be_on and is_state('switch.basement_grow_light', 'off') }}"
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.basement_grow_light
+          - conditions:
+              - condition: template
+                value_template: "{{ not should_be_on and is_state('switch.basement_grow_light', 'on') }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.basement_grow_light
+
+  - id: water_notification
+    alias: water_notification
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "12:15:00"
+    condition:
+      - alias: "condition alias (name)"
+        condition: template
+        value_template: >-
+          {{states.plant| selectattr('state', 'eq', 'problem')| list | length > 0}}
+    action:
+      - action: notify.all
+        data:
+          data:
+            url: "/@@PRIVATE:owner_dashboard_slug@@-new-mushroom/plants"
+          message: >-
+            {%- for plant in states.plant -%}
+              {%- set data = namespace(problems=[]) -%}
+                {%- for problem in plant.attributes.problem.split(', ') if ((problem not in ['none','brightness low', 'conductivity low'])) -%}
+                  {%- set data.problems = data.problems + [problem] -%}
+                {%- endfor -%}
+                {%- if data.problems | length > 0 -%}
+                      {{- plant.attributes.friendly_name -}}
+                  {%- if 'moisture low' in data.problems -%}
+                    {{- ' - moisture: ' -}}{{- states[plant.attributes.sensors.moisture].state_with_unit -}}
+                  {%- endif -%}
+                  {%- if 'battery unavailable' in data.problems -%}
+                    {{- ', battery likely dead' }}
+                  {%- endif -%}
+                {% endif %}
+            {% endfor -%}
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Cameras
+########################
+camera: []
+
+########################
+# Device Trackers
+########################
+device_tracker: []
+
+########################
+# Frontend
+########################
+frontend: {}
+
+########################
+# Groups
+########################
+group: {}
+
+########################
+# Input Booleans
+########################
+input_boolean: {}
+
+########################
+# Input Numbers
+########################
+input_number: {}
+
+########################
+# Input Select
+########################
+input_select: {}
+
+########################
+# iOS
+########################
+ios: {}
+
+########################
+# Light
+########################
+light: []
+
+########################
+# MQTT
+########################
+mqtt:
+  sensor:
+    - name: east_hanging_nepenthes_battery
+      unique_id: east_hanging_nepenthes_battery
+      state_topic: haplants/sensor/east_hanging_nepenthes_battery/state
+      unit_of_measurement: "%"
+      device_class: battery
+
+    - name: east_hanging_nepenthes_conductivity
+      unique_id: east_hanging_nepenthes_conductivity
+      state_topic: haplants/sensor/east_hanging_nepenthes_conductivity/state
+      unit_of_measurement: "\u00b5S/cm"
+      icon: mdi:flash-circle
+
+    - name: east_hanging_nepenthes_light_intensity
+      unique_id: east_hanging_nepenthes_light_intensity
+      state_topic: haplants/sensor/east_hanging_nepenthes_light_intensity/state
+      unit_of_measurement: "lx"
+      device_class: illuminance
+
+    - name: east_hanging_nepenthes_moisture
+      unique_id: east_hanging_nepenthes_moisture
+      state_topic: haplants/sensor/east_hanging_nepenthes_moisture/state
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+
+    #
+    - name: elkhorn_battery
+      unique_id: elkhorn_battery
+      state_topic: haplants/sensor/elkhorn_battery/state
+      unit_of_measurement: "%"
+      device_class: battery
+
+    - name: elkhorn_conductivity
+      unique_id: elkhorn_conductivity
+      state_topic: haplants/sensor/elkhorn_conductivity/state
+      unit_of_measurement: "\u00b5S/cm"
+      icon: mdi:flash-circle
+
+    - name: elkhorn_light_intensity
+      unique_id: elkhorn_light_intensity
+      state_topic: haplants/sensor/elkhorn_illuminance/state
+      unit_of_measurement: "lx"
+      device_class: illuminance
+
+    - name: elkhorn_moisture
+      unique_id: elkhorn_moisture
+      state_topic: haplants/sensor/elkhorn_moisture/state
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+
+    - name: elkhorn_temperature
+      unique_id: elkhorn_temperature
+      state_topic: haplants/sensor/elkhorn_temperature/state
+      unit_of_measurement: "\u00b0F"
+      device_class: temperature
+    #
+
+    - name: east_hanging_nepenthes_temperature
+      unique_id: east_hanging_nepenthes_temperature
+      state_topic: haplants/sensor/east_hanging_nepenthes_temperature/state
+      unit_of_measurement: "\u00b0F"
+      device_class: temperature
+
+    - name: west_hanging_nepenthes_battery
+      unique_id: west_hanging_nepenthes_battery
+      state_topic: haplants/sensor/west_hanging_nepenthes_battery/state
+      unit_of_measurement: "%"
+      device_class: battery
+
+    - name: terrarium_battery
+      unique_id: terrarium_battery
+      state_topic: haplants/sensor/terrarium_battery/state
+      unit_of_measurement: "%"
+      device_class: battery
+
+    - name: terrarium_conductivity
+      unique_id: terrarium_conductivity
+      state_topic: haplants/sensor/terrarium_conductivity/state
+      unit_of_measurement: "\u00b5S/cm"
+      icon: mdi:flash-circle
+
+    - name: terrarium_light_intensity
+      unique_id: terrarium_light_intensity
+      state_topic: haplants/sensor/terrarium_light_intensity/state
+      unit_of_measurement: "lx"
+      device_class: illuminance
+
+    - name: terrarium_moisture
+      unique_id: terrarium_moisture
+      state_topic: haplants/sensor/terrarium_moisture/state
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+
+    - name: terrarium_temperature
+      unique_id: terrarium_temperature
+      state_topic: haplants/sensor/terrarium_temperature/state
+      unit_of_measurement: "\u00b0F"
+      device_class: temperature
+
+    - name: west_hanging_nepenthes_conductivity
+      unique_id: west_hanging_nepenthes_conductivity
+      state_topic: haplants/sensor/west_hanging_nepenthes_conductivity/state
+      unit_of_measurement: "\u00b5S/cm"
+      icon: mdi:flash-circle
+
+    - name: west_hanging_nepenthes_light_intensity
+      unique_id: west_hanging_nepenthes_light_intensity
+      state_topic: haplants/sensor/west_hanging_nepenthes_light_intensity/state
+      unit_of_measurement: "lx"
+      device_class: illuminance
+      #icon:
+
+    - name: west_hanging_nepenthes_moisture
+      unique_id: west_hanging_nepenthes_moisture
+      state_topic: haplants/sensor/west_hanging_nepenthes_moisture/state
+      unit_of_measurement: "%"
+      #device_class: moisture
+      icon: mdi:water-percent
+
+    - name: west_hanging_nepenthes_temperature
+      unique_id: west_hanging_nepenthes_temperature
+      state_topic: haplants/sensor/west_hanging_nepenthes_temperature/state
+      unit_of_measurement: "\u00b0F"
+      device_class: temperature
+########################
+# Plant
+########################
+plant:
+  # https://raw.githubusercontent.com/khronimo/MiFloraDB/master/PlantDB_5335_U0.csv
+  bird_of_paradise:
+    sensors:
+      battery: sensor.bird_of_paradise_battery
+      conductivity: sensor.bird_of_paradise_conductivity
+      brightness: sensor.bird_of_paradise_illuminance
+      moisture: sensor.bird_of_paradise_moisture
+      temperature: sensor.bird_of_paradise_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_brightness: 4000
+    max_brightness: 000
+    min_temperature: 5
+    max_temperature: 35
+    min_battery: 10
+
+  birds_nest_fern:
+    sensors:
+      battery: sensor.bird_nest_fern_battery
+      conductivity: sensor.bird_nest_fern_conductivity
+      brightness: sensor.bird_nest_fern_illuminance
+      moisture: sensor.bird_nest_fern_moisture
+      temperature: sensor.bird_nest_fern_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_brightness: 500
+    max_brightness: 12000
+    min_temperature: 50
+    max_temperature: 95
+    min_battery: 10
+
+  bromeliad:
+    sensors:
+      battery: sensor.bromeliad_battery
+      conductivity: sensor.bromeliad_conductivity
+      brightness: sensor.bromeliad_illuminance
+      moisture: sensor.bromeliad_moisture
+      temperature: sensor.bromeliad_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 300
+    max_conductivity: 1000
+    min_brightness: 800
+    max_brightness: 27000
+    min_temperature: 50
+    max_temperature: 99
+    min_battery: 10
+
+  elkhorn:
+    sensors:
+      battery: sensor.elkhorn_fern_battery
+      conductivity: sensor.elkhorn_fern_conductivity
+      brightness: sensor.elkhorn_fern_illuminance
+      moisture: sensor.elkhorn_fern_moisture
+      temperature: sensor.elkhorn_fern_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 1500
+    min_brightness: 300
+    max_brightness: 4000
+    min_temperature: 50
+    max_temperature: 90
+    min_battery: 10
+
+  monstera:
+    sensors:
+      battery: sensor.monstera_battery
+      conductivity: sensor.monstera_conductivity
+      brightness: sensor.monstera_illuminance
+      moisture: sensor.monstera_moisture
+      temperature: sensor.monstera_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_temperature: 53
+    max_temperature: 89
+    min_brightness: 800
+    max_brightness: 15000
+    min_battery: 10
+
+  north_hanging_nepenthes:
+    sensors:
+      battery: sensor.n_nepenthes_battery
+      conductivity: sensor.n_nepenthes_conductivity
+      brightness: sensor.n_nepenthes_illuminance
+      moisture: sensor.n_nepenthes_moisture
+      temperature: sensor.n_nepenthes_temperature
+    min_brightness: 1500
+    max_brightness: 35000
+    min_moisture: 20
+    max_moisture: 60
+    min_conductivity: 50
+    max_conductivity: 1500
+    min_temperature: 54
+    max_temperature: 95
+    min_battery: 10
+
+  rubber_plant:
+    sensors:
+      battery: sensor.rubber_plant_battery
+      conductivity: sensor.rubber_plant_conductivity
+      brightness: sensor.rubber_plant_illuminance
+      moisture: sensor.rubber_plant_moisture
+      temperature: sensor.rubber_plant_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_temperature: 50
+    max_temperature: 90
+    min_brightness: 1000
+    max_brightness: 30000
+    min_battery: 10
+
+  four_inch_nepenthes:
+    sensors:
+      battery: sensor.4in_nepenthes_battery
+      conductivity: sensor.4in_nepenthes_conductivity
+      brightness: sensor.4in_nepenthes_illuminance
+      moisture: sensor.4in_nepenthe_moisture
+      temperature: sensor.4in_nepenthes_temperature
+    min_brightness: 1500
+    max_brightness: 35000
+    min_moisture: 20
+    max_moisture: 60
+    min_conductivity: 50
+    max_conductivity: 1500
+    min_temperature: 54
+    max_temperature: 95
+    min_battery: 10
+
+  terrarium:
+    sensors:
+      battery: sensor.terrarium_battery
+      conductivity: sensor.terrarium_conductivity
+      brightness: sensor.terrarium_light_intensity
+      moisture: sensor.terrarium_moisture
+      temperature: sensor.terrarium_temperature
+
+  sansevieria_victoria:
+    sensors:
+      battery: sensor.sanservia_victoria_battery
+      conductivity: sensor.sanservia_victoria_conductivity
+      brightness: sensor.sanservia_victoria_illuminance
+      moisture: sensor.sanservia_victoria_moisture
+      temperature: sensor.sanservia_victoria_temperature
+    min_brightness: 1500
+    max_brightness: 60000
+    min_moisture: 7
+    max_moisture: 50
+    min_conductivity: 300
+    max_conductivity: 1000
+    min_temperature: 50
+    max_temperature: 90
+    min_battery: 10
+
+  south_hanging_nepenthes:
+    sensors:
+      battery: sensor.s_nepenthes_battery
+      conductivity: sensor.s_nepenthes_conductivity
+      brightness: sensor.s_nepenthes_illuminance
+      moisture: sensor.s_nepenthes_moisture
+      temperature: sensor.s_nepenthes_temperature
+    min_brightness: 1500
+    max_brightness: 35000
+    min_moisture: 20
+    max_moisture: 60
+    min_conductivity: 50
+    max_conductivity: 1500
+    min_temperature: 54
+    max_temperature: 95
+    min_battery: 10
+
+  zz_plant:
+    sensors:
+      battery: sensor.zz_plant_battery
+      conductivity: sensor.zz_plant_conductivity
+      brightness: sensor.zz_plant_illuminance
+      moisture: sensor.zz_plant_moisture
+      temperature: sensor.zz_plant_temperature
+    min_brightness: 600
+    max_brightness: 20000
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_temperature: 50
+    max_temperature: 89
+    min_battery: 10
+
+########################
+# Scenes
+########################
+scene: []
+
+########################
+# Scripts
+########################
+script: {}
+
+########################
+# Sensor
+########################
+sensor: []
+
+########################
+# Switch
+########################
+switch: []
+
+########################
+# Zone
+########################
+zone: {}

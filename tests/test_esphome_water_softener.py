@@ -1,0 +1,139 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ACTIVE_CONFIG = ROOT / "esphome" / "watersoftener.yaml"
+LEGACY_CONFIG = (
+    ROOT / "docs" / "esphome_archive" / "watersoftener-esp8266-vl53l0x.yaml"
+)
+HA_PACKAGE = ROOT / "packages" / "water_softener.yaml"
+
+
+def test_legacy_water_softener_configuration_is_archived() -> None:
+    text = LEGACY_CONFIG.read_text(encoding="utf-8")
+
+    assert "esp8266:" in text
+    assert "board: esp01_1m" in text
+    assert "platform: vl53l0x" in text
+    assert 'name: "My Water Softener VL53L0X Sensor"' in text
+
+
+def test_active_water_softener_uses_esp32_and_pinned_vl53l1x_component() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+
+    assert "esp32:" in text
+    assert "variant: esp32" in text
+    assert "type: esp-idf" in text
+    assert 'minimum_chip_revision: "3.0"' in text
+    assert "sram1_as_iram: true" in text
+    assert "github://soldierkam/vl53l1x_sensor@v0.5.1" in text
+    assert "platform: vl53l1x_sensor" in text
+    assert "platform: vl53l0x" not in text
+    assert 'name: "My Water Softener VL53L1X Sensor"' in text
+
+
+def test_vl53l1x_wiring_and_measurement_contract_are_explicit() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+
+    assert "sda: GPIO21" in text
+    assert "scl: GPIO22" in text
+    assert "frequency: 400kHz" in text
+    assert "address: 0x29" in text
+    assert "distance_mode: LONG" in text
+    assert "timing_budget: 200ms" in text
+    assert "unit_of_measurement: \"mm\"" in text
+    assert "accuracy_decimals: 1" in text
+    assert "lambda: return x * 1000;" in text
+    assert "update_interval: 2s" in text
+
+
+def test_firmware_publishes_five_minute_averages_at_tenth_mm() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+    live = [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+    # One average of the ~150 two-second reads per 5 minutes instead of an EMA
+    # snapshot every ~30 s: same downstream noise/lag on the replayed recorder
+    # data with ~10x fewer state rows. Spike rejection (median) stays first.
+    assert "- throttle_average: 5min" in live
+    assert "- exponential_moving_average:" not in live
+    assert "- round: 1" in live
+    assert live.index("- median:") < live.index("- throttle_average: 5min")
+
+
+def test_firmware_exposes_restart_aware_diagnostics() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+
+    assert "level: INFO" in text
+    assert "platform: uptime" in text
+    # A boot timestamp only changes on reboot; a seconds counter would write a
+    # recorder row on every update.
+    assert "type: timestamp" in text
+    assert "platform: wifi_signal" in text
+    assert "platform: restart" in text
+    assert "platform: safe_mode" in text
+
+
+def test_home_assistant_package_consumes_new_sensor_entity() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # The salt-level filter sensor consumes the normalized-to-mm template
+    # sensor, not the raw ESPHome entity directly -- see
+    # test_salt_level_source_normalizes_units_to_mm below for why.
+    assert "entity_id: sensor.water_softener_distance_normalized_mm" in text
+    assert "entity_id: sensor.my_water_softener_vl53l0x_sensor" not in text
+    assert "entity_id: sensor.my_water_softener_vl53l1x_sensor" not in text
+
+
+def test_salt_level_source_normalizes_units_to_mm() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # HA registers this ESPHome node's entity with a "watersoftener_"
+    # device-name prefix (confirmed via the live entity registry after the
+    # VL53L0X -> VL53L1X hardware migration and ESPHome integration
+    # reconfigure); the un-prefixed id never existed post-migration.
+    assert "sensor.watersoftener_my_water_softener_vl53l1x_sensor" in text
+
+    # The normalizing template sensor must actually declare mm and handle
+    # the unit HA was observed reporting post-migration (in), not just the
+    # expected one (mm) -- a raw registry override is not version-controlled
+    # and was flagged as fragile in review.
+    assert 'unique_id: water_softener_distance_normalized_mm' in text
+    assert 'unit_of_measurement: "mm"' in text
+    assert "value * 25.4" in text
+
+    # Regression guard: an actual (non-comment) "device_class: distance"
+    # key on this template sensor would make HA's own unit-system
+    # conversion apply to *it* too, silently re-converting its mm state
+    # back to inches under an imperial unit system and reintroducing the
+    # exact bug this sensor exists to fix, one level downstream (caught in
+    # review). Checked line-by-line so this assertion survives explaining
+    # itself in a comment, same as this one does.
+    live_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any(line == "device_class: distance" for line in live_lines)
+
+
+def test_salt_level_filter_has_no_permanently_stuck_outlier_rejection() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # Regression guard: HA's `outlier` filter only widens its comparison
+    # window with values it *accepts*. A genuine step change bigger than
+    # its radius -- exactly what a real salt refill produces -- gets
+    # rejected forever afterward, since every later (correct) reading
+    # keeps comparing against the same stale pre-refill window. That would
+    # silently and permanently break refill detection, the whole point of
+    # this sensor (caught in review). Spike rejection belongs entirely in
+    # the firmware-side median filter, which has no such lockout.
+    live_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any(line == "filter: outlier" for line in live_lines)
+
+    esphome_text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+    assert "median:" in esphome_text

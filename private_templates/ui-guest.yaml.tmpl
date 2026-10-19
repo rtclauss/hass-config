@@ -1,0 +1,243 @@
+# Guest-facing Lovelace dashboard used for the kiosk/tablet view.
+# It exposes only simple room, media, and household controls so visitors can operate the house without opening the full admin dashboard.
+
+title: @@PRIVATE:zone_02_label@@
+
+# custom_header:
+#   compact_mode: true
+#   voice: hide
+#   swipe: true
+#   hide_config: true
+#   hide_raw: true
+#   hide_unused: true
+#   hide_help: true
+
+views:
+  - title: Home
+    path: home
+    icon: mdi:lightbulb
+    ## Add ETA to Home if I'm out and about?
+    badges:
+      - name: Time until @@PRIVATE:owner_person_title@@ returns home
+        entity: sensor.me_to_home
+    cards:
+      - id: f077a7073da44af5828c5bfe6a9f0982 # Automatically created id
+        type: vertical-stack
+        cards:
+          - type: custom:vertical-stack-in-card
+            title: Living Room Lights
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: entity-button
+                    entity: light.dining_room_lamps
+                    state_color: true
+                    name: "All but TV Bias"
+                    icon: mdi:sofa
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.basement_tv_bias
+                    state_color: true
+                    name: "TV Bias"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.den_lamp
+                    state_color: true
+                    name: "Couch Lamp"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+              - type: horizontal-stack
+                title: Scenes and Activities
+                show_header_toggle: false
+                cards:
+                  - type: entity-button
+                    entity: scene.scene_reset_bedroom
+                    name: "Reset Living Room"
+                    icon: mdi:backup-restore
+                    tap_action:
+                      action: call-service
+                      service: scene.turn_on
+                      service_data:
+                        entity_id: scene.scene_reset_bedroom
+      - id: f077a7073da44af5828c2bfe6a9f0921 # Automatically created id
+        type: vertical-stack
+        cards:
+          - id: e75eb2badf864ae8b76e9a14fde8b60d # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Guest Room
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: mdi:fan
+                    name: Ceiling  Bulb
+                    entity: light.guest_room_ceiling
+      - id: f077a7073da44af5828c1bfe6a9f0921 # Automatically created id
+        type: vertical-stack
+        cards:
+          - id: e75eb2badf864ae8b76e9a14fde8b60c # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Kitchen Lights
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: entity-button
+                    entity: light.kitchen_sink_overhead
+                    state_color: true
+                    name: "Kitchen Sink"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.dining_room_over_table
+                    state_color: true
+                    name: "Kitchen Table"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+          - id: e75eb2badf864ae8b76e9a14fde8b60e # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Lights in Other Rooms
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: entity-button
+                    entity: light.hall_stairway
+                    state_color: true
+                    name: "Stairs"
+                    tap_action:
+                      action: toggle
+                  - type: entity-button
+                    entity: light.office_floor_lamp
+                    state_color: true
+                    name: "Office"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+  ##################################################
+  - title: Media
+    path: media
+    icon: mdi:television
+    cards:
+      - id: f077a7073da44af5818c5bfe6a9f0981 # Automatically created id
+        type: vertical-stack
+        cards:
+          - type: entity-button
+            name: "Watch TV"
+            icon: mdi:television
+            entity: script.watch_tv
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_tv
+          - type: entity-button
+            name: "Watch Netflix"
+            icon: mdi:netflix
+            entity: script.watch_netflix
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_netflix
+          - type: entity-button
+            name: "Watch Plex"
+            icon: mdi:plex
+            entity: script.watch_plex
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_plex
+          # - type: entity-button
+          #   name: "Watch Popcorn Time"
+          #   icon: mdi:popcorn
+          #   tap_action:
+          #     action: call-service
+          #     service: script.turn_on
+          #     service_data:
+          #       entity_id: script.watch_popcorn_time
+          - type: entity-button
+            name: "Turn off TV"
+            icon: mdi:television-off
+            entity: media_player.lg_webos_smart_tv
+            tap_action:
+              action: call-service
+              service: media_player.turn_off
+              service_data:
+                entity_id: media_player.lg_webos_smart_tv
+  ##################################################
+
+  - title: Climate
+    path: climate
+    icon: mdi:gauge
+    cards:
+      - id: 6a88e04c67024e6ca1952d68c40f4ad9 # Automatically created id
+        type: entities
+        title: Current Conditions
+        show_header_toggle: false
+        entities:
+          - weather.@@PRIVATE:zone_02_name_slug@@
+          - sensor.@@PRIVATE:guest_dashboard_weather_station_slug@@_temperature
+
+      # - id: b1dfcb1f57cc428184dde82853ecd065 # Automatically created id
+      #   type: custom:entity-attributes-card
+      #   title: Current Weather Alerts
+      #   filter:
+      #     include:
+      #       - key: sensor.dark_sky_alerts.title*
+      #         name: Type
+      #       - key: sensor.dark_sky_alerts.description*
+      #         name: Details
+      - id: 94a59971fe914b669bcf5967f8f8619e # Automatically created id
+        type: thermostat
+        title: Upstairs
+        show_header_toggle: false
+        # Z-Wave Thermostat
+        # entity: climate.glycol_thermostat
+        # Nest Thermostat
+        entity: climate.my_ecobee
+
+      - id: 15cee4ae7bca4484bf102cbfb8cb1369 # Automatically created id
+        type: entities
+        title: Guest Bedroom
+        show_header_toggle: false
+        entities:
+          - sensor.guest_room_temperature
+          - sensor.guest_room_tph_humidity
+          - sensor.guest_room_tph_pressure
+          - sensor.guest_room_tph_battery
+
+  ##################################################
+
+  - title: Help
+    path: help
+    icon: mdi:help-circle
+    cards:
+      - type: markdown
+        title: Brewery Help
+        content: |
+          Thanks for visiting me. I've tried to make the house smart without being overly complicated for you.
+          This tablet contains the common controls you'll need to do things around the house. A few other things:
+          * If you get up in the night the hallway, office, and kitchen light will all turn on and off automatically.
+          * Most things in the house can be controlled by Alexa. Just ask her to do your bidding.
+            * `Alexa turn on watch Netflix`
+            * `Alexa turn on watch TV`
+            * `Alexa turn on reset living room`
+            * `Alexa turn off the lights`
+            * `Alexa turn on kitchen`
+            * `Alexa set glycol temperature to 70`
+            * `Alexa set basement temperature to 67`
+            * `Alexa play some Conway Twitty in guest room`
+          * Guest wifi is available

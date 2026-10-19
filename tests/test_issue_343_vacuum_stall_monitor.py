@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import importlib.util
 import json
 import struct
@@ -12,8 +14,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.py"
 APP_CONFIG_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.yaml"
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.example_new_mushroom"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 GITIGNORE_PATH = ROOT / ".gitignore"
+MEDIA_STALL_KEEP_PATH = ROOT / "media" / "vacuum_stalls" / ".gitkeep"
 
 
 def _load_module():
@@ -103,6 +107,26 @@ def test_monitor_only_counts_cleaning_and_returning_states() -> None:
     assert module.is_active_vacuum_state("returning") is True
     assert module.is_active_vacuum_state("docked") is False
     assert module.is_active_vacuum_state("unavailable") is False
+
+
+def test_slug_from_vacuum_entity_drops_duplicate_valetudo_prefix() -> None:
+    module = _load_module()
+
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_mainlevel") == "mainlevel"
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_den") == "den"
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_upstairs_vacuum") == "upstairs_vacuum"
+
+
+def test_snapshot_service_path_uses_home_assistant_allowlisted_config_media_path() -> None:
+    module = _load_module()
+
+    local_path = Path("/homeassistant/media/vacuum_stalls/mainlevel/latest.png")
+
+    assert module.DEFAULT_STORAGE_ROOT == Path("/homeassistant/media/vacuum_stalls")
+    assert module.home_assistant_snapshot_path_for(local_path) == "/config/media/vacuum_stalls/mainlevel/latest.png"
+    assert module.media_url_for(local_path) == (
+        "/media/local/vacuum_stalls/mainlevel/latest.png"
+    )
 
 
 def test_extract_valetudo_map_and_render_png(tmp_path: Path) -> None:
@@ -213,4 +237,17 @@ def test_config_and_dashboard_wire_all_vacuums() -> None:
     assert "Den Stall Evidence" in dashboard_text
     assert "Upstairs Stall Evidence" in dashboard_text
     assert "!appdaemon/apps/vacuum_stall_monitor.py" in gitignore_text
-    assert "!appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+    assert "appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+    assert "private_templates/appdaemon_vacuum_stall_monitor.yaml.tmpl" in (
+        ROOT / "docs/private_config_manifest.json"
+    ).read_text(encoding="utf-8")
+
+
+def test_home_assistant_allows_vacuum_stall_snapshot_directory() -> None:
+    config_text = CONFIGURATION_PATH.read_text(encoding="utf-8")
+    gitignore_text = GITIGNORE_PATH.read_text(encoding="utf-8")
+
+    assert "allowlist_external_dirs:" in config_text
+    assert "- /config/media/vacuum_stalls" in config_text
+    assert MEDIA_STALL_KEEP_PATH.exists()
+    assert "!media/vacuum_stalls/.gitkeep" in gitignore_text

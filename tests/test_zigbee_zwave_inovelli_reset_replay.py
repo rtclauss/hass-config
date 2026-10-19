@@ -4,7 +4,9 @@ import re
 from pathlib import Path
 
 
-ZIGBEE_ZWAVE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zigbee_zwave.yaml"
+ROOT = Path(__file__).resolve().parents[1]
+ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
+INOVELLI_LED_NOTIFICATIONS_PATH = ROOT / "packages" / "inovelli_led_notifications.yaml"
 
 
 def _script_block(script_id: str) -> str:
@@ -28,6 +30,18 @@ def _script_block(script_id: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def _automation_block(automation_id: str) -> str:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^  - id: {re.escape(automation_id)}\n(.*?)(?=^  - (?:id|alias): |^script:\n|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise AssertionError(f"Could not find automation {automation_id!r}")
+    return match.group(0)
 
 
 def _section(block: str, start_marker: str, end_marker: str) -> str:
@@ -121,11 +135,35 @@ def test_reset_script_uses_static_replay_snapshot_instead_of_runtime_capture() -
     assert "inovelli_smart_bulb_mode_replay:" in block
     assert "inovelli_output_mode_replay:" in block
     assert "inovelli_switch_type_replay:" in block
+    assert "inovelli_fan_control_mode_replay:" in block
+    assert "inovelli_mmwave_wired_control_replay:" in block
     assert "inovelli_group_membership_replay:" in block
     assert "inovelli_binding_replay:" in block
     assert "bridge/request/devices" not in block
     assert "bridge/response/devices" not in block
     assert "captured_inovelli_" not in block
+
+
+def test_hall_transition_mmwave_firmware_control_stays_disabled() -> None:
+    block = _automation_block("enforce_hall_transition_mmwave_ha_control")
+
+    assert "trigger: state" in block
+    assert block.count("select.hall_transition_switch_mmwavecontrolwireddevice") >= 5
+    assert "action: select.select_option" in block
+    assert 'option: "Disabled"' in block
+
+
+def test_reset_script_restores_hall_transition_mmwave_control_to_disabled() -> None:
+    block = _script_block("reset_inovelli_switches")
+    section = _section(
+        block,
+        "inovelli_mmwave_wired_control_replay:",
+        "inovelli_output_mode_replay:",
+    )
+
+    assert 'option: "Disabled"' in section
+    assert "select.hall_transition_switch_mmwavecontrolwireddevice" in section
+    assert "+ inovelli_mmwave_wired_control_replay" in block
 
 
 def test_reset_script_replays_current_live_switch_modes_readably() -> None:
@@ -139,6 +177,9 @@ def test_reset_script_replays_current_live_switch_modes_readably() -> None:
     assert 'option: "3-Way Aux Switch"' in block
     assert "select.garage_overhead_switch_switchtype" in block
     assert "select.hall_foyer_switch_switchtype" in block
+    assert 'option: "Toggle"' in block
+    assert "select.dining_room_table_switch_fancontrolmode" in block
+    assert "select.dining_room_wall_switch_fancontrolmode" in block
 
 
 def test_reset_script_does_not_restore_deck_flood_lights_smart_bulb_mode() -> None:
@@ -245,6 +286,20 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
             None,
             ("genLevelCtrl", "genOnOff", "genScenes"),
         ),
+        (
+            "Dining Room/Table Switch",
+            3,
+            "Kitchen/All",
+            None,
+            ("genLevelCtrl", "genOnOff"),
+        ),
+        (
+            "Dining Room/Wall Switch",
+            3,
+            "Kitchen/All",
+            None,
+            ("genLevelCtrl", "genOnOff"),
+        ),
         ("Hall/Foyer Switch", 2, "Hall/All", None, ("genLevelCtrl", "genOnOff")),
         (
             "Hall/Garage Laundry Switch",
@@ -291,6 +346,13 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
             None,
             ("genLevelCtrl", "genOnOff"),
         ),
+        (
+            "Tiki Room/Deck Switch",
+            2,
+            "Deck/Tiki Room Door",
+            11,
+            ("genLevelCtrl", "genOnOff"),
+        ),
     }
 
     assert _parse_group_memberships(block) == expected_memberships
@@ -309,15 +371,128 @@ def test_reset_script_replays_endpoint_1_membership_for_group_bound_switch_sync(
         assert (group, device, 2) not in memberships
 
 
+def test_inovelli_led_recovery_automation_watches_all_led_number_entities() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+
+    block = text.split("automation:\n", 1)[1].split(
+        "\n  - alias: basement_bathroom_switch_actions\n",
+        1,
+    )[0]
+
+    for token in (
+        "replay_inovelli_led_policy_on_recovery",
+        "mode: restart",
+        "event_type: state_changed",
+        "entity_id is match('^number\\\\..*_led(?:color|intensity)when(?:on|off)$')",
+        "from_state.state == 'unavailable'",
+        "to_state.state not in ['unavailable', 'unknown']",
+        "seconds: 45",
+        "entity_id: script.replay_inovelli_led_policy_after_recovery",
+    ):
+        assert token in block
+
+
+def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+
+    block = text.split(
+        "replay_inovelli_led_policy_after_recovery:\n",
+        1,
+    )[1].split(
+        "\n  turn_off_owner_suite_inovelli_switch_leds:\n",
+        1,
+    )[0]
+
+    for token in (
+        "entity_id: input_boolean.trip",
+        "entity_id: script.turn_off_all_inovelli_switch_leds",
+        "entity_id: script.restore_inovelli_switch_leds_from_trip",
+        "owner_suite_leds_should_be_dark",
+        "binary_sensor.bayesian_bed_occupancy",
+        "light.owner_suite_lamps",
+        "script.apply_owner_suite_inovelli_led_policy",
+        "policy: dark",
+    ):
+        assert token in block
+
+
+def test_owner_suite_led_darkening_excludes_unavailable_guest_room_switch() -> None:
+    block = _script_block("turn_off_owner_suite_inovelli_switch_leds")
+
+    for token in (
+        "^number\\\\.owner_suite_.*ledintensitywhenoff$",
+        "^number\\\\.owner_suite_.*ledintensitywhenon$",
+        "owner_suite_led_intensity_off_with_office",
+        "number.office_fan_switch_ledintensitywhenoff",
+    ):
+        assert token in block
+
+    assert "number.guest_room_fan_switch_ledintensitywhenoff" not in block
+
+
+def test_dynamic_inovelli_target_lists_skip_inactive_restore_state_entities() -> None:
+    script_ids = (
+        "night_tv_mode_switches",
+        "day_mode_switches_general",
+        "day_mode_switches_owner_suite_scope",
+        "night_mode_switches_owner_suite",
+        "day_mode_switches_office_guest_room",
+        "reset_inovelli_switches",
+        "turn_off_all_inovelli_switch_leds",
+        "turn_off_owner_suite_inovelli_switch_leds",
+    )
+
+    for script_id in script_ids:
+        block = _script_block(script_id)
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in block, script_id
+        assert "rejectattr('attributes.restored', 'eq', true)" in block, script_id
+
+
+def test_day_mode_default_switch_lists_filter_stale_entities_before_service_calls() -> None:
+    block = _script_block("day_mode_switches_general")
+
+    for variable_name in (
+        "all_day_mode_singletapbehavior_switches",
+        "all_day_mode_defaultlevellocal_switches",
+        "all_day_mode_defaultlevelremote_switches",
+    ):
+        match = re.search(
+            rf"      {variable_name}: >\n(?P<section>.*?)(?=\n      [A-Za-z0-9_]+:|\n    sequence:)",
+            block,
+            re.S,
+        )
+        assert match is not None
+        section = match.group("section")
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in section
+        assert "rejectattr('attributes.restored', 'eq', true)" in section
+
+
+def test_dynamic_inovelli_target_lists_exclude_inactive_restored_entities() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+    loops = re.findall(
+        r"{%- for device in states\.(?:number|select)\n(?P<body>.*?){%- endfor %}",
+        text,
+        flags=re.DOTALL,
+    )
+
+    assert loops
+    for loop in loops:
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in loop
+        assert "rejectattr('attributes.restored', 'eq', true)" in loop
+
+
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
+    notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
 
-    assert "aurora_effect: aurora" in block
-    assert "aurora_color: 187" in block
-    assert "aurora_level: 51" in block
-    assert "aurora_duration: 70" in block
-    assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' in block
-    assert "'led_effect': {" in block
+    assert "action: script.inovelli_led_aurora_notification" in block
+    assert "inovelli_led_aurora_notification:" in notification_text
+    assert "effect: aurora" in notification_text
+    assert "level: 130" in notification_text
+    assert "color: 190" in notification_text
+    assert "duration: 70" in notification_text
+    assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' not in block
+    assert "'led_effect': {" not in block
 
 
 def test_reset_script_skips_aurora_notification_while_bed_is_occupied() -> None:
@@ -326,5 +501,5 @@ def test_reset_script_skips_aurora_notification_while_bed_is_occupied() -> None:
     assert "binary_sensor.bayesian_bed_occupancy" in block
     assert 'state: "off"' in block
     assert block.index("binary_sensor.bayesian_bed_occupancy") < block.index(
-        'topic: "zigbee2mqtt/{{ repeat.item }}/set"'
+        "action: script.inovelli_led_aurora_notification"
     )

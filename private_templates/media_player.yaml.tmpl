@@ -1,0 +1,2557 @@
+# Home Assistant package for Music Assistant, Sonos, and whole-home media behavior.
+# Complex areas: it handles cube/button media controls, group preparation, wake-up and bedtime playback, and reusable scripts for generic Music Assistant search/playback flows.
+
+################################################################
+## Packages / Media Players
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "media_player"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Frontend
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel: []
+
+########################
+## Automation
+########################
+automation:
+  - id: bedroom_music_volume
+    alias: bedroom_music_volume
+    trace:
+      stored_traces: 50
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_001@@
+      #     command: "rotate_left"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_002@@
+      #     command: "rotate_right"
+      - trigger: state
+        entity_id: sensor.owner_suite_cube_action_angle
+        not_to:
+          - None
+          - "unknown"
+          - "unavailable"
+    action:
+      - action: media_player.volume_set
+        target:
+          entity_id: media_player.ma_bedroom
+        data:
+          # volume_level: >-
+          # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
+          # Fixed: the inner float() call now carries its own default of 0 so that
+          # transient "unknown"/"unavailable" sensor states (e.g. cube waking up)
+          # do not raise a ValueError and abort the automation.
+          volume_level: >-
+            {{ (state_attr('media_player.ma_bedroom', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
+
+  - id: bedroom_music_play_pause
+    alias: bedroom_music_play_pause
+    trace:
+      stored_traces: 50
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_003@@
+      #     command: "knock"
+      - trigger: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "tap"
+    action:
+      - action: media_player.media_play_pause
+        target:
+          entity_id: media_player.ma_bedroom
+
+  - id: bed_without_prep
+    alias: bed_without_prep
+    # Trigger on the DEBOUNCED bed signal (binary_sensor.bed_occupied_debounced,
+    # a 45s-delay_off view of binary_sensor.bayesian_bed_occupancy) rather than
+    # the raw Bayesian sensor, which blips off for ~2s on every weight shift.
+    # Those blips fired this automation repeatedly and, under the former
+    # mode: single, dropped the settled trigger as failed_single so the music
+    # rampdown never ran on the real "in bed" state. mode: restart lets a genuine
+    # re-entry (out of bed and back in) supersede a stale run.
+    mode: restart
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bed_occupied_debounced
+        to: "on"
+    condition:
+      - and:
+          - condition: time
+            after: "22:00:00"
+            before: "06:00:00"
+          - condition: numeric_state
+            entity_id: media_player.ma_bedroom
+            attribute: "volume_level"
+            above: 0.01
+          - condition: state
+            entity_id:
+              - media_player.ma_bedroom
+            state: "playing"
+    action:
+      # Run all three concurrently so the ~77s owner-suite LED policy can never
+      # delay the music rampdown. Previously the blocking LED call sat in front
+      # of spotify_bedtime_volume, so the music only started tapering ~77s after
+      # getting into bed.
+      - parallel:
+          - action: script.turn_on
+            target:
+              entity_id: script.night_tv_mode_switches
+          - action: script.turn_on
+            target:
+              entity_id: script.spotify_bedtime_volume
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: dark
+      # - delay: "00:10:00"
+      # - action: switch.turn_on
+      #   entity_id: switch.sleep_mode
+
+  - id: bedroom_music_select_playlist
+    alias: bedroom_music_select_playlist
+    trace:
+      stored_traces: 50
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_004@@
+      #     command: "flip"
+      - trigger: state
+        entity_id: sensor.owner_suite_cube_action_to_side
+        not_to:
+          - "None"
+          - "unknown"
+          - "unavailable"
+    action:
+      - action: notify.all
+        data:
+          message: >-
+            {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
+      - action: script.turn_on
+        target:
+          entity_id: >-
+            {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
+
+  - id: bedroom_music_skip_track
+    alias: bedroom_music_skip_track
+    trace:
+      stored_traces: 50
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_005@@
+      #     command: "slide"
+      - trigger: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "slide"
+    action:
+      - action: media_player.media_next_track
+        target:
+          entity_id: media_player.ma_bedroom
+
+  - id: bedroom_music_shuffle
+    alias: bedroom_music_shuffle
+    trace:
+      stored_traces: 50
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+@@PRIVATE:music_annotation_006@@
+      #     command: "shake"
+      - trigger: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "shake"
+    action:
+      - action: media_player.shuffle_set
+        target:
+          entity_id: media_player.ma_bedroom
+        data:
+          shuffle: >-
+            {{ not (state_attr('media_player.ma_bedroom', 'shuffle')) }}
+
+  - id: den_sonos_control_actions
+    alias: den_sonos_control_actions
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "toggle"
+        id: toggle_play_pause
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "play_pause"
+        id: play_pause
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "track_next"
+        id: track_next
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "track_previous"
+        id: track_previous
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_up"
+        id: volume_up
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_up_hold"
+        id: volume_up_hold
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_down"
+        id: volume_down
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_down_hold"
+        id: volume_down_hold
+      # TODO Use Dots for shuffle and repeat
+    action:
+      - choose:
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: toggle_play_pause
+                  - condition: trigger
+                    id: play_pause
+            sequence:
+              - action: media_player.media_play_pause
+                target:
+                  entity_id: media_player.ma_den
+          - conditions:
+              - condition: trigger
+                id: track_next
+            sequence:
+              - action: media_player.media_next_track
+                target:
+                  entity_id: media_player.ma_den
+          - conditions:
+              - condition: trigger
+                id: track_previous
+            sequence:
+              - action: media_player.media_previous_track
+                target:
+                  entity_id: media_player.ma_den
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: volume_up
+                  - condition: trigger
+                    id: volume_up_hold
+            sequence:
+              - action: media_player.volume_up
+                target:
+                  entity_id: media_player.ma_den
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: volume_down
+                  - condition: trigger
+                    id: volume_down_hold
+            sequence:
+              - action: media_player.volume_down
+                target:
+                  entity_id: media_player.ma_den
+
+  - id: play_music_in_bathroom_via_nfc_tap
+    alias: play_music_in_bathroom_via_nfc_tap
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: event
+        event_type: tag_scanned
+        event_data:
+          device_id: @@PRIVATE:media_nfc_device_id@@
+          tag_id: @@PRIVATE:media_nfc_tag_id@@
+    action:
+      - action: media_player.join
+        data:
+          group_members:
+            - media_player.ma_bathroom
+        target:
+          entity_id: media_player.ma_bedroom
+
+  - id: play_music_in_bathroom_when_up
+    alias: play_music_in_bathroom_when_up
+    trace:
+      stored_traces: 50
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id:
+          - binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
+    condition:
+      - alias: "Not in Bed"
+        condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        # entity_id: input_boolean.chatgpt_bed_occupied
+        state: "off"
+      - alias: "morning routine already started"
+        condition: state
+        entity_id: input_boolean.morning_routine
+        state: "off"
+      - alias: >-
+          Only the real alarm's wake window starts music — a bathroom trip
+          before the alarm (e.g. waking early and going back to bed) must not
+          trigger it
+        condition: template
+        value_template: >-
+          {# input_datetime.weekday_alarm/weekend_alarm are has_date: false,
+@@PRIVATE:music_annotation_007@@
+@@PRIVATE:music_annotation_008@@
+@@PRIVATE:music_annotation_009@@
+@@PRIVATE:music_annotation_010@@
+@@PRIVATE:music_annotation_011@@
+@@PRIVATE:music_annotation_012@@
+@@PRIVATE:music_annotation_013@@
+             morning_activity, #939). #}
+          {# alarm_wake_up requires binary_sensor.workday_sensor to be
+@@PRIVATE:music_annotation_014@@
+@@PRIVATE:music_annotation_015@@
+@@PRIVATE:music_annotation_016@@
+@@PRIVATE:music_annotation_017@@
+@@PRIVATE:music_annotation_018@@
+@@PRIVATE:music_annotation_019@@
+@@PRIVATE:music_annotation_020@@
+@@PRIVATE:music_annotation_021@@
+             (Codex P2 follow-up on #972). #}
+          {% set workday_sensor_state = states('binary_sensor.workday_sensor') %}
+          {% if workday_sensor_state == 'on' %}
+            {# A special meeting can wake the resident earlier than the
+@@PRIVATE:music_annotation_022@@
+@@PRIVATE:music_annotation_023@@
+@@PRIVATE:music_annotation_024@@
+@@PRIVATE:music_annotation_025@@
+@@PRIVATE:music_annotation_026@@
+               rejected for being before the weekday alarm (Codex P2). #}
+            {% set candidates = [
+                 state_attr('input_datetime.weekday_alarm', 'timestamp')
+                   if is_state('input_boolean.weekday_alarm_on', 'on') else none,
+                 state_attr('input_datetime.next_work_meeting', 'timestamp')
+                   if is_state('input_boolean.special_meeting', 'on') else none
+               ] | select('number') | reject('equalto', 0) | list %}
+            {% set alarm_enabled = candidates | length > 0 %}
+            {% set alarm_seconds_since_midnight = candidates | min if candidates else 0 %}
+          {% elif workday_sensor_state == 'off' %}
+            {% set alarm_enabled = is_state('input_boolean.weekend_alarm_on', 'on') %}
+            {% set alarm_seconds_since_midnight = state_attr('input_datetime.weekend_alarm', 'timestamp') | float(0) %}
+          {% else %}
+            {% set alarm_enabled = false %}
+            {% set alarm_seconds_since_midnight = 0 %}
+          {% endif %}
+          {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
+          {% set wake_window_seconds = 90 * 60 %}
+          {# alarm_wake_up's meeting-alarm branch turns special_meeting off
+@@PRIVATE:music_annotation_027@@
+@@PRIVATE:music_annotation_028@@
+@@PRIVATE:music_annotation_029@@
+@@PRIVATE:music_annotation_030@@
+@@PRIVATE:music_annotation_031@@
+@@PRIVATE:music_annotation_032@@
+@@PRIVATE:music_annotation_033@@
+@@PRIVATE:music_annotation_034@@
+@@PRIVATE:music_annotation_035@@
+@@PRIVATE:music_annotation_036@@
+@@PRIVATE:music_annotation_037@@
+@@PRIVATE:music_annotation_038@@
+@@PRIVATE:music_annotation_039@@
+@@PRIVATE:music_annotation_040@@
+@@PRIVATE:music_annotation_041@@
+@@PRIVATE:music_annotation_042@@
+@@PRIVATE:music_annotation_043@@
+@@PRIVATE:music_annotation_044@@
+@@PRIVATE:music_annotation_045@@
+@@PRIVATE:music_annotation_046@@
+@@PRIVATE:music_annotation_047@@
+@@PRIVATE:music_annotation_048@@
+@@PRIVATE:music_annotation_049@@
+             timestamp is sufficient on its own and needs no such latch. #}
+          {% set alarm_firing_recently =
+               (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
+          {{ alarm_firing_recently
+             or (alarm_enabled and alarm_seconds_since_midnight > 0
+             and now_seconds_since_midnight >= alarm_seconds_since_midnight
+             and now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds)) }}
+    action:
+      - variables:
+          bathroom_was_playing: "{{ is_state('media_player.ma_bathroom', 'playing') }}"
+          bathroom_volume_above_min: "{{ state_attr('media_player.ma_bathroom', 'volume_level') | float(0) > 0.1 }}"
+          group_members: >-
+            {{ ['media_player.ma_bedroom', 'media_player.ma_bathroom']
+               if is_state('input_boolean.guest_mode', 'on')
+               else ['media_player.ma_bedroom', 'media_player.ma_bathroom',
+                     'media_player.ma_office', 'media_player.ma_den'] }}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.morning_routine
+      - if:
+          - condition: state
+            entity_id: binary_sensor.workday_sensor
+            state: "on"
+        then:
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: day
+              scope: bathroom
+          - action: script.turn_on
+            target:
+              entity_id: script.day_mode_switches_office_guest_room
+      - choose:
+          # Bathroom already had audible playback (alarm ramped up). Switch to Spotify and
+          # ramp non-office members back to the calibrated 0.25 alarm peak.
+          - conditions:
+              - condition: template
+                value_template: "{{ bathroom_was_playing and bathroom_volume_above_min }}"
+            sequence:
+              - action: script.spotify_wake_up
+                data:
+                  playback_entity_id: media_player.ma_group_everywhere
+              - alias: "Ramp non-office group members back to the 0.25 alarm peak"
+                repeat:
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
+                      data:
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.25] | min }}"
+                    - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
+                      continue_on_error: true
+                      action: media_player.volume_set
+                      target:
+                        entity_id: media_player.ma_office
+                      data:
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.07] | min }}"
+                    - delay:
+                        seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
+                  until: "{{ repeat.index == 20 }}"
+        default:
+          # Nothing is playing in the bathroom yet, so ease all members up gently.
+          - alias: "Prime all members to safe starting volume"
+            action: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: "{{ group_members }}"
+            data:
+              volume_level: 0.05
+          - action: script.spotify_wake_up
+            data:
+              playback_entity_id: media_player.ma_group_everywhere
+          - alias: "Ramp non-office group members to the 0.25 alarm peak"
+            repeat:
+              sequence:
+                - alias: "Increase Volume by 0.01"
+                  action: media_player.volume_set
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
+                  data:
+                    volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
+                - alias: "Office capped at 7% — bedroom wake-up should not disturb work-in-progress"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  target:
+                    entity_id: media_player.ma_office
+                  data:
+                    volume_level: "{{ [0.01 * repeat.index, 0.07] | min }}"
+                - delay:
+                    # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
+                    seconds: "{{ (1/(tan(repeat.index/60))) | round(0, 'ceil', 5)}}"
+              until: "{{ repeat.index == 25 }}"
+
+  - id: recover_stuck_morning_audio_scripts
+    alias: recover_stuck_morning_audio_scripts
+    trace:
+      stored_traces: 50
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: script.music_assistant_prepare_bedroom_group
+        to: "on"
+        for:
+          minutes: 1
+      - trigger: state
+        entity_id:
+          - script.spotify_wake_up
+          - script.music_assistant_radio_wake_up
+        to: "on"
+        for:
+          minutes: 12
+    action:
+      - action: logbook.log
+        data:
+          entity_id: "{{ trigger.entity_id }}"
+          domain: script
+          name: Morning audio recovery
+          message: "Stopped a stalled morning audio script and cleared the wake-up latch."
+      - action: script.turn_off
+        continue_on_error: true
+        target:
+          entity_id:
+            - script.music_assistant_prepare_bedroom_group
+            - script.music_assistant_radio_wake_up
+            - script.spotify_wake_up
+      - action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id: input_boolean.morning_routine
+
+  - id: restart_sonos_unavailable
+    alias: restart_sonos_unavailable
+    description: >-
+      Bedroom-suite Sonos players occasionally drop to "unavailable" — either an
+      integration-level flap (recoverable by reloading the player's config entry)
+      or a hardware fault such as a red status LED, which only a physical
+      power-cycle can clear. After 30 min unavailable, try a cheap config-entry
+      reload first; if the player is still unavailable a minute later, notify so a
+      human can power-cycle it. The previous blanket homeassistant.restart was
+      removed: it disrupts the whole house and, for a hardware fault, cannot
+      recover the speaker (see #839).
+    trace:
+      stored_traces: 50
+    mode: parallel
+    max: 4
+    trigger:
+      - trigger: state
+        entity_id:
+          - media_player.ma_bedroom
+          - media_player.ma_bathroom
+          - media_player.ma_office
+          - media_player.ma_den
+        to: "unavailable"
+        for:
+          minutes: 30
+    action:
+      - alias: "Cheap first attempt — reload the player's config entry"
+        continue_on_error: true
+        action: homeassistant.reload_config_entry
+        target:
+          entity_id: "{{ trigger.entity_id }}"
+      - alias: "Give the reload time to bring the player back"
+        delay:
+          minutes: 1
+      - alias: "Still unavailable after reload — a human power-cycle is required"
+        if:
+          - condition: template
+            value_template: "{{ is_state(trigger.entity_id, 'unavailable') }}"
+        then:
+          - action: notify.all
+            continue_on_error: true
+            data:
+              title: "Sonos needs attention"
+              message: >-
+                {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }}
+                has been unavailable for 30+ minutes and a config-entry reload did not
+                recover it. Check the speaker for a red status LED — it likely needs a
+                physical power-cycle (unplug ~10s, plug back in).
+
+  - id: bedtime_music_homekit_trigger
+    alias: "Bedtime Music — HomeKit trigger"
+    description: >-
+      Exposes a momentary switch to HomeKit/Siri. Turning on input_boolean.bedtime_music
+      fires script.spotify_bedtime non-blocking, then immediately resets the boolean so
+      HomeKit always sees it as off (stateless trigger pattern).
+    mode: single
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.bedtime_music
+        to: "on"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.spotify_bedtime
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bedtime_music
+
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Cameras
+########################
+camera: []
+
+########################
+# Device Trackers
+########################
+device_tracker: []
+
+########################
+# Frontend
+########################
+frontend: {}
+
+########################
+# Groups
+########################
+group: {}
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  bedtime_music:
+    name: "Bedtime Music"
+    icon: mdi:music-note-plus
+
+########################
+# Input Numbers
+########################
+input_number: {}
+
+########################
+# Input Text
+########################
+input_text:
+  music_assistant_search_query:
+    name: "Music Assistant search query"
+    icon: mdi:magnify
+    max: 255
+    initial: ""
+
+########################
+# Input Select
+########################
+input_select:
+  music_assistant_provider_filter:
+    name: "Music Assistant provider filter"
+    icon: mdi:database-search
+    options:
+      - All providers
+    initial: All providers
+  music_assistant_playlist_target:
+    name: "Music Assistant playlist target"
+    icon: mdi:playlist-edit
+    options:
+      - Bedtime || spotify_bedtime
+      - Wake Up || spotify_wake_up
+      - Arrival || spotify_arrival
+      - Bedroom Playlist 0 || bedroom_playlist_0
+      - Bedroom Playlist 1 || bedroom_playlist_1
+      - Bedroom Playlist 2 || bedroom_playlist_2
+      - Bedroom Playlist 3 || bedroom_playlist_3
+      - Bedroom Playlist 4 || bedroom_playlist_4
+      - Bedroom Playlist 5 || bedroom_playlist_5
+    initial: Bedtime || spotify_bedtime
+  music_assistant_search_media_type:
+    name: "Music Assistant search type"
+    icon: mdi:magnify
+    options:
+      - track
+      - album
+      - artist
+      - playlist
+      - radio
+    initial: track
+  music_assistant_search_results:
+    name: "Music Assistant search results"
+    icon: mdi:playlist-music
+    options:
+      - "No results found"
+    initial: "No results found"
+
+########################
+# iOS
+########################
+ios: {}
+
+########################
+# Light
+########################
+light: []
+
+########################
+# Media Player
+########################
+media_player: []
+  # - platform: plex
+  #   entity_namespace: 'plex'
+
+  # - platform: spotify
+  #   client_id: !secret spotify_client_id
+  #   client_secret: !secret spotify_client_secret
+
+########################
+# Plant
+########################
+plant: {}
+
+########################
+# Plex
+########################
+# Switch to integration
+#plex:
+#  token: !secret plex_token
+#  host: fermentor.lan
+
+########################
+# Scenes
+########################
+scene: []
+
+########################
+# Shell Command
+########################
+shell_command:
+  music_assistant_append_playlist_item: >-
+    python3 /config/scripts/update_music_assistant_playlist.py
+    --config /config/packages/media_player.yaml
+    --target '{{ target_script | replace("'", "'\"'\"'") }}'
+    --item '{{ item_uri | replace("'", "'\"'\"'") }}'
+
+########################
+# Scripts
+########################
+script:
+  music_assistant_pause_house_audio:
+    alias: "Pause whole-home MA audio"
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: media_player.media_pause
+        continue_on_error: true
+        target:
+          entity_id:
+            - media_player.ma_bedroom
+            - media_player.ma_bathroom
+            - media_player.ma_office
+            - media_player.ma_den
+            - media_player.ma_tiki_room
+
+  music_assistant_sync_group_migration_stub:
+    alias: "Log disabled Music Assistant sync-group migration helper"
+    trace:
+      stored_traces: 50
+    fields:
+      caller_entity_id:
+        description: "Deprecated helper script entity that was called"
+    sequence:
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ caller_entity_id | default(this.entity_id) }} called but disabled — targeting sync groups directly now"
+          domain: script
+
+  music_assistant_prepare_bedroom_group:
+    alias: "Prepare bedroom Music Assistant group"
+    mode: restart
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.music_assistant_sync_group_migration_stub
+        data:
+          caller_entity_id: script.music_assistant_prepare_bedroom_group
+
+  music_assistant_try_join_bedroom_group_after_play:
+    alias: "Try joining bedroom Music Assistant followers after playback"
+    mode: restart
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.music_assistant_sync_group_migration_stub
+        data:
+          caller_entity_id: script.music_assistant_try_join_bedroom_group_after_play
+
+  music_assistant_prepare_arrival_group:
+    alias: "Prepare arrival Music Assistant group"
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.music_assistant_sync_group_migration_stub
+        data:
+          caller_entity_id: script.music_assistant_prepare_arrival_group
+
+  music_assistant_prepare_house_party_group:
+    alias: "Prepare house party Music Assistant group"
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.music_assistant_sync_group_migration_stub
+        data:
+          caller_entity_id: script.music_assistant_prepare_house_party_group
+
+  music_assistant_play_item:
+    alias: "Play Music Assistant item"
+    trace:
+      stored_traces: 50
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      media_item:
+        description: "Music Assistant URI, open.spotify.com URL, or plain item name"
+      media_type:
+        description: "Optional Music Assistant media type"
+      enqueue:
+        description: "Music Assistant enqueue mode"
+    variables:
+      raw_item: "{{ media_item | trim }}"
+      raw_media_type: "{{ media_type | default('') | trim }}"
+      raw_enqueue: "{{ enqueue | default('replace') }}"
+      normalized_item: >-
+        {%- set s = ('spotify:' ~ raw_item.split(':')[3] ~ ':' ~ raw_item.split(':')[4]) if (raw_item.startswith('spotify:user:') and (raw_item.split(':') | length) == 5) else raw_item -%}
+        {{ s }}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ raw_media_type != '' }}"
+            sequence:
+              - action: music_assistant.play_media
+                continue_on_error: true
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  media_id: "{{ normalized_item }}"
+                  media_type: "{{ raw_media_type }}"
+                  enqueue: "{{ raw_enqueue }}"
+        default:
+          - action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              media_id: "{{ normalized_item }}"
+              enqueue: "{{ raw_enqueue }}"
+
+  music_assistant_play_spotify_uri:
+    alias: "Play Spotify item via Music Assistant"
+    trace:
+      stored_traces: 50
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      spotify_uri:
+        description: "Spotify URI or open.spotify.com URL"
+      enqueue:
+        description: "Music Assistant enqueue mode"
+    variables:
+      raw_uri: "{{ spotify_uri | trim }}"
+      normalized_uri: >-
+        {% if raw_uri.startswith('https://open.spotify.com/') %}
+          {% set path = raw_uri.split('open.spotify.com/')[1].split('?')[0] %}
+          {{ 'spotify:' ~ path.replace('/', ':') }}
+        {% else %}
+          {{ raw_uri }}
+        {% endif %}
+    sequence:
+      - action: script.music_assistant_play_item
+        data:
+          entity_id: "{{ entity_id }}"
+          media_item: "{{ normalized_uri }}"
+          enqueue: "{{ enqueue | default('replace') }}"
+
+  music_assistant_play_bedroom_playlist_choice:
+    alias: "Play bedroom playlist choice via Music Assistant"
+    trace:
+      stored_traces: 50
+    fields:
+      playlist:
+        description: "Spotify URI selected by a bedroom playlist script"
+      playlist_name:
+        description: "Human-readable playlist group name for logbook"
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: media_player.ma_bedroom
+          domain: media_player
+          name: Cube Playlist is
+          message: " playing {{ playlist_name }} playlist: {{ playlist }}"
+      - alias: "Play playlist via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: media_player.ma_bedroom
+          spotify_uri: "{{ playlist }}"
+
+  music_assistant_play_random_lofi_playlist:
+    alias: "Play random LoFi playlist via Music Assistant"
+    trace:
+      stored_traces: 50
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      playlist_name:
+        description: "Human-readable playlist group name for logbook"
+      log_name:
+        description: "Logbook entry name"
+    variables:
+      playback_entity: "{{ entity_id | default('media_player.ma_bedroom') }}"
+      effective_playlist_name: "{{ playlist_name | default('Lowfi') }}"
+      effective_log_name: "{{ log_name | default('LoFi Playlist is') }}"
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_050@@
+@@PRIVATE:music_annotation_051@@
+@@PRIVATE:music_annotation_052@@
+@@PRIVATE:music_annotation_053@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_046@@",
+              "@@PRIVATE:music_uri_022@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_019@@"
+              ] -%}
+            {% set pindex = (range(0, (plists | length))|random) -%}
+            {{ plists[pindex] }}
+      - action: logbook.log
+        data:
+          entity_id: "{{ playback_entity }}"
+          domain: media_player
+          name: "{{ effective_log_name }}"
+          message: " playing {{ effective_playlist_name }} playlist: {{ playlist }}"
+      - alias: "Play LoFi playlist via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: "{{ playback_entity }}"
+          spotify_uri: "{{ playlist }}"
+
+  music_assistant_search_music:
+    alias: "Search Music Assistant"
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          query: "{{ states('input_text.music_assistant_search_query') | trim }}"
+          media_type: "{{ states('input_select.music_assistant_search_media_type') | trim }}"
+          config_entry: "{{ config_entry_id('media_player.ma_bedroom') }}"
+          selected_provider: "{{ states('input_select.music_assistant_provider_filter') | trim }}"
+          requested_provider_filter: >-
+            {% if selected_provider in ['', 'unknown', 'unavailable', 'All providers'] %}
+              {{ '' }}
+            {% else %}
+              {{ selected_provider | lower }}
+            {% endif %}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ query == '' }}"
+            sequence:
+              - action: input_select.set_options
+                target:
+                  entity_id: input_select.music_assistant_search_results
+                data:
+                  options:
+                    - "No results found"
+          - conditions:
+              - condition: template
+                value_template: "{{ query.startswith('spotify:') or query.startswith('http') or '://' in query }}"
+            sequence:
+              - variables:
+                  direct_provider_token: >-
+                    {% if query.startswith('spotify:') %}
+                      spotify
+                    {% elif '://' in query %}
+                      {{ query.split('://', 1)[0] | lower }}
+                    {% else %}
+                      {{ '' }}
+                    {% endif %}
+                  direct_provider_name: "{{ direct_provider_token.split('--', 1)[0] }}"
+                  direct_options: >-
+                    {% set requested_provider_name = requested_provider_filter.split('--', 1)[0] %}
+                    {% if requested_provider_filter == '' or requested_provider_filter == direct_provider_token or requested_provider_name == direct_provider_name %}
+                      {{ ['Direct URI || ' ~ query] }}
+                    {% else %}
+                      {{ ['No results found'] }}
+                    {% endif %}
+              - action: input_select.set_options
+                target:
+                  entity_id: input_select.music_assistant_search_results
+                data:
+                  options: "{{ direct_options }}"
+        default:
+          - action: music_assistant.search
+            continue_on_error: true
+            response_variable: search_results
+            data:
+              config_entry_id: "{{ config_entry }}"
+              name: "{{ query }}"
+              media_type: "{{ media_type }}"
+              limit: 20
+          - variables:
+              provider_tokens: >-
+                {% set search_response = search_results | default({}, true) %}
+                {% set ns = namespace(tokens=[]) %}
+                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'audiobooks', 'podcasts', 'items'] %}
+                  {% for item in search_response.get(bucket, []) %}
+                    {% set uri = item.uri | default(item.media_id | default('')) %}
+                    {% if uri %}
+                      {% if uri.startswith('library://') %}
+                        {% set provider_token = 'library' %}
+                      {% else %}
+                        {% set provider_token = uri.split('://', 1)[0] | lower %}
+                      {% endif %}
+                      {% if provider_token not in ns.tokens %}
+                        {% set ns.tokens = ns.tokens + [provider_token] %}
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {{ ns.tokens }}
+              effective_provider_filter: >-
+                {% if requested_provider_filter in provider_tokens %}
+                  {{ requested_provider_filter }}
+                {% else %}
+                  {{ '' }}
+                {% endif %}
+              provider_options: "{{ ['All providers'] + provider_tokens }}"
+              search_options: >-
+                {% set search_response = search_results | default({}, true) %}
+                {% set ns = namespace(options=[], seen=[]) %}
+                {% set requested_provider_name = effective_provider_filter.split('--', 1)[0] %}
+                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'audiobooks', 'podcasts', 'items'] %}
+                  {% for item in search_response.get(bucket, []) %}
+                    {% set uri = item.uri | default(item.media_id | default('')) %}
+                    {% if uri and uri not in ns.seen %}
+                      {% if uri.startswith('library://') %}
+                        {% set provider_token = 'library' %}
+                      {% else %}
+                        {% set provider_token = uri.split('://', 1)[0] | lower %}
+                      {% endif %}
+                      {% set provider_name = provider_token.split('--', 1)[0] %}
+                      {% if effective_provider_filter == '' or effective_provider_filter == provider_token or requested_provider_name == provider_name %}
+                        {% set label = item.name | default(uri) %}
+                        {% if item.artists is defined and item.artists %}
+                          {% set label = (item.artists | map(attribute='name') | join(', ')) ~ ' - ' ~ label %}
+                        {% endif %}
+                        {% set ns.options = ns.options + ['[' ~ provider_name ~ '] ' ~ label ~ ' || ' ~ uri] %}
+                        {% set ns.seen = ns.seen + [uri] %}
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {{ ns.options if ns.options else ['No results found'] }}
+          - action: input_select.set_options
+            target:
+              entity_id: input_select.music_assistant_provider_filter
+            data:
+              options: "{{ provider_options }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ requested_provider_filter != '' and requested_provider_filter in provider_tokens }}"
+                sequence:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: input_select.music_assistant_provider_filter
+                    data:
+                      option: "{{ requested_provider_filter }}"
+            default:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.music_assistant_provider_filter
+                data:
+                  option: "All providers"
+          - action: input_select.set_options
+            target:
+              entity_id: input_select.music_assistant_search_results
+            data:
+              options: "{{ search_options }}"
+
+  music_assistant_play_selected_search_result:
+    alias: "Play selected Music Assistant search result"
+    trace:
+      stored_traces: 50
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      enqueue:
+        description: "Music Assistant enqueue mode"
+    variables:
+      target_entity: "{{ entity_id | default('media_player.ma_bedroom') }}"
+      selected_option: "{{ states('input_select.music_assistant_search_results') | trim }}"
+      selected_uri: >-
+        {% if ' || ' in selected_option %}
+          {{ selected_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ selected_option }}
+        {% endif %}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ selected_uri not in ['', 'No results found'] }}"
+            sequence:
+              - action: script.music_assistant_play_item
+                data:
+                  entity_id: "{{ target_entity }}"
+                  media_item: "{{ selected_uri }}"
+                  enqueue: "{{ enqueue | default('add') }}"
+
+  music_assistant_add_selected_search_result_to_playlist:
+    alias: "Add selected Music Assistant search result to playlist"
+    trace:
+      stored_traces: 50
+    fields:
+      playlist_target:
+        description: "Playlist target script id or option label"
+    variables:
+      selected_option: "{{ states('input_select.music_assistant_search_results') | trim }}"
+      selected_uri: >-
+        {% if ' || ' in selected_option %}
+          {{ selected_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ selected_option }}
+        {% endif %}
+      target_option: "{{ playlist_target | default(states('input_select.music_assistant_playlist_target')) | trim }}"
+      target_script: >-
+        {% if ' || ' in target_option %}
+          {{ target_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ target_option }}
+        {% endif %}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ selected_uri not in ['', 'No results found'] and target_script != '' }}"
+            sequence:
+              - action: shell_command.music_assistant_append_playlist_item
+                data:
+                  target_script: "{{ target_script }}"
+                  item_uri: "{{ selected_uri }}"
+              - delay:
+                  seconds: 1
+              - action: script.reload
+              - action: logbook.log
+                data:
+                  entity_id: "script.{{ target_script }}"
+                  domain: script
+                  name: Music Assistant Playlist Builder
+                  message: "Added {{ selected_uri }} to {{ target_script }}"
+
+  music_assistant_play_wakeup_source:
+    alias: "Play a wake-up source (raw stream URL or Music Assistant URI)"
+    description: >-
+      Plays source_uri on target_entity, choosing media_player.play_media for a
+      raw http(s) stream URL (most reliable for a Sonos Icecast stream) and
+      music_assistant.play_media for a Music Assistant URI (spotify:/library:/
+      tunein--).
+    trace:
+      stored_traces: 50
+    fields:
+      target_entity:
+        description: "Media player / MA sync group entity_id to play on"
+      source_uri:
+        description: "Raw http(s) stream URL or Music Assistant URI"
+      source_media_type:
+        description: "media_type for a Music Assistant URI (default: radio); ignored for raw URLs"
+    sequence:
+      - if:
+          - condition: template
+            value_template: "{{ source_uri.startswith('http') }}"
+        then:
+          - action: media_player.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_content_id: "{{ source_uri }}"
+              media_content_type: music
+        else:
+          - action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_id: "{{ source_uri }}"
+              media_type: "{{ source_media_type | default('radio', true) }}"
+              enqueue: replace
+
+  music_assistant_prime_wake_group:
+    alias: "Prime exact wake-up MA Sonos group"
+    trace:
+      stored_traces: 10
+    mode: queued
+    fields:
+      group_members:
+        description: "Exact MA Sonos wake-up members to group and prime"
+      starting_volume:
+        description: "Initial per-member volume before playback starts"
+    sequence:
+      # Evict any stray member left in the live bedroom sync group from a
+      # prior grouping (e.g. Tiki Room after whole-home / arrival audio) —
+      # media_player.join below ADDS the intended followers but never removes
+      # extras, so without this a stray room stays in the group unprimed and
+      # unramped, playing owner-suite wake-up audio at whatever volume it was
+      # left at. docs/music_assistant.md requires Tiki Room stay out of
+      # wake-up audio; this makes the group exactly group_members.
+      - alias: "Unjoin any stray members not in the intended wake-up group"
+        variables:
+          stray_members: >-
+            {{ (state_attr('media_player.ma_bedroom', 'group_members') or [])
+               | reject('in', group_members) | list }}
+      - if:
+          - condition: template
+            value_template: "{{ stray_members | count > 0 }}"
+        then:
+          - continue_on_error: true
+            action: media_player.unjoin
+            target:
+              entity_id: "{{ stray_members }}"
+      - alias: "Set each wake-up member to the starting volume"
+        continue_on_error: true
+        action: media_player.volume_set
+        target:
+          entity_id: "{{ group_members }}"
+        data:
+          volume_level: "{{ starting_volume | float(0.01) }}"
+      - alias: "Prepare exact wake-up group from MA Sonos players"
+        continue_on_error: true
+        action: media_player.join
+        target:
+          entity_id: media_player.ma_bedroom
+        data:
+          group_members: "{{ group_members | reject('eq', 'media_player.ma_bedroom') | list }}"
+
+  music_assistant_radio_wake_up:
+    alias: "Radio wake-up via Music Assistant"
+    trace:
+      stored_traces: 50
+    fields:
+      radio_uri:
+        description: "Music Assistant radio URI"
+      initial_delay:
+        description: "Optional delay before playback starts"
+      ramp_step_volume:
+        description: "volume_level increment per ramp update (default 0.01 = 1 percentage point ≈ 0.5 dB at the assumed 50 dB Sonos/MA range — half the ~1 dB just-noticeable-difference, same per-step size as the bedtime rampdown)"
+      ramp_interval_seconds:
+        description: "Seconds between ramp updates (default 15). At the default step size this yields ~6 minutes from silence to the peak — stretched well past the ~4s auditory-echoic-memory window so the rise reads as smooth rather than a series of audible jumps"
+      ramp_peak_volume_level:
+        description: "Target volume_level for non-office, non-bedroom wake-up members (default 0.25)"
+      ramp_bedroom_peak_volume_level:
+        description: "Target volume_level for the bedroom member, set higher than the other rooms so the sleeper is reliably woken (default 0.30)"
+      ramp_office_peak_volume_level:
+        description: "Target volume_level for the office member, capped lower so the wake-up does not disturb work-in-progress (default 0.07)"
+      playback_entity_id:
+        description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
+      regroup_after_play:
+        description: "Kept for backwards compatibility; ignored — sync groups manage membership"
+      fallback_uri:
+        description: "Provider-independent source to play if the primary radio source cannot be resolved (e.g. a TuneIn/DNS outage). Accepts a raw http(s) stream URL (played via media_player.play_media) or a Music Assistant URI such as spotify:/library:/tunein-- (played via music_assistant.play_media). Default: a Spotify morning playlist that does not depend on the TuneIn resolver."
+      fallback_media_type:
+        description: "media_type for a Music Assistant fallback_uri (default: playlist); ignored for raw http(s) stream URLs"
+      verify_timeout:
+        description: "Seconds to wait for playback to be confirmed at each attempt (default: 20)"
+      retry_backoff:
+        description: "Seconds to wait before retrying the primary source once (default: 15)"
+    variables:
+      playback_player: media_player.ma_bedroom
+      effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
+      effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
+      # The bedroom peaks higher than the other rooms — it holds the sleeper,
+      # so the wake-up has to clear the "still asleep" threshold there, not
+      # just be audible. Other rooms stay at effective_peak_volume.
+      effective_bedroom_peak_volume: "{{ ramp_bedroom_peak_volume_level | default(0.30) | float(0.30) }}"
+      # Clamped to the alarm spec's office_wakeup_peak_volume_percent (7%)
+      # as a ceiling, not just a default — the spec requires the office
+      # capped there so the wake-up never disturbs work-in-progress; a
+      # caller can still ask for something quieter, never louder.
+      effective_office_peak_volume: >-
+        {{ [(ramp_office_peak_volume_level | default(0.07) | float(0.07)), 0.07] | min }}
+      # Non-positive values snap up to the documented 0.01 default; any
+      # positive-but-too-small value (e.g. an explicit 0.001) snaps up to
+      # min_step_volume_for_watchdog instead. Jinja's default() filter only
+      # substitutes for an *undefined* input, not an explicitly-passed value,
+      # so either case would otherwise let the ramp take arbitrarily long to
+      # reach effective_peak_volume — recover_stuck_morning_audio_scripts
+      # (media_player.yaml:509-526) force-stops this script at 12 minutes
+      # regardless, so a too-small step leaves the wake-up stuck partway
+      # instead of ever reaching peak. min_step_volume_for_watchdog is
+      # derived from the *configured* peak/interval (not a fixed constant)
+      # so it stays correct if a caller changes those too, and targets
+      # completing within a 10-minute budget — comfortably inside the
+      # watchdog's 12 minutes.
+      effective_step_volume: >-
+        {% set raw_step_volume = ramp_step_volume | default(0.01) | float(0.01) %}
+        {% set positive_step_volume = raw_step_volume if raw_step_volume > 0 else 0.01 %}
+        {% set watchdog_timeout_seconds = 720 %}
+        {% set watchdog_safety_margin_seconds = 120 %}
+        {% set max_ramp_distance = [effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max %}
+        {% set min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds) / (watchdog_timeout_seconds - watchdog_safety_margin_seconds) %}
+        {{ [positive_step_volume, min_step_volume_for_watchdog] | max }}
+      # Safety bound so a stuck/unavailable player can never hold the ramp
+      # open indefinitely (the theoretical step count, plus margin).
+      effective_max_ramp_iterations: >-
+        {{ (([effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
+      effective_fallback_uri: >-
+        {{ fallback_uri | default('@@PRIVATE:music_uri_021@@', true) }}
+      effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
+      effective_verify_timeout: "{{ verify_timeout | default(20) | int(20) }}"
+      effective_retry_backoff: "{{ retry_backoff | default(15) | int(15) }}"
+      group_members: >-
+        {{ ['media_player.ma_bedroom', 'media_player.ma_bathroom']
+           if is_state('input_boolean.guest_mode', 'on')
+           else ['media_player.ma_bedroom', 'media_player.ma_bathroom',
+                 'media_player.ma_office', 'media_player.ma_den'] }}
+      pre_playback_fingerprint: >-
+        {{ [
+          state_attr(playback_player, 'media_content_id') | default('', true),
+          state_attr(playback_player, 'media_title') | default('', true),
+          state_attr(playback_player, 'media_artist') | default('', true),
+          state_attr(playback_player, 'media_album_name') | default('', true)
+        ] | join('|') }}
+    sequence:
+      - alias: "Prime the exact wake-up group to 0.01"
+        action: script.music_assistant_prime_wake_group
+        data:
+          group_members: "{{ group_members }}"
+          starting_volume: 0.01
+      - if:
+          - condition: template
+            value_template: "{{ (initial_delay | default(0) | int(0)) > 0 }}"
+        then:
+          - delay:
+              seconds: "{{ initial_delay | default(0) | int(0) }}"
+      - alias: "Request the primary wake-up source"
+        action: script.music_assistant_play_wakeup_source
+        continue_on_error: true
+        data:
+          target_entity: "{{ playback_player }}"
+          source_uri: "{{ radio_uri }}"
+          source_media_type: radio
+      # Verify the source actually started before fading anything up. The group
+      # may already hold overnight audio at alarm time, and a source-resolution
+      # failure (e.g. a DNS flap reaching opml.radiotime.com) leaves the group
+      # idle/silent — so "is it playing?" alone is not proof. Confirmation =
+      # `playing` AND the media changed from the pre-request fingerprint. All
+      # wait/decision steps stay at the top sequence level so `wait.completed`
+      # is read in the same scope it is set (HA copies variables into nested
+      # then/choose sub-scripts, so a value set inside `then:` is not visible
+      # to a later top-level step).
+      - alias: "Confirm primary playback started"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Retry the primary source once after a short backoff (transient DNS)"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - delay:
+              seconds: "{{ effective_retry_backoff }}"
+          - action: script.music_assistant_play_wakeup_source
+            continue_on_error: true
+            data:
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ radio_uri }}"
+              source_media_type: radio
+      - alias: "Confirm playback after the retry"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Fall back to a provider-independent source so the alarm still sounds"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed and (effective_fallback_uri | length) > 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: wakeup_radio_primary_failed
+              title: "Wake-up radio fell back"
+              message: >-
+                Primary wake-up source {{ radio_uri }} could not be started on
+                {{ playback_player }}; falling back to {{ effective_fallback_uri }}.
+          - action: script.music_assistant_play_wakeup_source
+            continue_on_error: true
+            data:
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ effective_fallback_uri }}"
+              source_media_type: "{{ effective_fallback_media_type }}"
+      - alias: "Confirm playback after the fallback"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Give up loudly — never fade up a silent group (issue #772)"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: wakeup_radio_failed
+              title: "Wake-up audio failed"
+              message: >-
+                Neither the primary source ({{ radio_uri }}) nor the fallback
+                ({{ effective_fallback_uri }}) started on {{ playback_player }}.
+                Skipped the volume ramp.
+          - action: logbook.log
+            data:
+              entity_id: script.music_assistant_radio_wake_up
+              domain: script
+              name: Radio wake-up via Music Assistant
+              message: "Wake-up audio playback could not be established; skipped volume ramp."
+          - stop: "Wake-up audio playback could not be established; skipped volume ramp."
+            error: true
+      # Perceptual design: each update raises volume by effective_step_volume
+      # (default 0.01 ≈ 0.5 dB, half the ~1 dB just-noticeable-difference) and
+      # waits effective_interval_seconds (default 15s, well past the ~4s
+      # echoic-memory window) so the climb reads as smooth rather than as
+      # discrete jumps. Every group member (office included, when present) is
+      # commanded to an ABSOLUTE, index-driven target — effective_step_volume ×
+      # the outer iteration count, capped at that member's peak — NOT its own
+      # live volume_level + a step. This is deliberate: MA/Sonos group volume
+      # "proportional scaling rounds to 0 below ~8%" (docs/music_assistant.md),
+      # so a readback-derived target (min(live + step, peak)) gets trapped in
+      # that sub-8% dead zone — the reported volume stops rising, so the next
+      # target never advances past live+step and the ramp stalls at ~6% (the
+      # 2026-08-12 MPR alarm). An absolute curve keeps raising the COMMANDED
+      # value (0.08, 0.15, 0.25…) regardless of a pinned readback, powering
+      # straight through the dead zone — the same technique the working
+      # owner_suite_morning_transition ramp already uses. Each member resolves
+      # its own peak: the bedroom to effective_bedroom_peak_volume (higher, to
+      # wake the sleeper), the office to effective_office_peak_volume (capped),
+      # everyone else to effective_peak_volume. Priming set every member to the
+      # starting volume, so the curve is authoritative from index 1. Guest mode
+      # excluding the office from group_members means it's simply never iterated
+      # — no special-casing needed. Completion is index-driven (steps_to_peak =
+      # ceil(loudest peak / step)), so a stale/pinned volume_level can neither
+      # stall the loop nor extend it; effective_max_ramp_iterations remains a
+      # hard backstop. continue_on_error keeps one unavailable member from
+      # aborting the rest of the ramp.
+      - repeat:
+          while:
+            - condition: template
+              value_template: >-
+                {% set max_member_peak = [effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max %}
+                {% set steps_to_peak = (max_member_peak / effective_step_volume) | round(0, 'ceil') %}
+                {{ repeat.index <= steps_to_peak and repeat.index <= effective_max_ramp_iterations }}
+          sequence:
+            # Capture the OUTER iteration count before descending into the
+            # per-member for_each, whose own repeat.index would otherwise
+            # shadow it (inner index = position within group_members).
+            - variables:
+                ramp_index: "{{ repeat.index }}"
+            - repeat:
+                for_each: "{{ group_members }}"
+                sequence:
+                  - action: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      # Absolute curve = step × iteration, capped at the peak.
+                      # A member that was unavailable for part of the fade
+                      # (missed volume_set calls under continue_on_error) snaps
+                      # to the elapsed curve position when it returns, rather
+                      # than fading up from where it dropped. For a wake-up
+                      # ALARM that catch-up is intended: every room must reach
+                      # its peak to wake the sleeper, so a briefly-offline room
+                      # rejoining the group level is correct — leaving it quiet,
+                      # or dropping it from the run, risks not waking someone.
+                      # A readback-relative cap would smooth the catch-up but
+                      # reintroduce the sub-8% dead-zone stall this ramp exists
+                      # to defeat (a pinned member is indistinguishable from a
+                      # recovering one without per-member history, which HA
+                      # templates can't carry across iterations). Matches the
+                      # in-production owner_suite_morning_transition ramp.
+                      volume_level: >-
+                        {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume) %}
+                        {{ [effective_step_volume * ramp_index, member_peak] | min }}
+            - delay:
+                seconds: "{{ effective_interval_seconds }}"
+
+  bedroom_playlist_0:
+    alias: "Play LoFi"
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.music_assistant_play_random_lofi_playlist
+        data:
+          entity_id: media_player.ma_bedroom
+          playlist_name: Lowfi
+          log_name: Cube Playlist is
+
+  bedroom_playlist_1:
+@@PRIVATE:music_label_1618@@
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_054@@
+@@PRIVATE:music_annotation_055@@
+@@PRIVATE:music_annotation_056@@
+@@PRIVATE:music_annotation_057@@
+@@PRIVATE:music_annotation_058@@
+@@PRIVATE:music_annotation_059@@
+@@PRIVATE:music_annotation_060@@
+@@PRIVATE:music_annotation_061@@
+@@PRIVATE:music_annotation_062@@
+@@PRIVATE:music_annotation_063@@
+@@PRIVATE:music_annotation_064@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_043@@",
+            "@@PRIVATE:music_uri_035@@",
+            "@@PRIVATE:music_uri_038@@",
+            "@@PRIVATE:music_uri_047@@",
+            "@@PRIVATE:music_uri_040@@",
+            "@@PRIVATE:music_uri_044@@",
+            "@@PRIVATE:music_uri_003@@",
+            "@@PRIVATE:music_uri_007@@",
+            "@@PRIVATE:music_uri_015@@",
+            "@@PRIVATE:music_uri_037@@"
+            ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - action: script.music_assistant_play_bedroom_playlist_choice
+        data:
+@@PRIVATE:music_label_1652@@
+          playlist: "{{ playlist }}"
+
+  bedroom_playlist_2:
+@@PRIVATE:music_label_1656@@
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_065@@
+@@PRIVATE:music_annotation_066@@
+@@PRIVATE:music_annotation_067@@
+@@PRIVATE:music_annotation_068@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_016@@",
+              "@@PRIVATE:music_uri_013@@",
+              "@@PRIVATE:music_uri_048@@",
+              "@@PRIVATE:music_uri_049@@"
+              ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - action: script.music_assistant_play_bedroom_playlist_choice
+        data:
+@@PRIVATE:music_label_1677@@
+          playlist: "{{ playlist }}"
+
+  bedroom_playlist_3:
+@@PRIVATE:music_label_1681@@
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_069@@
+@@PRIVATE:music_annotation_070@@
+@@PRIVATE:music_annotation_071@@
+@@PRIVATE:music_annotation_072@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_010@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_036@@",
+              "@@PRIVATE:music_uri_039@@"
+              ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - action: script.music_assistant_play_bedroom_playlist_choice
+        data:
+@@PRIVATE:music_label_1702@@
+          playlist: "{{ playlist }}"
+
+  bedroom_playlist_4:
+@@PRIVATE:music_label_1706@@
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_073@@
+@@PRIVATE:music_annotation_074@@
+@@PRIVATE:music_annotation_075@@
+@@PRIVATE:music_annotation_076@@
+@@PRIVATE:music_annotation_077@@
+@@PRIVATE:music_annotation_078@@
+@@PRIVATE:music_annotation_079@@
+@@PRIVATE:music_annotation_080@@
+@@PRIVATE:music_annotation_081@@
+@@PRIVATE:music_annotation_082@@
+@@PRIVATE:music_annotation_083@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_026@@",
+              "@@PRIVATE:music_uri_034@@",
+              "@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_069@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_033@@"
+              ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - action: script.music_assistant_play_bedroom_playlist_choice
+        data:
+@@PRIVATE:music_label_1740@@
+          playlist: "{{ playlist }}"
+
+  bedroom_playlist_5:
+    alias: "Play LoFi Legacy Delegate"
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.bedroom_playlist_0
+
+  play_video_games:
+    alias: "Play Video Games"
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: media_player.turn_on
+        target:
+          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.wait_for_basement_media_player_ready
+      # - action: media_player.turn_on
+      #   data:
+      #     entity_id: media_player.lg_webos_smart_tv
+      # - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        target:
+          entity_id: media_player.lg_webos_smart_tv
+        data:
+          source: "HDMI 4"
+      - alias: "Let the TV settle after HDMI source selection"
+        delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  spotify_arrival:
+    alias: "Spotify Arrive Home"
+    trace:
+      stored_traces: 50
+    variables:
+      playback_entity: >-
+        {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.ma_group_everywhere' }}
+      arrival_volume_entities: >-
+        {{ ['media_player.ma_bedroom', 'media_player.ma_bathroom']
+           if is_state('input_boolean.guest_mode', 'on')
+           else ['media_player.ma_bedroom', 'media_player.ma_bathroom',
+                 'media_player.ma_den', 'media_player.ma_office',
+                 'media_player.ma_tiki_room'] }}
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_084@@
+@@PRIVATE:music_annotation_085@@
+@@PRIVATE:music_annotation_086@@
+@@PRIVATE:music_annotation_087@@
+@@PRIVATE:music_annotation_088@@
+@@PRIVATE:music_annotation_089@@
+@@PRIVATE:music_annotation_090@@
+@@PRIVATE:music_annotation_091@@
+@@PRIVATE:music_annotation_092@@
+@@PRIVATE:music_annotation_093@@
+@@PRIVATE:music_annotation_094@@
+@@PRIVATE:music_annotation_095@@
+@@PRIVATE:music_annotation_096@@
+@@PRIVATE:music_annotation_097@@
+@@PRIVATE:music_annotation_098@@
+@@PRIVATE:music_annotation_099@@
+@@PRIVATE:music_annotation_100@@
+@@PRIVATE:music_annotation_101@@
+@@PRIVATE:music_annotation_102@@
+@@PRIVATE:music_annotation_103@@
+@@PRIVATE:music_annotation_104@@
+@@PRIVATE:music_annotation_105@@
+@@PRIVATE:music_annotation_106@@
+@@PRIVATE:music_annotation_107@@
+@@PRIVATE:music_annotation_108@@
+@@PRIVATE:music_annotation_109@@
+@@PRIVATE:music_annotation_110@@
+@@PRIVATE:music_annotation_111@@
+@@PRIVATE:music_annotation_112@@
+@@PRIVATE:music_annotation_113@@
+@@PRIVATE:music_annotation_114@@
+@@PRIVATE:music_annotation_115@@
+@@PRIVATE:music_annotation_116@@
+@@PRIVATE:music_annotation_117@@
+@@PRIVATE:music_annotation_118@@
+@@PRIVATE:music_annotation_119@@
+@@PRIVATE:music_annotation_120@@
+@@PRIVATE:music_annotation_121@@
+@@PRIVATE:music_annotation_122@@
+@@PRIVATE:music_annotation_123@@
+@@PRIVATE:music_annotation_124@@
+@@PRIVATE:music_annotation_125@@
+@@PRIVATE:music_annotation_126@@
+@@PRIVATE:music_annotation_127@@
+@@PRIVATE:music_annotation_128@@
+@@PRIVATE:music_annotation_129@@
+@@PRIVATE:music_annotation_130@@
+@@PRIVATE:music_annotation_131@@
+@@PRIVATE:music_annotation_132@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@"
+              ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - delay:
+          seconds: 90
+      - action: media_player.shuffle_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ playback_entity }}"
+        data:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+            {% set sindex =  (range(0, (shuffle | length))|random) -%}
+            {{ shuffle[sindex] }}
+      - alias: "Let shuffle settle before arrival volume changes"
+        delay:
+          seconds: 2
+      - action: media_player.volume_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ arrival_volume_entities }}"
+        data:
+          volume_level: 0.30
+      # Fingerprint the group immediately before the play request, not before the
+      # 90s arrival delay: an already-playing group advances tracks on its own, so
+      # a fingerprint taken earlier would differ by playback time alone and let a
+      # failed request read as success. As with the wake-up script above, the
+      # wait/decision steps stay at the top sequence level so `wait.completed` is
+      # read in the same scope it is set.
+      - variables:
+          arrival_pre_playback_fingerprint: >-
+            {{ [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') }}
+      - alias: "Play arrival music via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: "{{ playback_entity }}"
+          spotify_uri: "{{ playlist }}"
+      - alias: "Confirm arrival playback changed the group media"
+        wait_template: >-
+          {{ is_state(playback_entity, 'playing') and [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != arrival_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - alias: "Retry arrival music once when the primary request did not start"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music retry
+              message: " primary playback failed to start; retrying {{ playlist }}"
+          - alias: "Retry arrival music via Music Assistant"
+            action: script.music_assistant_play_spotify_uri
+            data:
+              entity_id: "{{ playback_entity }}"
+              spotify_uri: "{{ playlist }}"
+      - alias: "Confirm arrival playback after the retry"
+        wait_template: >-
+          {{ is_state(playback_entity, 'playing') and [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != arrival_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music is
+              message: " playing Arrival playlist: {{ playlist }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              notification_id: arrival_audio_failed
+              title: "Arrival audio failed"
+              message: >-
+                Arrival music failed twice to start on {{ playback_entity }}
+                using {{ playlist }}.
+
+  spotify_bedtime:
+    alias: "Spotify Bedtime"
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_133@@
+@@PRIVATE:music_annotation_134@@
+@@PRIVATE:music_annotation_135@@
+@@PRIVATE:music_annotation_136@@
+@@PRIVATE:music_annotation_137@@
+@@PRIVATE:music_annotation_138@@
+@@PRIVATE:music_annotation_139@@
+@@PRIVATE:music_annotation_140@@
+@@PRIVATE:music_annotation_141@@
+@@PRIVATE:music_annotation_142@@
+@@PRIVATE:music_annotation_143@@
+@@PRIVATE:music_annotation_144@@
+@@PRIVATE:music_annotation_145@@
+@@PRIVATE:music_annotation_146@@
+@@PRIVATE:music_annotation_147@@
+@@PRIVATE:music_annotation_148@@
+@@PRIVATE:music_annotation_149@@
+@@PRIVATE:music_annotation_150@@
+@@PRIVATE:music_annotation_151@@
+@@PRIVATE:music_annotation_152@@
+@@PRIVATE:music_annotation_153@@
+@@PRIVATE:music_annotation_154@@
+@@PRIVATE:music_annotation_155@@
+@@PRIVATE:music_annotation_156@@
+@@PRIVATE:music_annotation_157@@
+@@PRIVATE:music_annotation_158@@
+@@PRIVATE:music_annotation_159@@
+@@PRIVATE:music_annotation_160@@
+@@PRIVATE:music_annotation_161@@
+@@PRIVATE:music_annotation_162@@
+@@PRIVATE:music_annotation_163@@
+@@PRIVATE:music_annotation_164@@
+@@PRIVATE:music_annotation_165@@
+@@PRIVATE:music_annotation_166@@
+@@PRIVATE:music_annotation_167@@
+@@PRIVATE:music_annotation_168@@
+@@PRIVATE:music_annotation_169@@
+@@PRIVATE:music_annotation_170@@
+@@PRIVATE:music_annotation_171@@
+@@PRIVATE:music_annotation_172@@
+@@PRIVATE:music_annotation_173@@
+@@PRIVATE:music_annotation_174@@
+@@PRIVATE:music_annotation_175@@
+@@PRIVATE:music_annotation_176@@
+@@PRIVATE:music_annotation_177@@
+@@PRIVATE:music_annotation_178@@
+@@PRIVATE:music_annotation_179@@
+@@PRIVATE:music_annotation_180@@
+@@PRIVATE:music_annotation_181@@
+@@PRIVATE:music_annotation_182@@
+@@PRIVATE:music_annotation_183@@
+@@PRIVATE:music_annotation_184@@
+@@PRIVATE:music_annotation_185@@
+@@PRIVATE:music_annotation_186@@
+@@PRIVATE:music_annotation_187@@
+@@PRIVATE:music_annotation_188@@
+@@PRIVATE:music_annotation_189@@
+@@PRIVATE:music_annotation_190@@
+@@PRIVATE:music_annotation_191@@
+@@PRIVATE:music_annotation_192@@
+@@PRIVATE:music_annotation_193@@
+@@PRIVATE:music_annotation_194@@
+            #}
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_018@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_011@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_012@@",
+              "@@PRIVATE:music_uri_019@@",
+              "@@PRIVATE:media_stream_002@@",
+              "@@PRIVATE:media_stream_001@@",
+              "@@PRIVATE:media_stream_003@@",
+              "@@PRIVATE:media_stream_004@@",
+              "@@PRIVATE:media_stream_005@@",
+              "@@PRIVATE:music_uri_014@@"
+              ] -%}
+            {% set pindex = (range(0, (plists | length))|random) -%}
+            {{ plists[pindex] }}
+      - variables:
+          bedtime_playback_entity: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
+          bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
+          bedtime_apple_music_fallback_uri: "@@PRIVATE:media_apple_music_fallback@@"
+          bedtime_apple_music_fallback_media_type: ""
+          bedtime_local_library_fallback_uri: "@@PRIVATE:media_local_radio_fallback@@"
+          bedtime_local_library_fallback_media_type: radio
+          bedtime_pre_playback_fingerprint: >-
+            {{ [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') }}
+      - action: media_player.shuffle_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ bedtime_playback_entity }}"
+        data:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+            {% set sindex =  (range(0, (shuffle | length))|random) -%}
+            {{ shuffle[sindex] }}
+      - action: media_player.repeat_set
+        continue_on_error: true
+        data:
+          repeat: all
+        target:
+          entity_id: "{{ bedtime_playback_entity }}"
+      - alias: "Let bedtime repeat mode settle before volume changes"
+        delay:
+          seconds: 2
+      - action: media_player.volume_set
+        continue_on_error: true
+        target:
+          entity_id:
+            - media_player.ma_bedroom
+            - media_player.ma_bathroom
+            - media_player.ma_office
+            - media_player.ma_den
+        data:
+          volume_level: 0.20
+      - alias: "Let bedtime volume settle before playback starts"
+        delay:
+          seconds: 2
+      - action: logbook.log
+        data:
+          entity_id: "{{ bedtime_playback_entity }}"
+          domain: media_player
+          name: Spotify Bedtime is
+          message: " playing Bedtime playlist: {{ playlist }}"
+      - alias: "Play bedtime music on sync group"
+        action: script.music_assistant_play_item
+        data:
+          entity_id: "{{ bedtime_playback_entity }}"
+          media_item: "{{ playlist }}"
+          media_type: "{{ bedtime_media_type }}"
+      - alias: "Confirm primary bedtime playback changed the group media"
+        wait_template: >-
+          {{ is_state(bedtime_playback_entity, 'playing') and [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Spotify Bedtime fallback is
+              message: " primary bedtime playback failed to start; playing LoFi fallback"
+          - action: script.music_assistant_play_random_lofi_playlist
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              playlist_name: Bedtime LoFi fallback
+              log_name: Spotify Bedtime fallback is
+      - alias: "Confirm LoFi fallback changed the group media"
+        wait_template: >-
+          {{ is_state(bedtime_playback_entity, 'playing') and [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Apple Music bedtime fallback is
+              message: >-
+                Spotify bedtime and LoFi fallback failed; playing Apple Music
+                fallback: {{ bedtime_apple_music_fallback_uri }}
+          - action: script.music_assistant_play_item
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              media_item: "{{ bedtime_apple_music_fallback_uri }}"
+              media_type: "{{ bedtime_apple_music_fallback_media_type }}"
+      - alias: "Confirm Apple Music fallback changed the group media"
+        wait_template: >-
+          {% set ns = namespace(parts=[]) %}
+          {% for attr in [
+            'media_content_id',
+            'media_title',
+            'media_artist',
+            'media_album_name'
+          ] %}
+            {% set value =
+              state_attr(bedtime_playback_entity, attr)
+              | default('', true)
+            %}
+            {% set ns.parts = ns.parts + [value] %}
+          {% endfor %}
+          {{ is_state(bedtime_playback_entity, 'playing')
+             and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Local bedtime fallback is
+              message: >-
+                Apple Music bedtime fallback failed; playing local library
+                fallback: {{ bedtime_local_library_fallback_uri }}
+          - action: script.music_assistant_play_item
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              media_item: "{{ bedtime_local_library_fallback_uri }}"
+              media_type: "{{ bedtime_local_library_fallback_media_type }}"
+      - alias: "Confirm local library fallback changed the group media"
+        wait_template: >-
+          {% set ns = namespace(parts=[]) %}
+          {% for attr in [
+            'media_content_id',
+            'media_title',
+            'media_artist',
+            'media_album_name'
+          ] %}
+            {% set value =
+              state_attr(bedtime_playback_entity, attr)
+              | default('', true)
+            %}
+            {% set ns.parts = ns.parts + [value] %}
+          {% endfor %}
+          {{ is_state(bedtime_playback_entity, 'playing')
+             and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: bedtime_audio_failed
+              title: "Bedtime audio failed"
+              message: >-
+                Spotify bedtime, LoFi, Apple Music, and local library fallbacks
+                all failed to start on {{ bedtime_playback_entity }}.
+      - alias: "Ensure bedtime queue repeats after playback starts"
+        action: media_player.repeat_set
+        continue_on_error: true
+        data:
+          repeat: all
+        target:
+          entity_id: "{{ bedtime_playback_entity }}"
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+            to: "on"
+        timeout:
+          minutes: 10 # TODO this as a variable that is passed by the caller. Different timeouts for tv off and for laying in bed automation
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - delay:
+              minutes: 3
+      - action: script.turn_on
+        target:
+          entity_id: script.spotify_bedtime_volume
+
+  spotify_bedtime_volume:
+    alias: "Spotify Bedtime Rampdown"
+    trace:
+      stored_traces: 50
+    sequence:
+      - variables:
+          # Perceptual design: each update lowers volume by
+          # bedtime_rampdown_step_volume (0.01 ≈ 0.5 dB at the assumed 50 dB
+          # Sonos/MA range — half the ~1 dB just-noticeable-difference), then
+          # waits bedtime_rampdown_interval_seconds (12s, 3x the ~4s
+          # auditory-echoic-memory window) so no single step is ever compared
+          # against a fresh reference. Reads live volume each iteration
+          # (rather than a precomputed curve) so a manually raised/lowered
+          # room still tapers smoothly, and a dropped/unavailable member
+          # (continue_on_error, #839) never desyncs the rest of the ramp.
+          # Bedroom alone keeps a higher 6% floor: MA proportional scaling
+          # rounds lower bedroom levels too aggressively after the loudness
+          # change. Office, bathroom, and den all ramp down to 1%. Office and
+          # den are guest_capable_rooms per docs/room_intent.yaml
+          # ("override_when_guest_present: treat as guest-private room at any
+          # time", priority high) — the same rooms the wake-up scripts'
+          # group_members already exclude in guest mode. guest_mode is
+          # re-checked live every iteration (not snapshotted once up front),
+          # so a room stops being touched within one interval of guest mode
+          # turning on mid-rampdown, not just at script start. This script
+          # has callers with no guest-mode guard of their own (e.g.
+          # bed_without_prep), so the exclusion lives here rather than
+          # relying on every caller to remember it.
+          bedtime_rampdown_step_volume: 0.01
+          bedtime_rampdown_interval_seconds: 12
+          bedtime_rampdown_targets:
+            - entity_id: media_player.ma_bedroom
+              floor_volume: 0.06
+              guest_capable: false
+            - entity_id: media_player.ma_bathroom
+              floor_volume: 0.01
+              guest_capable: false
+            - entity_id: media_player.ma_office
+              floor_volume: 0.01
+              guest_capable: true
+            - entity_id: media_player.ma_den
+              floor_volume: 0.01
+              guest_capable: true
+          # Safety bound so a member stuck reporting a stale above-floor
+          # volume (e.g. volume_set silently failing under
+          # continue_on_error) can't hold the rampdown open indefinitely —
+          # the max possible distance (silence to full volume) at the
+          # configured step size, plus margin.
+          bedtime_rampdown_max_iterations: >-
+            {{ (1 / bedtime_rampdown_step_volume) | round(0, 'ceil') + 10 }}
+      # Unlike the wake-up ramp (which climbs an absolute index-driven curve
+      # to power through MA's "rounds to 0 below ~8%" dead zone), this rampdown
+      # steps DOWN from each target's OWN live volume every iteration:
+      # max(live − step, floor). That is deliberate and NOT a stall risk here —
+      # it descends toward a low floor (0.06 bedroom / 0.01 others), the regime
+      # where the dead zone helps reach floor rather than trapping the climb.
+      # A live-relative step is also the only pause-safe option: guest mode
+      # skips office/den mid-rampdown (re-checked live each iteration), so an
+      # absolute step × global-iteration curve would resume a paused room many
+      # steps below where it was left, slamming it to floor in one jump. A room
+      # unavailable at script start and later recovered is likewise handled for
+      # free — it simply eases one step down from wherever it re-appears. HA
+      # templates can't carry a per-target active-iteration counter across
+      # outer iterations, so an absolute curve can't be made pause-aware here
+      # (Codex review, PR #957).
+      - repeat:
+          while:
+            - condition: template
+              value_template: >-
+                {% set ns = namespace(any_active_above_floor=false) %}
+                {% set guest_mode_on = is_state('input_boolean.guest_mode', 'on') %}
+                {% for target in bedtime_rampdown_targets %}
+                  {% if not (guest_mode_on and target.guest_capable) %}
+                    {% if (state_attr(target.entity_id, 'volume_level') | float(target.floor_volume)) > target.floor_volume %}
+                      {% set ns.any_active_above_floor = true %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_active_above_floor }}
+          sequence:
+            - repeat:
+                for_each: "{{ bedtime_rampdown_targets }}"
+                sequence:
+                  # Every step tolerates an unavailable member (e.g. a faulted
+                  # bathroom Sonos, #839) so one dropped speaker never aborts
+                  # the rampdown. Guest-capable targets are skipped whenever
+                  # guest mode is currently on, checked fresh each iteration.
+                  # Also skipped once a target's live volume is already at or
+                  # below its floor — otherwise max(live - step, floor) would
+                  # raise it back UP to floor on the next iteration (e.g.
+                  # someone manually mutes a room mid-rampdown), which is
+                  # backwards for a rampdown.
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{ not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable)
+                             and (state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) > repeat.item.floor_volume }}
+                    then:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          # One step down from the target's OWN live volume,
+                          # floored — self-correcting across pauses, manual
+                          # changes, and unavailable→recovered transitions.
+                          volume_level: >-
+                            {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+            - delay:
+                seconds: "{{ bedtime_rampdown_interval_seconds }}"
+
+  spotify_wake_up:
+    alias: "Spotify Wake Up"
+    icon: mdi:weather-sunset-up
+    description: "Play music in the morning when I visit the bathroom."
+    trace:
+      stored_traces: 50
+    fields:
+      playback_entity_id:
+        description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
+      regroup_after_play:
+        description: "Kept for backwards compatibility; ignored — sync groups manage membership"
+    variables:
+      playback_player: media_player.ma_bedroom
+      group_members: >-
+        {{ ['media_player.ma_bedroom', 'media_player.ma_bathroom']
+           if is_state('input_boolean.guest_mode', 'on')
+           else ['media_player.ma_bedroom', 'media_player.ma_bathroom',
+                 'media_player.ma_office', 'media_player.ma_den'] }}
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+@@PRIVATE:music_annotation_195@@
+@@PRIVATE:music_annotation_196@@
+@@PRIVATE:music_annotation_197@@
+@@PRIVATE:music_annotation_198@@
+@@PRIVATE:music_annotation_199@@
+@@PRIVATE:music_annotation_200@@
+@@PRIVATE:music_annotation_201@@
+@@PRIVATE:music_annotation_202@@
+@@PRIVATE:music_annotation_203@@
+@@PRIVATE:music_annotation_204@@
+@@PRIVATE:music_annotation_205@@
+@@PRIVATE:music_annotation_206@@
+@@PRIVATE:music_annotation_207@@
+@@PRIVATE:music_annotation_208@@
+@@PRIVATE:music_annotation_209@@
+@@PRIVATE:music_annotation_210@@
+@@PRIVATE:music_annotation_211@@
+@@PRIVATE:music_annotation_212@@
+@@PRIVATE:music_annotation_213@@
+@@PRIVATE:music_annotation_214@@
+@@PRIVATE:music_annotation_215@@
+@@PRIVATE:music_annotation_216@@
+@@PRIVATE:music_annotation_217@@
+@@PRIVATE:music_annotation_218@@
+@@PRIVATE:music_annotation_219@@
+@@PRIVATE:music_annotation_220@@
+@@PRIVATE:music_annotation_221@@
+@@PRIVATE:music_annotation_222@@
+@@PRIVATE:music_annotation_223@@
+@@PRIVATE:music_annotation_224@@
+@@PRIVATE:music_annotation_225@@
+@@PRIVATE:music_annotation_226@@
+@@PRIVATE:music_annotation_227@@
+@@PRIVATE:music_annotation_228@@
+@@PRIVATE:music_annotation_229@@
+@@PRIVATE:music_annotation_230@@
+@@PRIVATE:music_annotation_231@@
+@@PRIVATE:music_annotation_232@@
+@@PRIVATE:music_annotation_233@@
+@@PRIVATE:music_annotation_234@@
+@@PRIVATE:music_annotation_235@@
+@@PRIVATE:music_annotation_236@@
+@@PRIVATE:music_annotation_237@@
+@@PRIVATE:music_annotation_238@@
+@@PRIVATE:music_annotation_239@@
+@@PRIVATE:music_annotation_240@@
+@@PRIVATE:music_annotation_241@@
+@@PRIVATE:music_annotation_242@@
+@@PRIVATE:music_annotation_243@@
+@@PRIVATE:music_annotation_244@@
+@@PRIVATE:music_annotation_245@@
+@@PRIVATE:music_annotation_246@@
+@@PRIVATE:music_annotation_247@@
+            #}
+            {%- set plists = [
+              "@@PRIVATE:music_uri_061@@",
+              "@@PRIVATE:music_uri_062@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_023@@",
+              "@@PRIVATE:music_uri_004@@",
+              "@@PRIVATE:music_uri_032@@",
+              "@@PRIVATE:music_uri_006@@",
+              "@@PRIVATE:music_uri_002@@",
+              "@@PRIVATE:music_uri_001@@",
+              "@@PRIVATE:music_uri_066@@",
+              "@@PRIVATE:music_uri_064@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_050@@",
+              "@@PRIVATE:music_uri_041@@",
+              "@@PRIVATE:music_uri_028@@",
+              "@@PRIVATE:music_uri_042@@",
+              ] -%}
+              {% set pindex =  (range(0, (plists | length))|random) -%}
+              {{ plists[pindex] }}
+      - alias: "Prime the exact wake-up group to 0.05"
+        action: script.music_assistant_prime_wake_group
+        data:
+          group_members: "{{ group_members }}"
+          starting_volume: 0.05
+      - alias: "Enable Shuffle"
+        continue_on_error: true
+        action: media_player.shuffle_set
+        target:
+          entity_id: "{{ playback_player }}"
+        data:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+            {% set sindex =  (range(0, (shuffle | length))|random) -%}
+            {{ shuffle[sindex] }}
+      - action: media_player.repeat_set
+        continue_on_error: true
+        data:
+          repeat: all
+        target:
+          entity_id: "{{ playback_player }}"
+      - action: logbook.log
+        data:
+          entity_id: "{{ playback_player }}"
+          domain: media_player
+          name: Spotify Wake Up is
+          message: " playing wakeup playlist: {{ playlist }}"
+      - alias: "Play wake-up music on sync group"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: "{{ playback_player }}"
+          spotify_uri: "{{ playlist }}"
+
+########################
+# Sensor
+########################
+sensor: []
+
+########################
+# Switch
+########################
+switch: []
+
+########################
+# webosTV
+########################
+# YAML Deprecated 2022.2
+# webostv:
+#   - host: !secret lg_tv_ip
+
+########################
+# Zone
+########################
+zone: {}

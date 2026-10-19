@@ -1,0 +1,452 @@
+# Home Assistant package for security and household alerts.
+# It keeps alarm helpers, triggered-state notifications, and high-priority alert responses together so warning behavior is centralized.
+
+################################################################
+## Packages / Alerts
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "alerts"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: true
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+    alarm_control_panel.home_alarm:
+      <<: *customize
+      friendly_name: Home Alarm
+      icon: mdi:home-alert
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.arm_alarm:
+      <<: *customize
+      friendly_name: "Arm Home Alarm"
+      icon: mdi:home-alert
+
+    automation.disarm_alarm:
+      <<: *customize
+      friendly_name: "Disarm Home Alarm"
+      icon: mdi:home-alert
+
+    automation.motion_detected_on_trip:
+      <<: *customize
+      friendly_name: "Home Alarm Triggered"
+      icon: mdi:home-alert
+
+    automation.alarm_triggered_response:
+      <<: *customize
+      friendly_name: "Alarm Triggered Response"
+      icon: mdi:home-alert
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.flash_lights:
+      <<: *customize
+      friendly_name: "Flash lights"
+      icon: mdi:alarm-light
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel:
+  - platform: manual
+    name: home_alarm
+    code: !secret alarm_code
+    delay_time: 30
+    trigger_time: 4
+    disarmed:
+      trigger_time: 0
+    armed_home:
+      delay_time: 30
+
+########################
+# Automations
+########################
+automation:
+  - id: water_leak_detected
+    alias: water_leak_detected
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.basement_unfinished_leak_water_leak
+        from: "on"
+        to: "off"
+        id: dry
+      - trigger: state
+        entity_id: binary_sensor.basement_unfinished_leak_water_leak
+        from: "off"
+        to: "on"
+        id: wet
+
+      - trigger: state
+        entity_id: binary_sensor.kitchen_sink_leak_water_leak
+        from: "off"
+        to: "on"
+        id: wet
+      - trigger: state
+        entity_id: binary_sensor.kitchen_sink_leak_water_leak
+        from: "on"
+        to: "off"
+        id: dry
+
+      - trigger: state
+        entity_id: binary_sensor.laundry_room_leak_water_leak
+        from: "off"
+        to: "on"
+        id: wet
+      - trigger: state
+        entity_id: binary_sensor.laundry_room_leak_water_leak
+        from: "on"
+        to: "off"
+        id: dry
+
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: wet
+            sequence:
+              # Select Wet
+              - action: persistent_notification.create
+                data:
+                  title: Wet floor
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is wet.
+                  notification_id: wet-floor-alert
+              - action: notify.all
+                data:
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is wet.
+          - conditions:
+              - condition: trigger
+                id: dry
+            sequence:
+              # Select dry
+              - action: persistent_notification.create
+                data:
+                  title: Dry floor
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is dry.
+                  notification_id: wet-floor-alert
+              - action: notify.all
+                data:
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} has dried.
+
+  - id: motion_detected_on_trip
+    alias: motion_detected_on_trip
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.any_egress_open
+        from: "off"
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.office_occupancy_2
+        from: "off"
+        to: "on"
+    variables:
+      open_egress_points: >-
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
+      trigger_label: >-
+        {% if trigger.entity_id == 'binary_sensor.any_egress_open' %}
+          {{ open_egress_points if open_egress_points else 'an egress point' }}
+        {% else %}
+          {{ trigger.to_state.attributes.friendly_name }}
+        {% endif %}
+    condition:
+      - condition: state
+        entity_id: alarm_control_panel.home_alarm
+        state: armed_away
+    action:
+      - action: alarm_control_panel.alarm_trigger
+        target:
+          entity_id: alarm_control_panel.home_alarm
+      - action: notify.all
+        continue_on_error: true
+        data:
+          message: >
+            Activity detected at {{ trigger_label }} while you're away!
+  - alias: alarm_triggered_response
+    id: alarm_triggered_response
+    description: >-
+      Responds when the alarm enters triggered state: always sends a push
+      notification; also flashes all lights for 3 minutes (90 × 2 s cycles)
+      when @@PRIVATE:presence_person_title@@ is away from home.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: alarm_control_panel.home_alarm
+        to: "triggered"
+    action:
+      - action: @@PRIVATE:mobile_notify_service_02@@
+        continue_on_error: true
+        data:
+          message: "Something triggered alarm panel at home!"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+            sequence:
+              - repeat:
+                  count: 90  # 90 × 2 s/cycle = 3 minutes
+                  sequence:
+                    - action: script.flash_lights
+
+  - alias: mirror_shared_notifications_to_lg_tv_when_on
+    id: mirror_shared_notifications_to_lg_tv_when_on
+    mode: queued
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: all
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: notify_all
+    variables:
+      notify_payload: "{{ trigger.event.data.service_data | default({}, true) }}"
+      notify_message: "{{ notify_payload.message | default('', true) }}"
+      notify_title: "{{ notify_payload.title | default('', true) }}"
+      notify_data: "{{ notify_payload.data | default({}, true) }}"
+    condition:
+      - condition: state
+        entity_id: media_player.lg_webos_smart_tv
+        state: "on"
+      - condition: template
+        value_template: "{{ notify_message | trim != '' }}"
+    action:
+      - action: notify.lg_webos_tv_oled65c4aua_dusqljr
+        data:
+          message: "{{ notify_message }}"
+          title: "{{ notify_title }}"
+          data: "{{ notify_data }}"
+
+  - alias: send_pic_from_camera
+    id: send_pic_from_camera
+    # Sends a mobile notification with a camera snapshot when motion is detected.
+    # Triggers on basement or living room motion sensors held for 5 seconds.
+    # Fixed: entity_id must live inside data.data (not at the top level of data)
+    # so the HA companion app can attach the camera snapshot correctly.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id:
+          - binary_sensor.tikiroomcam_motionsensor
+          - binary_sensor.livingroom_motion_sensor
+        from: "off"
+        to: "on"
+        for:
+          seconds: 5
+    # condition:
+    action:
+      - action: @@PRIVATE:mobile_notify_service_02@@
+        data:
+          message: >-
+            Stream from {{ trigger.to_state.attributes.friendly_name }}
+          data:
+            # camera_entity_id attaches a snapshot from the associated camera
+            # to the iOS/Android companion app notification. Rendered as a
+            # single-line expression so the entity_id has no surrounding
+            # whitespace/newlines — a padded id makes the app request
+            # /api/camera_proxy/<padded-id>, which 404s.
+            entity_id: >-
+              {{ 'camera.tikiroomcamera'
+                 if trigger.entity_id == 'binary_sensor.tikiroomcam_motionsensor'
+                 else 'camera.livingroomcamera' }}
+
+  - alias: arm_alarm
+    id: arm_alarm
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "on"
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+    action:
+      #    - action: notify.all
+      #      data_template:
+      #        message: >
+      #          Enabled alarm and turned on motion detection
+      - action: alarm_control_panel.alarm_arm_away
+        target:
+          entity_id: alarm_control_panel.home_alarm
+        data:
+          code: !secret alarm_code
+      - action: switch.turn_on
+        continue_on_error: true
+        target:
+          entity_id:
+            - switch.livingroom_motion_detection
+            - switch.tikiroomcam_tikiroom_motion_detection
+      - action: input_boolean.turn_on
+        continue_on_error: true
+        target:
+          entity_id:
+            - input_boolean.house_unoccupied
+
+  - alias: disarm_alarm
+    id: disarm_alarm
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "off"
+        to: "on"
+    action:
+      - action: alarm_control_panel.alarm_disarm
+        target:
+          entity_id: alarm_control_panel.home_alarm
+        data:
+          code: !secret alarm_code
+      - action: switch.turn_off
+        continue_on_error: true
+        target:
+          entity_id:
+            - switch.livingroom_motion_detection
+            - switch.tikiroomcam_tikiroom_motion_detection
+      #    - action: notify.all
+      #      data_template:
+      #        message: >
+      #          Disabled alarm and turned off motion detection
+      - action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id:
+            - input_boolean.house_unoccupied
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Groups
+########################
+group:
+  motion_sensors:
+    entities:
+      - binary_sensor.hall_upstairs_motion_occupancy
+      - binary_sensor.office_occupancy_2
+      - binary_sensor.bedroom_occupancy
+      - binary_sensor.hall_main_foyer_motion_occupancy
+      - binary_sensor.den_occupancy_2
+      - binary_sensor.livingroom_motion_sensor
+      - binary_sensor.basement_landing_occupancy
+      - binary_sensor.basement_occupancy_2
+
+########################
+# Input Booleans
+########################
+input_boolean: {}
+
+########################
+# Input Numbers
+########################
+input_number: {}
+
+########################
+# iOS
+########################
+ios: {}
+
+########################
+# Light
+########################
+light: []
+
+########################
+# Notify
+########################
+notify:
+  - name: all
+    platform: group
+    services:
+      #    - action: telegram
+      - action: mobile_app_faro
+      - action: mobile_app_wethop
+      - action: mobile_app_f7m69c_5d3d6e76
+      - action: mobile_app_personal_macbook
+  - name: notify_all
+    platform: group
+    services:
+      - action: mobile_app_faro
+      - action: mobile_app_wethop
+      - action: mobile_app_f7m69c_5d3d6e76
+      - action: mobile_app_personal_macbook
+
+########################
+# Scenes
+########################
+scene: []
+
+########################
+# Scripts
+########################
+script:
+  flash_lights:
+    description: >-
+      Single flash pulse: turn all lights on for 1 s then off for 1 s.
+      Callers should loop externally (e.g. repeat/count or repeat/while)
+      for a sustained effect — do not self-call to avoid infinite loops.
+    trace:
+      stored_traces: 10
+    sequence:
+      - alias: Lights On
+        action: light.turn_on
+        target:
+          entity_id: all
+      - alias: Hold lights on
+        delay:
+          seconds: 1
+      - alias: Lights Off
+        action: light.turn_off
+        target:
+          entity_id: all
+      - alias: Hold lights off
+        delay:
+          seconds: 1

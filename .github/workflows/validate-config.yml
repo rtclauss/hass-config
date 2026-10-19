@@ -14,10 +14,7 @@ permissions:
   contents: read
 
 env:
-  # Home Assistant 2026.4.0 regressed `check_config` for trigger-based automation,
-  # script, and template validation. Keep this pinned until upstream fixes
-  # home-assistant/core#167066 in a stable release.
-  HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.3.4
+  HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.8.3
 
 concurrency:
   group: validate-home-assistant-config-${{ github.ref }}
@@ -39,8 +36,76 @@ jobs:
       - name: Install uv
         run: python -m pip install --upgrade pip uv
 
+      - name: Prepare public automation example
+        run: cp automations.example.yaml automations.yaml
+
+      - name: Validate private config templates
+        run: python scripts/render_private_config.py --values examples/private_values.example.json --validate
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
+
       - name: Run pytest
-        run: uv run --with pytest pytest
+        run: uv run --with pytest --with pyyaml --with jinja2 pytest
+
+  allium-weed:
+    name: Allium Weed Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    if: >-
+      ${{
+        (github.event_name == 'pull_request' && github.base_ref == 'develop') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+        github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch'
+      }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Allium CLI
+        run: |
+          set -euo pipefail
+
+          version="3.2.3"
+          archive="allium-x86_64-unknown-linux-gnu.tar.gz"
+          expected_sha="3e1afbed99b039a1fe659b1a3aaa69dbb274bfe18a0680571c9d0a4ab3ac205f"
+          curl -fsSL -o "$archive" "https://github.com/juxt/allium-tools/releases/download/v${version}/${archive}"
+          echo "${expected_sha}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive"
+          sudo install -m 0755 allium /usr/local/bin/allium
+          allium --version
+
+      - name: Run Allium weed check
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          args=(--format markdown --output "$GITHUB_STEP_SUMMARY")
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags origin "$BASE_REF"
+            args+=(--changed-from "origin/$BASE_REF")
+          elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            args+=(--changed-from "$BEFORE_SHA")
+          fi
+          if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "schedule" ]]; then
+            args+=(--create-issues)
+          fi
+
+          python scripts/allium_weed_check.py --require-allium "${args[@]}"
 
   yaml-lint:
     name: YAML Lint
@@ -60,6 +125,12 @@ jobs:
       - name: Verify pinned Python tracks latest Home Assistant support
         run: python scripts/check_ha_python_support.py --python-version-file .python-version
 
+      - name: Prepare public automation example
+        run: cp automations.example.yaml automations.yaml
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
+
       - name: Lint YAML files
         run: |
           yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
@@ -68,7 +139,8 @@ jobs:
             blueprints \
             esphome \
             packages \
-            zigbee2mqtt
+            zigbee2mqtt \
+            examples
 
   detect-esphome-changes:
     name: Detect ESPHome Config Changes
@@ -108,24 +180,35 @@ jobs:
             exit 0
           fi
 
-          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/' | sort -u || true)
 
           config_files=()
           package_change=false
+          include_basenames=()
 
-          while IFS= read -r config; do
-            [[ -z "$config" ]] && continue
+          while IFS= read -r changed; do
+            [[ -z "$changed" ]] && continue
 
-            if [[ "$config" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
-              if [[ -f "$config" ]]; then
-                config_files+=("$config")
+            # Top-level config (esphome/foo.yaml) -> build that config directly.
+            if [[ "$changed" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
+              if [[ -f "$changed" ]]; then
+                config_files+=("$changed")
               else
-                echo "Skipping removed ESPHome config: $config"
+                echo "Skipping removed ESPHome config: $changed"
               fi
               continue
             fi
 
-            package_change=true
+            # Other YAML under esphome/ (shared packages in subdirs) -> rebuild package consumers.
+            if [[ "$changed" =~ \.ya?ml$ ]]; then
+              package_change=true
+              continue
+            fi
+
+            # Non-YAML file (C++ `includes:` such as .h/.cpp/.tcc) -> rebuild every
+            # top-level config whose `includes:` references it by basename. Without
+            # this, header-only changes were silently skipped and never compiled.
+            include_basenames+=("$(basename "$changed")")
           done <<< "$changed_esphome_files"
 
           if [[ "$package_change" == "true" ]]; then
@@ -133,6 +216,20 @@ jobs:
               [[ -z "$config" ]] && continue
               config_files+=("$config")
             done < <(grep -l "^packages:" esphome/*.yaml || true)
+          fi
+
+          if [[ ${#include_basenames[@]} -gt 0 ]]; then
+            for include_basename in "${include_basenames[@]}"; do
+              matched=false
+              while IFS= read -r config; do
+                [[ -z "$config" ]] && continue
+                config_files+=("$config")
+                matched=true
+              done < <(grep -lF "$include_basename" esphome/*.yaml || true)
+              if [[ "$matched" == "false" ]]; then
+                echo "Note: changed include '$include_basename' is not referenced by any top-level esphome/*.yaml; nothing to build for it."
+              fi
+            done
           fi
 
           if [[ ${#config_files[@]} -gt 0 ]]; then
@@ -173,11 +270,12 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Install ESPHome
-        run: python -m pip install --upgrade pip esphome
+        run: python -m pip install --upgrade pip "esphome==2026.8.2"
 
       - name: Prepare ESPHome secrets for CI
         run: |
           set -euo pipefail
+          cp examples/esphome_secrets.example.yaml esphome/secrets.yaml
 
           python - <<'PY'
           from pathlib import Path
@@ -190,7 +288,7 @@ jobs:
           secrets_path = config_dir / "secrets.yaml"
 
           referenced = set()
-          for file_path in config_dir.glob("*.yaml"):
+          for file_path in config_dir.rglob("*.yaml"):
             if file_path.name == "secrets.yaml":
               continue
             content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -245,11 +343,12 @@ jobs:
 
       - name: Prepare test secrets
         run: |
-          if [[ -f travis_secrets.yaml ]]; then
-            cp travis_secrets.yaml secrets.yaml
-          else
-            touch secrets.yaml
-          fi
+          cp travis_secrets.example.yaml secrets.yaml
+          cp automations.example.yaml automations.yaml
+          cp examples/z2m_availability.yaml packages/z2m_availability.yaml
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
 
       - name: Fill missing secrets with CI placeholders
         run: |

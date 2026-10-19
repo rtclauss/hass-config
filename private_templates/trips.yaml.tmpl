@@ -1,0 +1,2897 @@
+# Home Assistant package for trip and vacation orchestration.
+# Complex areas: it combines presence, calendars, lighting simulation, and Ecobee vacation sync so long trips flip the house into the correct away-mode behavior.
+
+################################################################
+## Packages / Trips
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "trips"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    automation.trip_mode_manager:
+      <<: *customize
+      friendly_name: "Trip Mode Manager"
+      icon: mdi:bag-suitcase
+
+    automation.trip_mode_startup_reconcile:
+      <<: *customize
+      friendly_name: "Trip Mode Startup Reconcile"
+      icon: mdi:restart-alert
+
+    automation.sync_ecobee_calendar_vacation:
+      <<: *customize
+      friendly_name: "Sync Ecobee Calendar Vacation"
+      icon: mdi:calendar-sync
+
+    automation.log_calendar_vacation_plan_diagnostics:
+      <<: *customize
+      friendly_name: "Log Calendar Vacation Diagnostics"
+      icon: mdi:clipboard-text-clock
+
+    automation.trip_guest_door_unlock_open_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Unlock"
+      icon: mdi:door-open
+
+    automation.trip_guest_door_lock_close_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Lock"
+      icon: mdi:door-closed-lock
+
+    automation.trip_guest_visit_clear_on_return:
+      <<: *customize
+      friendly_name: "Trip Guest Visit Clear"
+      icon: mdi:broom
+
+    automation.trip_mode_watchdog_home_1h:
+      <<: *customize
+      friendly_name: "Trip Mode Watchdog"
+      icon: mdi:home-clock
+
+    automation.random_off_time:
+      <<: *customize
+      friendly_name: "Set random turn off time"
+
+    automation.send_nest_airport_home_eta:
+      <<: *customize
+      friendly_name: "Send Nest ETA from @@PRIVATE:home_airport_primary_code@@ airport to home"
+      icon: mdi:airplane-landing
+
+    automation.vacation_lights_on:
+      <<: *customize
+      friendly_name: "Turn on lights when I am away"
+
+    automation.vacation_lights_off:
+      <<: *customize
+      friendly_name: "Turn off lights at night when I am away"
+
+    automation.vacuum_flying_home:
+      <<: *customize
+      friendly_name: "Vacuum house when flying home"
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+    binary_sensor.sensed_trip:
+      <<: *customize
+      friendly_name: "Sensed a Trip"
+      icon: mdi:airplane-takeoff
+
+    binary_sensor.planned_vacation_calendar:
+      <<: *customize
+      friendly_name: "Scheduled Vacation Day"
+      icon: mdi:airplane-takeoff
+
+    binary_sensor.planned_work_trip_calendar:
+      <<: *customize
+      friendly_name: "Scheduled Work Trip Day"
+      icon: mdi:airplane-takeoff
+
+    binary_sensor.flying_home_today:
+      <<: *customize
+      friendly_name: "Flying Home Now"
+      icon: mdi:airplane-landing
+
+    ################################################
+    ## Groups
+    ################################################
+    group.trip_status_card:
+      <<: *customize
+      friendly_name: "Trip Status"
+      icon: mdi:beach
+
+    group.vacation_group_card_1:
+      <<: *customize
+      friendly_name: "Vacation Group 1"
+
+    group.vacation_group_card_2:
+      <<: *customize
+      friendly_name: "Vacation Group 2"
+
+    group.vacation_group_card_3:
+      <<: *customize
+      friendly_name: "Vacation Group 3"
+
+    group.vacation_group_card_4:
+      <<: *customize
+      friendly_name: "Vacation Group 4"
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    input_boolean.trip:
+      <<: *customize
+      friendly_name: "On a Trip"
+      hidden: true
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    input_number.random_vacation_light_group:
+      <<: *customize
+      friendly_name: "Random Group of Lights to Turn on"
+    input_number.trip_trigger_radius_miles:
+      <<: *customize
+      friendly_name: "Trip Trigger Radius"
+    input_number.ecobee_calendar_vacation_heat:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Heat"
+    input_number.ecobee_calendar_vacation_cool:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Cool"
+
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.me_to_home:
+      <<: *customize
+      friendly_name: "Time to Home"
+    sensor.ecobee_calendar_vacation_schedule:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Schedule"
+
+########################
+# Automations
+########################
+automation:
+  # - id: init_vacation
+  #   alias: initialize_vacation_items
+  #   trigger:
+  #   - platform: homeassistant
+  #     event: start
+  #   action:
+  #   - delay: '00:00:{{ (range(1,90)|random|int) }}'
+  #   - action: script.vacation_group_visibility
+
+  - id: trip_mode_startup_reconcile
+    alias: trip_mode_startup_reconcile
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - delay:
+          seconds: 30
+      - variables:
+          trip_mode_on: "{{ is_state('input_boolean.trip', 'on') }}"
+          vacation_sim_on: "{{ is_state('switch.vacation_simulation', 'on') }}"
+          states_mismatch: "{{ trip_mode_on != vacation_sim_on }}"
+          notification_tag: "trip-mode-startup-reconcile"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "on"
+              - condition: template
+                value_template: "{{ trip_mode_on or vacation_sim_on }}"
+            sequence:
+              # Emit an event so trip_mode_manager stays the single owner of trip-state writes.
+              - event: trip_mode_resolution_requested
+                event_data:
+                  desired_state: "off"
+                  reason: startup_reconcile
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+              - condition: template
+                value_template: "{{ states_mismatch }}"
+            sequence:
+              - action: @@PRIVATE:mobile_notify_service_02@@
+                data:
+                  title: "Trip Mode Needs Confirmation"
+                  message: >-
+                    Home Assistant restarted while you were away and trip mode is out of sync.
+                    Should trip mode be enabled?
+                  data:
+                    tag: "{{ notification_tag }}"
+                    persistent: true
+                    actions:
+                      - action: "TRIP_STARTUP_ENABLE"
+                        title: "Enable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "TRIP_STARTUP_DISABLE"
+                        title: "Disable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+              - action: @@PRIVATE:mobile_notify_service_01@@
+                data:
+                  title: "Trip Mode Needs Confirmation"
+                  message: >-
+                    Home Assistant restarted while you were away and trip mode is out of sync.
+                    Should trip mode be enabled?
+                  data:
+                    tag: "{{ notification_tag }}"
+                    persistent: true
+                    actions:
+                      - action: "TRIP_STARTUP_ENABLE"
+                        title: "Enable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "TRIP_STARTUP_DISABLE"
+                        title: "Disable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+              - wait_for_trigger:
+                  - trigger: event
+                    id: startup_enable
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: TRIP_STARTUP_ENABLE
+                  - trigger: event
+                    id: startup_disable
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: TRIP_STARTUP_DISABLE
+                timeout:
+                  hours: 4
+                continue_on_timeout: true
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            wait.completed
+                            and wait.trigger is not none
+                            and wait.trigger.id == 'startup_disable'
+                          }}
+                    sequence:
+                      - event: trip_mode_resolution_requested
+                        event_data:
+                          desired_state: "off"
+                          reason: startup_reconcile
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            not wait.completed
+                            or (wait.trigger is not none and wait.trigger.id == 'startup_enable')
+                          }}
+                    sequence:
+                      - event: trip_mode_resolution_requested
+                        event_data:
+                          desired_state: "on"
+                          reason: startup_reconcile
+              - action: @@PRIVATE:mobile_notify_service_02@@
+                data:
+                  message: "clear_notification"
+                  data:
+                    tag: "{{ notification_tag }}"
+              - action: @@PRIVATE:mobile_notify_service_01@@
+                data:
+                  message: "clear_notification"
+                  data:
+                    tag: "{{ notification_tag }}"
+
+  - id: trip_mode_manager
+    alias: trip_mode_manager
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        id: startup_reconcile_enable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "on"
+          reason: startup_reconcile
+      - trigger: event
+        id: startup_reconcile_disable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: startup_reconcile
+      - trigger: event
+        id: watchdog_home_disable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: watchdog_home_1h
+      - trigger: state
+        id: away_for_20h
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        to: "off"
+        for:
+          hours: 20
+      - trigger: state
+        id: depart_for_scheduled_trip
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "on"
+        to: "off"
+      - trigger: template
+        id: away_over_radius_mi
+        value_template: >-
+          {% set lat = state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'latitude') %}
+          {% set lon = state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'longitude') %}
+          {% set home_lat = state_attr('zone.home', 'latitude') %}
+          {% set home_lon = state_attr('zone.home', 'longitude') %}
+          {% set trip_radius_mi = states('input_number.trip_trigger_radius_miles') | float(120) %}
+          {{
+            lat is not none and lon is not none and home_lat is not none and home_lon is not none
+            and (distance(lat, lon, home_lat, home_lon) * 0.621371) > trip_radius_mi
+            and is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'off')
+          }}
+      - trigger: state
+        id: planned_work_trip
+        entity_id: binary_sensor.planned_work_trip_calendar
+        to: "on"
+      - trigger: state
+        id: planned_vacation
+        entity_id: binary_sensor.planned_vacation_calendar
+        to: "on"
+      - trigger: calendar
+        id: calendar_trip
+        entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
+        event: start
+        offset: -00:50:00
+      - trigger: state
+        id: manual_trip_on
+        entity_id: input_boolean.trip
+        to: "on"
+      - trigger: state
+        id: manual_trip_off
+        entity_id: input_boolean.trip
+        to: "off"
+      - trigger: state
+        id: return_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "off"
+        to: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: startup_reconcile_enable
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: script.house_transition
+                data:
+                  mode: "{{ states('input_select.house_mode') }}"
+                  reason: startup_reconcile_enable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "Trip mode enabled."
+          - conditions:
+              - condition: trigger
+                id:
+                  - startup_reconcile_disable
+                  - watchdog_home_disable
+            sequence:
+              - variables:
+                  trip_disable_message: >-
+                    {% if trigger.id == 'watchdog_home_disable' %}
+                      Trip mode watchdog cleared vacation mode after 1 hour
+                      at home.
+                    {% else %}
+                      Back from trip. 💺
+                    {% endif %}
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.trip
+              - action: script.house_transition
+                data:
+                  mode: "{{ states('input_select.house_mode') }}"
+                  reason: startup_reconcile_disable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "{{ trip_disable_message }}"
+          - conditions:
+              - condition: trigger
+                id:
+                  - away_for_20h
+                  - away_over_radius_mi
+                  - planned_work_trip
+                  - planned_vacation
+                  - depart_for_scheduled_trip
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+              - condition: or
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id != 'depart_for_scheduled_trip' }}"
+                  - condition: state
+                    entity_id: binary_sensor.planned_work_trip_calendar
+                    state: "on"
+                  - condition: template
+                    value_template: >-
+                      {% set start_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'start'), default=none) %}
+                      {% set end_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'end'), default=none) %}
+                      {% set now_ts = as_timestamp(now()) %}
+                      {% set scheduled_departure_lead_seconds = 6 * 3600 %}
+                      {{
+                        start_ts is not none
+                        and end_ts is not none
+                        and now_ts >= (start_ts - scheduled_departure_lead_seconds)
+                        and now_ts < end_ts
+                      }}
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: script.house_transition
+                data:
+                  mode: away
+                  reason: automatic_trip_enable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
+          - conditions:
+              - condition: trigger
+                id: calendar_trip
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {% set summary = trigger.calendar_event.summary | default('', true) | string %}
+                  {% set description = trigger.calendar_event.description | default('', true) | string %}
+                  {% set location = trigger.calendar_event.location | default('', true) | string %}
+                  {% set summary_lower = summary | lower %}
+                  {% set location_lower = location | lower %}
+                  {% set trip_text = [summary, description, location] | join(' ') | lower %}
+                  {% set route_summary = '→' in summary %}
+                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                  {% set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text %}
+                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set origin_code = '' %}
+                  {% set destination_code = '' %}
+                  {% if route_summary %}
+                    {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight to ') %}
+                    {% set destination_code = summary_lower[10:].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                    {% set flight_tail_lower = summary_lower[8:] %}
+                    {% set destination_code = flight_tail_lower.split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% endif %}
+                  {% set is_@@PRIVATE:home_airport_primary_code_lower@@_departure = (
+                    origin_code == "@@PRIVATE:home_airport_primary_code@@"
+                    or location_lower == "@@PRIVATE:home_metro_lower@@-@@PRIVATE:home_metro_st_paul_lower@@ intl/@@PRIVATE:home_secondary_airport_alias_lower@@"
+                    or "@@PRIVATE:home_airport_primary_code_lower@@ airport" in location_lower
+                    or "@@PRIVATE:home_metro_lower@@ @@PRIVATE:home_airport_primary_code_lower@@" in location_lower
+                    or ("@@PRIVATE:home_metro_lower@@" in location_lower and ("@@PRIVATE:home_metro_saint_paul_lower@@" in location_lower or "@@PRIVATE:home_metro_st_paul_lower@@" in location_lower))
+                    or "@@PRIVATE:home_secondary_airport_alias_lower@@" in location_lower
+                  ) %}
+                  {{
+                    looks_like_flight
+                    and is_@@PRIVATE:home_airport_primary_code_lower@@_departure
+                    and destination_code not in ["", "@@PRIVATE:home_airport_primary_code@@", "@@PRIVATE:home_airport_secondary_code@@", "@@PRIVATE:home_metro_code@@", "@@PRIVATE:home_metro_compact_code@@", "@@PRIVATE:home_city_secondary_code@@", "@@PRIVATE:home_region_code@@"]
+                    and "friend" not in trip_text
+                  }}
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: script.house_transition
+                data:
+                  mode: away
+                  reason: calendar_trip_enable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
+          - conditions:
+              - condition: trigger
+                id: manual_trip_on
+            sequence:
+              - action: script.house_transition
+                data:
+                  mode: "{{ states('input_select.house_mode') }}"
+                  reason: manual_trip_enable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "Trip mode enabled."
+          - conditions:
+              - condition: trigger
+                id: manual_trip_off
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+            sequence:
+              - action: script.house_transition
+                data:
+                  mode: "{{ states('input_select.house_mode') }}"
+                  reason: manual_trip_disable
+                  apply_lights: false
+                  apply_security: false
+                  apply_climate: false
+                  apply_media: false
+                  apply_trip_policy: true
+              - action: notify.all
+                data:
+                  message: "Back from trip. \U0001F4BA"
+      - if:
+          - condition: trigger
+            id: return_home
+          - condition: state
+            entity_id: input_boolean.trip
+            state: "on"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.trip
+          - action: script.house_transition
+            data:
+              mode: "{{ states('input_select.house_mode') }}"
+              reason: return_home_trip_disable
+              apply_lights: false
+              apply_security: false
+              apply_climate: false
+              apply_media: false
+              apply_trip_policy: true
+          - action: notify.all
+            data:
+              message: "Back from trip. \U0001F4BA"
+
+  - id: sync_ecobee_calendar_vacation
+    alias: sync_ecobee_calendar_vacation
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        id: schedule_changed
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+      - trigger: time
+        id: daily_refresh
+        at: "03:05:00"
+    variables:
+      vacation_name: >-
+        {% set planned_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
+        {{ planned_name[:12] if planned_name else 'CalAutoVac' }}
+      delete_vacation_name: >-
+        {% set previous_name = '' %}
+        {% if trigger is defined and trigger.platform == 'state' and trigger.from_state is not none %}
+          {% set previous_name = trigger.from_state.attributes.vacation_name | default('', true) | trim %}
+        {% endif %}
+        {% set current_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
+        {% set delete_name = previous_name if previous_name else current_name %}
+        {{ delete_name[:12] if delete_name else 'CalAutoVac' }}
+      vacation_state: "{{ states('sensor.ecobee_calendar_vacation_schedule') }}"
+      schedule_start: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') }}"
+      schedule_end: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') }}"
+      heat_temp: "{{ states('input_number.ecobee_calendar_vacation_heat') | float(60) }}"
+      cool_temp: "{{ states('input_number.ecobee_calendar_vacation_cool') | float(82) }}"
+    action:
+      - action: ecobee.delete_vacation
+        continue_on_error: true
+        data:
+          entity_id: climate.my_ecobee
+          vacation_name: "{{ delete_vacation_name }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{
+                vacation_state != 'off'
+                and schedule_start not in [none, '', 'unknown', 'unavailable']
+                and schedule_end not in [none, '', 'unknown', 'unavailable']
+              }}
+        then:
+          - action: ecobee.create_vacation
+            data:
+              entity_id: climate.my_ecobee
+              vacation_name: "{{ vacation_name }}"
+              heat_temp: "{{ heat_temp }}"
+              cool_temp: "{{ cool_temp }}"
+              start_date: "{{ (schedule_start | as_datetime | as_local).date().isoformat() }}"
+              start_time: "{{ (schedule_start | as_datetime | as_local).strftime('%H:%M:%S') }}"
+              end_date: "{{ (schedule_end | as_datetime | as_local).date().isoformat() }}"
+              end_time: "{{ (schedule_end | as_datetime | as_local).strftime('%H:%M:%S') }}"
+
+  - id: log_calendar_vacation_plan_diagnostics
+    alias: log_calendar_vacation_plan_diagnostics
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+      - trigger: state
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+        attribute: decision_code
+    variables:
+      decision_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'decision_summary') | default('No travel decision recorded.', true) | string | trim }}"
+      outbound_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'outbound_summary') | default('', true) | string | trim }}"
+      return_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'return_summary') | default('', true) | string | trim }}"
+      fallback_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'fallback_summary') | default('', true) | string | trim }}"
+      fallback_source: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'fallback_source') | default('', true) | string | trim }}"
+      destination_name: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'destination_name') | default('', true) | string | trim }}"
+      ignored_reason: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'ignored_reason') | default('', true) | string | trim }}"
+    action:
+      - continue_on_error: true
+        action: logbook.log
+        data:
+          entity_id: sensor.ecobee_calendar_vacation_schedule
+          domain: sensor
+          name: Travel detection
+          message: >-
+            {{ decision_summary }}{% if outbound_summary %} Outbound: {{ outbound_summary }}.{% endif %}{% if return_summary %} Return: {{ return_summary }}.{% endif %}{% if fallback_summary %} Fallback{% if fallback_source %} ({{ fallback_source }}){% endif %}: {{ fallback_summary }}.{% endif %}{% if destination_name %} Destination: {{ destination_name }}.{% endif %}{% if ignored_reason and ignored_reason != decision_summary %} Ignored: {{ ignored_reason }}.{% endif %}
+
+  - id: trip_mode_watchdog_home_1h
+    alias: trip_mode_watchdog_home_1h
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        from: "off"
+        to: "on"
+        for:
+          hours: 1
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+    action:
+      # Delegate to trip_mode_manager so trip state, vacation simulation, and
+      # related notifications stay on the same reconciliation path.
+      - event: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: watchdog_home_1h
+
+  - id: garage_opened_on_a_trip
+    alias: Garage Door Opened while on a Trip
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: cover.garage_door
+        to: open
+        id: door_opened_while_gone
+      - trigger: homeassistant
+        event: start
+        id: door_opened_while_gone
+      - trigger: event
+        event_type: mobile_app_notification_action
+        id: close_garage_mobile_trigger
+        event_data:
+          action: CLOSE_GARAGE
+    condition:
+      condition: and
+      conditions:
+        - alias: "garage trip mode is active"
+          condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - alias: "garage primary resident is away"
+          condition: state
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: door_opened_while_gone
+            sequence:
+              - action: @@PRIVATE:mobile_notify_service_02@@
+                data:
+                  title: "Garage opened while on a trip"
+                  # Fixed: `message` is a required field for all HA notify services.
+                  # Removing the comment restores the field that was accidentally
+                  # commented out, preventing the "required key not provided" error.
+                  message: "Close the door?"
+                  data:
+                    tag: "garage-opened-on-trip"
+                    persistent: true
+                    actions:
+                      - action: "CLOSE_GARAGE"
+                        title: "Close the door now"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "IGNORE_GARAGE"
+                        title: "Ignore for 5 minutes"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+          - conditions:
+              - condition: trigger
+                id: close_garage_mobile_trigger
+            sequence:
+              - action: cover.close_cover
+                target:
+                  entity_id: cover.garage_door
+      - delay:
+          minutes: 5
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - action: notify.all
+        data:
+          message: Closing garage door while you're on a trip.
+      - action: cover.close_cover
+        target:
+          entity_id: cover.garage_door
+
+  - id: random_off_time
+    alias: random_off_time
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        id: random_off_time_startup
+        event: start
+      - trigger: time
+        at: "12:00:00"
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "on"
+    condition:
+      - alias: "random vacation group only while trip mode is active"
+        condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+    action:
+      - action: input_datetime.set_datetime
+        data:
+          entity_id: input_datetime.random_vacation_lights_off
+          time: "{{ (range(22, 24)|random|int ~ ':' ~ range(0, 59)|random|int ~ ':' ~ range(0, 59)|random|int) }}"
+      - action: input_number.set_value
+        data:
+          entity_id: input_number.random_vacation_light_group
+          value: "{{ (range(1, 5)|random|int) }}" #one more than group, max not included
+      - action: notify.all
+        data:
+          message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_datetime.random_vacation_lights_off") }}
+
+  # TODO is this still needed with Vacation Mode?
+  - id: return_home_from_parents
+    alias: return_home_from_parents
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.parents
+        event: leave
+      # - platform: state
+      #   entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+      #   from: 'Parents'
+    condition:
+      condition: time
+      weekday:
+        - sun
+    action:
+      # - action: nest.set_eta
+      #   data_template:
+      #     eta: '{{states.sensor.time_to_home.state}}'
+      #     trip_id: "{{ states.input_select.trip_origin.state }}"
+      # - action: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Away"
+      - action: script.resume_ecobee_program_for_return_home
+        data:
+          reason: return_home_from_parents
+      - action: notify.all
+        data:
+          data:
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/climate"
+          message: >-
+            Turning off Ecobee away while driving home from parents
+
+  - id: send_nest_airport_home_eta
+    alias: send_nest_airport_home_eta
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:home_airport_primary_code_lower@@
+        event: leave
+    condition:
+      - condition: state
+        entity_id: binary_sensor.flying_home_today
+        state: "on"
+    action:
+      # - action: nest.set_eta
+      #   data_template:
+      #     eta: '{{states.sensor.time_to_home.state}}'
+      #     trip_id: "{{ states.input_select.trip_origin.state }}"
+      # - action: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - action: script.resume_ecobee_program_for_return_home
+        data:
+          reason: send_nest_airport_home_eta
+      - action: notify.all
+        data:
+          data: url:"/@@PRIVATE:owner_person_slug@@-new-mushroom/climate"
+          message: >-
+            Turning off Ecobee Away mode while driving home from @@PRIVATE:home_airport_primary_code@@
+
+  - id: vacation_lights_on
+    alias: vacation_lights_on
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:30:00
+    condition:
+      condition: and
+      conditions:
+        - alias: "vacation lights on while trip mode is active"
+          condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - alias: "vacation lights on while primary resident is away"
+          condition: state
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
+    action:
+      - delay: 00:{{ (range(5,45)|random|int) }}:00
+      - alias: "no guest visit started during the delay"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
+      - action: scene.turn_on
+        data:
+          target: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
+      - action: notify.all
+        data:
+          message: Turning on lights while you're away.
+
+  - id: vacation_lights_off
+    alias: vacation_lights_off
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: input_datetime.random_vacation_lights_off
+    #- platform: template
+    #value_template: "{{ states('sensor.time') == (state_attr('input_datetime.random_vacation_lights_off', 'timestamp') | int | timestamp_custom('%H:%M', True)) }}"
+    condition:
+      condition: and
+      conditions:
+        - alias: "vacation lights off while trip mode is active"
+          condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - alias: "vacation lights off while primary resident is away"
+          condition: state
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
+    action:
+      - action: script.lights_off_except
+        data:
+          exclude_lights:
+            - light.outside_front_hue
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+          transition: 240
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
+      # - action: light.turn_off
+      #   entity_id: "all"
+      - action: fan.turn_off
+        target:
+          entity_id: "all"
+      - action: notify.all
+        data:
+          message: Lights off while you're away.
+      - delay: 25
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
+      - action: script.leave_home_transition
+
+  - id: vacuum_on_trip
+    alias: vacuum_on_trip
+    description: >-
+      Run one full-floor pass on the main and upstairs levels during trips.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "13:00:00"
+    condition:
+      condition: and
+      conditions:
+        - alias: "on a trip"
+          condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - alias: "not home"
+          condition: state
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "off"
+        - alias: "guest mode off"
+          condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
+        # On a flying-home day the pre-landing clean (vacuum_flying_home) owns the
+        # X40 queue. Written as `not on` so an unavailable helper never stops the
+        # ordinary daily trip clean.
+        - alias: "no pre-landing clean covering today"
+          condition: template
+          value_template: "{{ not is_state('binary_sensor.pre_arrival_clean_day', 'on') }}"
+    action:
+      - action: script.trip_vacuum_main_and_upstairs_levels
+        data:
+          # Dropped at dequeue time if it waited >2 h or you are home by then, so a
+          # request stuck behind a long run can never start after you arrive.
+          require_away: true
+          expires_at: "{{ (now() + timedelta(hours=2)).isoformat() }}"
+          notify_message: >-
+            Vacuuming the main and upstairs levels while you're away 💺
+
+  - id: vacuum_flying_home
+    alias: vacuum_flying_home
+    description: >-
+      Start the flying-home clean far enough ahead that it is FINISHED before the
+      plane lands: start = landing - input_number.pre_arrival_clean_lead_minutes
+      (default 210; a full vacuum+mop cycle measures 182-191 min). Anchored to the
+      flight's ARRIVAL (sensor.next_flight_home_arrival), not takeoff, because a
+      cycle is longer than the flight; the house is empty for the whole trip so
+      starting before takeoff is fine. A late start (late booking, HA restart,
+      schedule change) degrades instead of running past landing: vacuum-only when
+      at least 100 min remain, otherwise skipped with a notification. Launches once
+      per landing (input_datetime.pre_arrival_clean_done_for). The replaced trigger
+      was takeoff (binary_sensor.flying_home_today), which on 2026-10-09 finished
+      the clean 49 min after landing.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: sensor.pre_arrival_clean_start
+        id: scheduled
+      # Catch-up: the itinerary appeared/moved after its start time had passed, or
+      # the lead helper was edited. The conditions below decide whether it is late.
+      - trigger: state
+        entity_id: sensor.pre_arrival_clean_start
+        id: rescheduled
+      - trigger: homeassistant
+        event: start
+        id: boot
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
+        - alias: "a future flight home is known"
+          condition: template
+          value_template: >-
+            {{ states('sensor.next_flight_home_arrival') not in ['unknown', 'unavailable', 'none', 'None', '']
+               and states('sensor.pre_arrival_clean_start') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
+        - alias: "start time has been reached"
+          condition: template
+          value_template: >-
+            {{ as_timestamp(now()) >= as_timestamp(states('sensor.pre_arrival_clean_start'), default=9999999999) }}
+        # Tolerates a delayed flight shifting the landing a little (6 h), but a
+        # different day's flight gets its own clean.
+        - alias: "not already launched for this landing"
+          condition: template
+          value_template: >-
+            {% set arrival = as_timestamp(states('sensor.next_flight_home_arrival'), default=0) | float(0) %}
+            {% set done = as_timestamp(states('input_datetime.pre_arrival_clean_done_for'), default=0) | float(0) %}
+            {{ done <= 0 or ((arrival - done) | abs) >= 6 * 3600 }}
+    action:
+      - variables:
+          arrival_ts: "{{ as_timestamp(states('sensor.next_flight_home_arrival'), default=0) | float(0) }}"
+          arrival_iso: "{{ states('sensor.next_flight_home_arrival') }}"
+          landing_label: "{{ (as_datetime(arrival_iso) | as_local).strftime('%-I:%M %p') }}"
+          lead_min: "{{ states('input_number.pre_arrival_clean_lead_minutes') | float(210) }}"
+          # Minutes left before landing; what still fits a FULL vacuum+mop cycle (worst
+          # observed 191 min, so 195; or the lead itself if it was set lower, minus 5 min
+          # of trigger jitter, so the scheduled start is always "full"); and the least
+          # that still fits a vacuum pass (measured 81-87 min).
+          remaining_min: "{{ ((arrival_ts - as_timestamp(now())) / 60) | round(0) }}"
+          full_min: "{{ [lead_min - 5, 195] | min }}"
+          vacuum_only_min: 100
+          plan: >-
+            {{ 'full' if remaining_min >= full_min
+               else ('vacuum' if remaining_min >= vacuum_only_min else 'skip') }}
+      # Record the landing first so a retrigger (boot, schedule edit) cannot launch
+      # the same flight twice, including on the skip path.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.pre_arrival_clean_done_for
+        data:
+          timestamp: "{{ arrival_ts }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ plan == 'full' }}"
+            sequence:
+              - action: script.trip_vacuum_main_and_upstairs_levels
+                data:
+                  force_mop: true
+                  require_away: true
+                  expires_at: "{{ arrival_iso }}"
+                  notify_message: >-
+                    Pre-landing clean started: vacuum, then mop. It should finish
+                    before your {{ landing_label }} landing ✈️
+          - conditions:
+              - condition: template
+                value_template: "{{ plan == 'vacuum' }}"
+            sequence:
+              - action: script.trip_vacuum_main_and_upstairs_levels
+                data:
+                  force_mop: false
+                  allow_mop: false
+                  require_away: true
+                  expires_at: "{{ arrival_iso }}"
+                  notify_message: >-
+                    Pre-landing clean started late ({{ remaining_min | int }} min before
+                    your {{ landing_label }} landing): vacuum only, no mop ✈️
+        default:
+          - action: notify.all
+            data:
+              data:
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+              message: >-
+                Pre-landing clean skipped: only {{ remaining_min | int }} min before your
+                {{ landing_label }} landing, not enough time to finish.
+
+  - alias: trip_guest_door_unlock_open_house
+    id: trip_guest_door_unlock_open_house
+    description: >-
+      While on a trip and away, unlocking the (virtual) front door lock means a guest is
+      checking on the cats: turn the water main back on and disarm the alarm,
+      and remember the visit so the relock can undo it.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        to: unlocked
+        not_from:
+          - unknown
+          - unavailable
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform != 'homeassistant' }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.trip_guest_visit_active
+      - repeat:
+          count: 3
+          sequence:
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: script.vacuum_dock_all_robots
+              continue_on_error: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: alarm_control_panel.alarm_disarm
+              continue_on_error: true
+              target:
+                entity_id: alarm_control_panel.home_alarm
+              data:
+                code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - wait_template: >-
+                {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                   and is_state('switch.basement_water_shutoff', 'on')
+                   and is_state('switch.livingroom_motion_detection', 'off')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                   and states('vacuum.valetudo_den') in ['docked', 'idle']
+                   and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
+              timeout: "00:00:10"
+              continue_on_timeout: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                       and is_state('switch.basement_water_shutoff', 'on')
+                       and is_state('switch.livingroom_motion_detection', 'off')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                       and states('vacuum.valetudo_den') in ['docked', 'idle']
+                       and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
+              then:
+                - action: @@PRIVATE:mobile_notify_service_02@@
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit"
+                    message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
+                - stop: "House ready for guest"
+      - action: @@PRIVATE:mobile_notify_service_02@@
+        continue_on_error: true
+        data:
+          title: "Guest visit: house NOT ready"
+          message: >-
+            Front door unlocked but the alarm is {{ states('alarm_control_panel.home_alarm') }},
+            the water is {{ states('switch.basement_water_shutoff') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}.
+            The guest may trigger the alarm, be photographed, have no water, or meet a vacuum that has not docked (den {{ states('vacuum.valetudo_den') }}, X40 {{ states('vacuum.x40_ultra') }}).
+
+  - alias: trip_guest_door_lock_close_house
+    id: trip_guest_door_lock_close_house
+    description: >-
+      When the front door locks again after a guest visit during a trip, turn
+      the water main back off and re-arm the alarm. Only acts if the unlock
+      automation started a visit, so it never re-arms on the owner's own return. Also runs at Home Assistant start so a restart mid-close
+      (or with a restored visit flag and a locked door) reconciles the secured state.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        to: locked
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "off"
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
+      - repeat:
+          count: 3
+          sequence:
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: alarm_control_panel.alarm_arm_away
+              continue_on_error: true
+              target:
+                entity_id: alarm_control_panel.home_alarm
+              data:
+                code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - wait_template: >-
+                {{ is_state('switch.basement_water_shutoff', 'off')
+                   and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                   and is_state('switch.livingroom_motion_detection', 'on')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
+              timeout: "00:00:20"
+              continue_on_timeout: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('switch.basement_water_shutoff', 'off')
+                       and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                       and is_state('switch.livingroom_motion_detection', 'on')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
+              then:
+                - action: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.trip_guest_visit_active
+                - action: @@PRIVATE:mobile_notify_service_02@@
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit over"
+                    message: "Front door locked: alarm armed, cameras on, water off."
+                - stop: "House secured"
+      - action: @@PRIVATE:mobile_notify_service_02@@
+        continue_on_error: true
+        data:
+          title: "Guest visit: house NOT secured"
+          message: >-
+            Front door locked but the water is {{ states('switch.basement_water_shutoff') }},
+            the alarm is {{ states('alarm_control_panel.home_alarm') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}. Visit flag kept;
+            it retries on the next lock event.
+
+  - alias: trip_guest_visit_clear_on_return
+    id: trip_guest_visit_clear_on_return
+    description: >-
+      Clears the guest-visit flag when the owner returns home or trip mode ends,
+      so a visit left open mid-trip cannot re-arm the alarm or shut the water
+      off on a later lock event.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.trip_guest_visit_active
+
+  # - id: toggle_vacation_tab
+  #   alias: toggle_vacation_tab
+  #   trigger:
+  #   - platform: state
+  #     entity_id: binary_sensor.sensed_trip
+  #   - platform: homeassistant
+  #     event: start
+  #   condition: []
+  #   action:
+  #   - delay: '00:00:{{ (range(1,30)|random|int) }}'
+  #   - action: script.toggle_view
+  #     data_template:
+  #       view_id: vacation
+  #       visible: >-
+  #         {{ is_state("binary_sensor.sensed_trip", 'on') | lower }}
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Groups
+########################
+group:
+  trip_status_card:
+    entities:
+      - binary_sensor.planned_vacation_calendar
+      - binary_sensor.planned_work_trip_calendar
+      - input_boolean.trip
+      - binary_sensor.flying_home_today
+
+  vacation_climate:
+    entities:
+      - group.average_house_climate
+
+  vacation_group_card_1:
+    entities:
+      - light.dining_room_all
+      - light.basement_great_room
+      - light.den_floods
+      - scene.vacation_group_1
+
+  vacation_group_card_2:
+    entities:
+      - light.basement_great_room
+      - light.owner_suite_lamps
+      - light.office_all
+      - light.hall_all
+      - light.kitchen_sink_overhead
+      - scene.vacation_group_2
+
+  vacation_group_card_3:
+    entities:
+      - light.dining_room_all
+      - light.owner_suite_lamps
+      - light.kitchen_sink_overhead
+      - light.den_leather_chair
+      - scene.vacation_group_3
+
+  vacation_group_card_4:
+    entities:
+      - light.dining_room_all
+      - light.kitchen_sink_overhead
+      - light.office_all
+      - light.hall_all
+      - scene.vacation_group_4
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  trip:
+    name: On a Trip
+  house_unoccupied:
+    name: House Unoccupied
+  trip_guest_visit_active:
+    name: Trip Guest Visit Active
+
+########################
+# Input DateTimes
+########################
+input_datetime:
+  random_vacation_lights_off:
+    name: Turn Off Lights at a Random Time
+    has_date: false
+    has_time: true
+  # The flight arrival (landing) timestamp a pre-landing clean was already launched
+  # for. Run-once guard for vacuum_flying_home: it tolerates a few hours of
+  # schedule drift (a delayed flight changes the arrival) but not a different day.
+  pre_arrival_clean_done_for:
+    name: Pre-Arrival Clean Done For (Landing Time)
+    has_date: true
+    has_time: true
+
+########################
+# Input Numbers
+########################
+input_number:
+  random_vacation_light_group:
+    min: 0
+    max: 4
+    step: 1
+    mode: box
+  # How long before the flight LANDS the flying-home clean starts. Calibrated from
+  # 2026-10-06..09 X40 history: vacuum pass 81-87 min, mop pass 97-104 min, full
+  # vacuum+mop cycle 182-191 min. 210 = worst observed cycle + ~19 min margin.
+  pre_arrival_clean_lead_minutes:
+    name: Pre-Arrival Clean Lead (min before landing)
+    min: 120
+    max: 360
+    step: 5
+    mode: box
+    unit_of_measurement: min
+    initial: 210
+  trip_trigger_radius_miles:
+    name: Trip Trigger Radius (mi)
+    min: 25
+    max: 1000
+    step: 5
+    mode: box
+    unit_of_measurement: mi
+    initial: 120
+  ecobee_calendar_vacation_heat:
+    name: Ecobee Calendar Vacation Heat
+    min: 45
+    max: 80
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    initial: 60
+  ecobee_calendar_vacation_cool:
+    name: Ecobee Calendar Vacation Cool
+    min: 65
+    max: 95
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    initial: 82
+
+########################
+# Scenes
+########################
+scene:
+  - id: vacation_group_1
+    name: Vacation Group 1
+    entities:
+      light.dining_room_lamps:
+        state: "on"
+      light.basement_great_room:
+        state: "on"
+      light.den_floods:
+        state: "on"
+
+  - id: vacation_group_2
+    name: Vacation Group 2
+    entities:
+      light.basement_great_room:
+        state: "on"
+      light.owner_suite_lamps:
+        state: "on"
+      light.office_all:
+        state: "on"
+      light.hall_transition_switch:
+        state: "on"
+        brightness: 255
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 255
+      light.hall_upstairs_switch:
+        state: "on"
+        brightness: 255
+      light.kitchen_sink_overhead:
+        state: "on"
+
+  - id: vacation_group_3
+    name: Vacation Group 3
+    entities:
+      light.dining_room_lamps:
+        state: "on"
+      light.owner_suite_lamps:
+        state: "on"
+      light.kitchen_sink_overhead:
+        state: "on"
+      light.den_leather_chair:
+        state: "on"
+
+  - id: vacation_group_4
+    name: Vacation Group 4
+    entities:
+      light.dining_room_lamps:
+        state: "on"
+      light.kitchen_sink_overhead:
+        state: "on"
+      light.office_all:
+        state: "on"
+      light.hall_transition_switch:
+        state: "on"
+        brightness: 255
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 255
+      light.hall_upstairs_switch:
+        state: "on"
+        brightness: 255
+
+########################
+# Scripts
+########################
+script:
+  resume_ecobee_program_for_return_home:
+    alias: resume_ecobee_program_for_return_home
+    description: >-
+      Resume the Ecobee program when a return-home travel signal fires.
+    mode: queued
+    trace:
+      stored_traces: 10
+    fields:
+      reason:
+        description: Return-home travel source requesting Ecobee resume.
+        example: send_nest_airport_home_eta
+    sequence:
+      - continue_on_error: true
+        action: logbook.log
+        data:
+          name: Travel climate
+          entity_id: script.resume_ecobee_program_for_return_home
+          message: >-
+            Resuming Ecobee program for
+            {{ reason | default('return_home', true) }}.
+          domain: script
+      - action: ecobee.resume_program
+        data:
+          resume_all: true
+          entity_id: climate.my_ecobee
+
+  trip_vacuum_main_and_upstairs_levels:
+    alias: trip_vacuum_main_and_upstairs_levels
+    description: >-
+      Run trip-safe whole-floor vacuuming and send the travel notification.
+    mode: queued
+    trace:
+      stored_traces: 10
+    fields:
+      force_mop:
+        description: "Force a main-level mop pass after the X40 vacuum pass."
+        example: true
+      allow_mop:
+        description: "false forces a vacuum-only main-level pass (not enough time left for a mop). Defaults to true."
+        example: false
+      require_away:
+        description: "Drop the queued main-level request unless the owner is still confirmed away when it runs."
+        example: true
+      expires_at:
+        description: "ISO timestamp after which a still-queued main-level request is dropped (e.g. the flight's landing)."
+        example: "2026-10-09T14:13:00-05:00"
+      notify_message:
+        description: >-
+          Notification text describing why the trip vacuum pass started.
+        example: "Vacuuming the main and upstairs levels while you're away."
+    sequence:
+      - alias: "Trip cleaning requires explicit unattended pet policy"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Unattended"
+      - action: script.vacuum_main_and_upstairs_levels
+        data:
+          force_mop: "{{ force_mop | default(false) | bool }}"
+          allow_mop: "{{ allow_mop | default(true) | bool }}"
+          require_away: "{{ require_away | default(false) | bool }}"
+          expires_at: "{{ expires_at | default('', true) | string }}"
+      # Also clean the den on trip/flying-home days so all three areas match the
+      # departure path. This central boundary already fails closed on den-door
+      # open, guest mode, and non-Unattended policy, so no extra guards here.
+      - action: script.vacuum_den_pet_safe_start
+        continue_on_error: true
+      - action: notify.all
+        data:
+          data:
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+          message: "{{ notify_message }}"
+  # toggle_automations_showing_house:
+  #   sequence:
+  #     - action: homeassistant.toggle
+  #       data:
+  #         entity_id: group.all_automations
+  # vacation_group_visibility:
+  #   sequence:
+  #     - action: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_1
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '1.0'
+  #     - action: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_2
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '2.0'
+  #     - action: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_3
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '3.0'
+  #     - action: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_4
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '4.0'
+
+########################
+# Sensors
+########################
+sensor: []
+
+################################################
+## Templates
+################################################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.sensed_trip
+        unique_id: sensed_trip
+        state: >-
+          {% if is_state("input_boolean.trip", 'on') %}
+            True
+          {% else %}
+            False
+          {% endif %}
+        name: sensed_trip
+      - default_entity_id: binary_sensor.planned_vacation_calendar
+        unique_id: planned_vacation_calendar
+        state: >-
+          {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
+          {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
+          {% if start in [none, '', 'unknown', 'unavailable'] or end in [none, '', 'unknown', 'unavailable'] %}
+            false
+          {% else %}
+            {% set start_dt = as_datetime(start) %}
+            {% set end_dt = as_datetime(end) %}
+            {{
+              start_dt is not none
+              and end_dt is not none
+              and now() >= (start_dt | as_local)
+              and now() < (end_dt | as_local)
+            }}
+          {% endif %}
+        name: planned_vacation_calendar
+      - default_entity_id: binary_sensor.planned_work_trip_calendar
+        unique_id: planned_work_trip_calendar
+        state: >-
+          {% if is_state("binary_sensor.work_trip_today", 'on') %}
+            true
+          {% else %}
+            false
+          {% endif %}
+        name: planned_work_trip_calendar
+      - delay_off: "3:00:00"
+        default_entity_id: binary_sensor.flying_home_today
+        unique_id: flying_home_today
+        state: >-
+          {% if is_state("binary_sensor.flight_to_@@PRIVATE:home_airport_primary_code_lower@@_today", 'on') or is_state("binary_sensor.flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_today",'on')  %}
+            true
+          {% else %}
+            false
+          {% endif %}
+        name: flying_home_today
+      # True on a day the pre-landing clean owns the X40: the landing or the clean's
+      # start falls today, or one was launched within the last 12 h (so it still
+      # holds after landing moves "next arrival" on to a later trip). vacuum_on_trip
+      # and the daily litter pass skip while this is on, so nothing queues behind
+      # (or after) the clean that has to finish before the plane lands.
+      - default_entity_id: binary_sensor.pre_arrival_clean_day
+        unique_id: pre_arrival_clean_day
+        name: pre_arrival_clean_day
+        state: >-
+          {% set today = now().date() %}
+          {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {% set arrival = states('sensor.next_flight_home_arrival') %}
+          {% set start = states('sensor.pre_arrival_clean_start') %}
+          {% set done = as_timestamp(states('input_datetime.pre_arrival_clean_done_for'), default=0) | float(0) %}
+          {{ (arrival not in bad and (as_datetime(arrival) | as_local).date() == today)
+             or (start not in bad and (as_datetime(start) | as_local).date() == today)
+             or (done > 0 and ((as_timestamp(now()) - done) | abs) < 12 * 3600) }}
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: state
+        entity_id:
+          - calendar.curling
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
+          - calendar.work_trip
+    action:
+      - variables:
+          lookahead_start: >-
+            {{ now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat() }}
+          lookahead_end: >-
+            {{ (now() + timedelta(days=180)).replace(hour=23, minute=59, second=59, microsecond=0).isoformat() }}
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.curling
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: curling_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: personal_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.work_trip
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: work_trip_event_window
+      - variables:
+          curling_events: >-
+            {% if curling_event_window is mapping and curling_event_window.events is defined %}
+              {{ curling_event_window.events | to_json }}
+            {% elif curling_event_window is mapping and curling_event_window['calendar.curling'] is defined and curling_event_window['calendar.curling'].events is defined %}
+              {{ curling_event_window['calendar.curling'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          personal_events: >-
+            {% if personal_event_window is mapping and personal_event_window.events is defined %}
+              {{ personal_event_window.events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'] is defined and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events is defined %}
+              {{ personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          work_trip_events: >-
+            {% if work_trip_event_window is mapping and work_trip_event_window.events is defined %}
+              {{ work_trip_event_window.events | to_json }}
+            {% elif work_trip_event_window is mapping and work_trip_event_window['calendar.work_trip'] is defined and work_trip_event_window['calendar.work_trip'].events is defined %}
+              {{ work_trip_event_window['calendar.work_trip'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          curling_events_list: >-
+            {{ (curling_events | default('[]', true) | string | trim | from_json) }}
+          personal_events_list: >-
+            {{ (personal_events | default('[]', true) | string | trim | from_json) }}
+          work_trip_events_list: >-
+            {{ (work_trip_events | default('[]', true) | string | trim | from_json) }}
+          curling_vacation_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in curling_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if '#vacation' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          personal_vacation_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if '#vacation' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          # Only explicit flight summaries qualify here. Generic calendar locations like
+          # "United States" or "@@PRIVATE:zone_07_label@@" must not be treated as flights.
+          flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set summary_lower = summary | lower %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set route_summary = '→' in summary %}
+              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
+              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set is_friend_itinerary = 'friend' in text %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% set destination_code = '' %}
+              {% set named_destination = '' %}
+              {% if route_summary %}
+                {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight to ') %}
+                {% set named_destination = summary[10:] %}
+              {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                {% set flight_tail = summary[8:] %}
+                {% set flight_tail_lower = summary_lower[8:] %}
+                {% set to_index = flight_tail_lower.find(' to ') %}
+                {% if to_index != -1 %}
+                  {% set named_destination = flight_tail[to_index + 4:] %}
+                {% endif %}
+              {% endif %}
+              {% if named_destination != '' %}
+                {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% endif %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['@@PRIVATE:home_airport_primary_code@@', '@@PRIVATE:home_metro_code@@', '@@PRIVATE:home_metro_compact_code@@', '@@PRIVATE:home_region_code@@'] and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set summary_lower = summary | lower %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set route_summary = '→' in summary %}
+              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
+              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set is_friend_itinerary = 'friend' in text %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% set destination_code = '' %}
+              {% set named_destination = '' %}
+              {% if route_summary %}
+                {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight to ') %}
+                {% set named_destination = summary[10:] %}
+              {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                {% set flight_tail = summary[8:] %}
+                {% set flight_tail_lower = summary_lower[8:] %}
+                {% set to_index = flight_tail_lower.find(' to ') %}
+                {% if to_index != -1 %}
+                  {% set named_destination = flight_tail[to_index + 4:] %}
+                {% endif %}
+              {% endif %}
+              {% if named_destination != '' %}
+                {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% endif %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['@@PRIVATE:home_airport_secondary_code@@', '@@PRIVATE:home_city_secondary_code@@'] and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          work_trip_today_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in work_trip_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if 'stay at' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          vacation_plan_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set future_cutoff_ts = now_ts + (180 * 86400) %}
+            {% set home_codes = ['@@PRIVATE:home_airport_primary_code@@', '@@PRIVATE:home_airport_secondary_code@@', '@@PRIVATE:home_metro_code@@', '@@PRIVATE:home_metro_compact_code@@', '@@PRIVATE:home_city_secondary_code@@', '@@PRIVATE:home_region_code@@'] %}
+            {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
+            {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
+            {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
+            {% set travel_events = personal_events_list + work_trip_events_list %}
+            {% set ns = namespace(
+              outbound=None,
+              final_destination=None,
+              return_home=None,
+              standalone_fallback=None,
+              paired_fallback=None,
+              ignored_reason='No qualifying travel itinerary or calendar trip block was found.'
+            ) %}
+            {% for event in curling_events_list %}
+              {% set summary = event.summary | default('Curling', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and is_all_day and duration_days > 2 %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary | default('Curling', true),
+                    'source_code': 'curling_block',
+                    'source_label': 'curling block',
+                    'priority': 4
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('Vacation', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% set is_explicit_vacation = '#vacation' in text %}
+                {% set is_trip_block = is_all_day and duration_days > 1 and ('vacation' in text or ' trip' in text or text.startswith('trip ') or 'travel' in text or 'out of town' in text or 'pto' in text or 'ooo' in text) %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and (is_explicit_vacation or is_trip_block) %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary,
+                    'source_code': 'explicit_vacation' if is_explicit_vacation else 'all_day_trip_block',
+                    'source_label': 'explicit vacation event' if is_explicit_vacation else 'all-day trip block',
+                    'priority': 1 if is_explicit_vacation else 3
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% for event in work_trip_events_list %}
+              {% set summary = event.summary | default('Work Trip', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% set is_lodging = 'stay at' in text or 'hotel' in text or 'airbnb' in text or 'lodging' in text or 'resort' in text or ' inn' in text or text.startswith('inn ') or 'check-in' in text or 'check out' in text %}
+                {% set is_trip_block = is_all_day and duration_days > 1 %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and (is_lodging or is_trip_block) %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary,
+                    'source_code': 'lodging' if is_lodging else 'all_day_trip_block',
+                    'source_label': 'lodging span' if is_lodging else 'all-day trip block',
+                    'priority': 0 if is_lodging else 3
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% for event in travel_events %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% if start_dt is not none %}
+                {% set summary = event.summary | default('Flight', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set summary_lower = summary | lower %}
+                {% set flight_text = [summary, description, location] | join(' ') | lower %}
+                {% set route_summary = '→' in summary %}
+                {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
+                {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                {% set is_friend_itinerary = 'friend' in flight_text %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set origin_code = '' %}
+                {% set destination_name = '' %}
+                {% set destination_code = '' %}
+                {% set named_destination = '' %}
+                {% if route_summary %}
+                  {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                {% elif summary_lower.startswith('flight to ') %}
+                  {% set named_destination = summary[10:] %}
+                {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                  {% set flight_tail = summary[8:] %}
+                  {% set flight_tail_lower = summary_lower[8:] %}
+                  {% set to_index = flight_tail_lower.find(' to ') %}
+                  {% if to_index != -1 %}
+                    {% set named_destination = flight_tail[to_index + 4:] %}
+                  {% endif %}
+                {% endif %}
+                {% if named_destination != '' %}
+                  {% set destination_name = named_destination.split(' (', 1)[0].split(' •', 1)[0].strip() %}
+                  {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
+                {% endif %}
+                {% if destination_name == '' and destination_code not in ([''] + home_codes) %}
+                  {% set destination_name = destination_code %}
+                {% endif %}
+                {% set is_home_origin = origin_code in ['@@PRIVATE:home_airport_primary_code@@', '@@PRIVATE:home_airport_secondary_code@@'] %}
+                {% set is_home_destination = destination_code in home_codes %}
+                {% set outbound_priority = 0 if is_home_origin else 1 if named_flight else 9 %}
+                {% if looks_like_flight and is_friend_itinerary and is_home_destination and ns.ignored_reason == 'No qualifying travel itinerary or calendar trip block was found.' %}
+                  {% set ns.ignored_reason = 'Ignored a friend itinerary arriving home.' %}
+                {% endif %}
+                {% if looks_like_flight and not is_friend_itinerary and start_ts >= (now_ts - 3600) and destination_name != '' and not is_home_destination and outbound_priority < 9 %}
+                  {% if ns.outbound is none or outbound_priority < ns.outbound.priority or (outbound_priority == ns.outbound.priority and start_ts < ns.outbound.start_ts) %}
+                    {% set ns.outbound = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'priority': outbound_priority,
+                      'destination_name': destination_name
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.outbound is not none %}
+              {% set ns.final_destination = {
+                'destination_name': ns.outbound.destination_name,
+                'summary': ns.outbound.summary,
+                'start_ts': ns.outbound.start_ts
+              } %}
+              {% for event in travel_events %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% if start_dt is not none %}
+                  {% set summary = event.summary | default('Flight', true) | string %}
+                  {% set description = event.description | default('', true) | string %}
+                  {% set location = event.location | default('', true) | string %}
+                  {% set summary_lower = summary | lower %}
+                  {% set flight_text = [summary, description, location] | join(' ') | lower %}
+                  {% set route_summary = '→' in summary %}
+                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                  {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
+                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set is_friend_itinerary = 'friend' in flight_text %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set destination_name = '' %}
+                  {% set destination_code = '' %}
+                  {% set named_destination = '' %}
+                  {% if route_summary %}
+                    {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight to ') %}
+                    {% set named_destination = summary[10:] %}
+                  {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                    {% set flight_tail = summary[8:] %}
+                    {% set flight_tail_lower = summary_lower[8:] %}
+                    {% set to_index = flight_tail_lower.find(' to ') %}
+                    {% if to_index != -1 %}
+                      {% set named_destination = flight_tail[to_index + 4:] %}
+                    {% endif %}
+                  {% endif %}
+                  {% if named_destination != '' %}
+                    {% set destination_name = named_destination.split(' (', 1)[0].split(' •', 1)[0].strip() %}
+                    {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% endif %}
+                  {% if destination_name == '' and destination_code not in home_codes %}
+                    {% set destination_name = destination_code %}
+                  {% endif %}
+                  {% set is_home_destination = destination_code in home_codes %}
+                  {% if looks_like_flight and not is_friend_itinerary and destination_name != '' and not is_home_destination and start_ts >= ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 172800) %}
+                    {% if ns.final_destination is none or start_ts >= ns.final_destination.start_ts %}
+                      {% set ns.final_destination = {
+                        'destination_name': destination_name,
+                        'summary': summary,
+                        'start_ts': start_ts
+                      } %}
+                    {% endif %}
+                  {% endif %}
+                  {% if looks_like_flight and not is_friend_itinerary and is_home_destination and start_ts > ns.outbound.start_ts %}
+                    {% if ns.return_home is none or start_ts < ns.return_home.start_ts %}
+                      {% set ns.return_home = {
+                        'summary': summary,
+                        'start': (start_dt | as_local).isoformat(),
+                        'start_ts': start_ts
+                      } %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for event in curling_events_list %}
+                {% set summary = event.summary | default('Curling', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and is_all_day and duration_days > 2 %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary | default('Curling', true),
+                      'source_code': 'curling_block',
+                      'source_label': 'curling block',
+                      'priority': 4,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for event in personal_events_list %}
+                {% set summary = event.summary | default('Vacation', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set text = [summary, description, location] | join(' ') | lower %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% set is_explicit_vacation = '#vacation' in text %}
+                  {% set is_trip_block = is_all_day and duration_days > 1 and ('vacation' in text or ' trip' in text or text.startswith('trip ') or 'travel' in text or 'out of town' in text or 'pto' in text or 'ooo' in text) %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and (is_explicit_vacation or is_trip_block) %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary,
+                      'source_code': 'explicit_vacation' if is_explicit_vacation else 'all_day_trip_block',
+                      'source_label': 'explicit vacation event' if is_explicit_vacation else 'all-day trip block',
+                      'priority': 1 if is_explicit_vacation else 3,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for event in work_trip_events_list %}
+                {% set summary = event.summary | default('Work Trip', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set text = [summary, description, location] | join(' ') | lower %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% set is_lodging = 'stay at' in text or 'hotel' in text or 'airbnb' in text or 'lodging' in text or 'resort' in text or ' inn' in text or text.startswith('inn ') or 'check-in' in text or 'check out' in text %}
+                  {% set is_trip_block = is_all_day and duration_days > 1 %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and (is_lodging or is_trip_block) %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary,
+                      'source_code': 'lodging' if is_lodging else 'all_day_trip_block',
+                      'source_label': 'lodging span' if is_lodging else 'all-day trip block',
+                      'priority': 0 if is_lodging else 3,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% if ns.outbound is not none and ns.return_home is not none and (ns.return_home.start_ts - 7200) > ns.outbound.start_ts %}
+              {{
+                {
+                  'reason': 'flight',
+                  'decision_code': 'flight_return',
+                  'decision_summary': 'Using outbound flight and booked return flight.',
+                  'summary': ns.outbound.summary,
+                  'start': ns.outbound.start,
+                  'end': ((ns.return_home.start | as_datetime | as_local) - timedelta(hours=2)).isoformat(),
+                  'return_summary': ns.return_home.summary,
+                  'vacation_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': ''
+                } | to_json
+              }}
+            {% elif ns.outbound is not none and ns.paired_fallback is not none and ns.paired_fallback.end_ts > ns.outbound.start_ts %}
+              {{
+                {
+                  'reason': 'flight',
+                  'decision_code': 'flight_' ~ ns.paired_fallback.source_code,
+                  'decision_summary': 'Using outbound flight and ' ~ ns.paired_fallback.source_label ~ ' because no return flight is booked.',
+                  'summary': ns.outbound.summary,
+                  'start': ns.outbound.start,
+                  'end': ns.paired_fallback.end,
+                  'return_summary': '',
+                  'vacation_name': ns.final_destination.destination_name | default(ns.paired_fallback.vacation_name, true),
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.paired_fallback.vacation_name, true),
+                  'fallback_summary': ns.paired_fallback.summary,
+                  'fallback_source': ns.paired_fallback.source_label,
+                  'ignored_reason': ''
+                } | to_json
+              }}
+            {% elif ns.outbound is not none %}
+              {{
+                {
+                  'reason': 'off',
+                  'decision_code': 'off_outbound_missing_end',
+                  'decision_summary': 'Found an outbound flight, but no booked return or related fallback trip window.',
+                  'summary': '',
+                  'start': '',
+                  'end': '',
+                  'return_summary': '',
+                  'vacation_name': '',
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': 'No return flight or linked lodging, vacation event, or all-day trip block was found.'
+                } | to_json
+              }}
+            {% elif ns.standalone_fallback is not none %}
+              {{
+                {
+                  'reason': 'calendar',
+                  'decision_code': 'calendar_' ~ ns.standalone_fallback.source_code,
+                  'decision_summary': 'Using standalone ' ~ ns.standalone_fallback.source_label ~ '.',
+                  'summary': ns.standalone_fallback.summary,
+                  'start': ns.standalone_fallback.start,
+                  'end': ns.standalone_fallback.end,
+                  'return_summary': '',
+                  'vacation_name': ns.standalone_fallback.vacation_name,
+                  'outbound_summary': '',
+                  'destination_name': ns.standalone_fallback.vacation_name,
+                  'fallback_summary': ns.standalone_fallback.summary,
+                  'fallback_source': ns.standalone_fallback.source_label,
+                  'ignored_reason': ''
+                } | to_json
+              }}
+            {% else %}
+              {{
+                {
+                  'reason': 'off',
+                  'decision_code': 'off_no_candidate',
+                  'decision_summary': ns.ignored_reason,
+                  'summary': '',
+                  'start': '',
+                  'end': '',
+                  'return_summary': '',
+                  'vacation_name': '',
+                  'outbound_summary': '',
+                  'destination_name': '',
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': ns.ignored_reason
+                } | to_json
+              }}
+            {% endif %}
+    binary_sensor:
+      - name: Curling Vacation Today
+        unique_id: curling_vacation
+        default_entity_id: binary_sensor.curling_vacation
+        state: "{{ (curling_vacation_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (curling_vacation_match_json | from_json).message | default('') }}"
+          start_time: "{{ (curling_vacation_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (curling_vacation_match_json | from_json).end_time | default('') }}"
+          location: "{{ (curling_vacation_match_json | from_json).location | default('') }}"
+          description: "{{ (curling_vacation_match_json | from_json).description | default('') }}"
+          all_day: "{{ (curling_vacation_match_json | from_json).all_day | default(false) }}"
+      - name: Personal Vacation Today
+        unique_id: personal_vacation
+        default_entity_id: binary_sensor.personal_vacation
+        state: "{{ (personal_vacation_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (personal_vacation_match_json | from_json).message | default('') }}"
+          start_time: "{{ (personal_vacation_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (personal_vacation_match_json | from_json).end_time | default('') }}"
+          location: "{{ (personal_vacation_match_json | from_json).location | default('') }}"
+          description: "{{ (personal_vacation_match_json | from_json).description | default('') }}"
+          all_day: "{{ (personal_vacation_match_json | from_json).all_day | default(false) }}"
+      - name: Flying to @@PRIVATE:home_airport_primary_code@@ Today
+        unique_id: flight_to_@@PRIVATE:home_airport_primary_code_lower@@_today
+        default_entity_id: binary_sensor.flight_to_@@PRIVATE:home_airport_primary_code_lower@@_today
+        state: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).message | default('') }}"
+          start_time: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).end_time | default('') }}"
+          location: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).location | default('') }}"
+          description: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).description | default('') }}"
+          all_day: "{{ (flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json | from_json).all_day | default(false) }}"
+      - name: Flying to @@PRIVATE:home_airport_secondary_code@@ Today
+        unique_id: flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_today
+        default_entity_id: binary_sensor.flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_today
+        state: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).message | default('') }}"
+          start_time: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).end_time | default('') }}"
+          location: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).location | default('') }}"
+          description: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).description | default('') }}"
+          all_day: "{{ (flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json | from_json).all_day | default(false) }}"
+      - name: Work Trip Today
+        unique_id: work_trip_today
+        default_entity_id: binary_sensor.work_trip_today
+        state: "{{ (work_trip_today_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (work_trip_today_match_json | from_json).message | default('') }}"
+          start_time: "{{ (work_trip_today_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (work_trip_today_match_json | from_json).end_time | default('') }}"
+          location: "{{ (work_trip_today_match_json | from_json).location | default('') }}"
+          description: "{{ (work_trip_today_match_json | from_json).description | default('') }}"
+          all_day: "{{ (work_trip_today_match_json | from_json).all_day | default(false) }}"
+    sensor:
+      - name: Ecobee Calendar Vacation Schedule
+        unique_id: ecobee_calendar_vacation_schedule
+        state: >-
+          {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+          {% set raw_plan_state = raw_plan | lower %}
+          {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+            off
+          {% else %}
+            {% set plan = raw_plan | from_json %}
+            {% if plan.reason | default('off') == 'off' %}
+              off
+            {% else %}
+              {{ plan.start }} -> {{ plan.end }}
+            {% endif %}
+          {% endif %}
+        attributes:
+          reason: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              off
+            {% else %}
+              {{ (raw_plan | from_json).reason | default('off') }}
+            {% endif %}
+          summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).summary | default('') }}
+            {% endif %}
+          start: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).start | default('') }}
+            {% endif %}
+          end: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).end | default('') }}
+            {% endif %}
+          return_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).return_summary | default('') }}
+            {% endif %}
+          vacation_name: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).vacation_name | default('') }}
+            {% endif %}
+          decision_code: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              off_no_candidate
+            {% else %}
+              {{ (raw_plan | from_json).decision_code | default('off_no_candidate') }}
+            {% endif %}
+          decision_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ 'No qualifying travel itinerary or calendar trip block was found.' }}
+            {% else %}
+              {{ (raw_plan | from_json).decision_summary | default('No qualifying travel itinerary or calendar trip block was found.') }}
+            {% endif %}
+          outbound_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).outbound_summary | default('') }}
+            {% endif %}
+          destination_name: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).destination_name | default('') }}
+            {% endif %}
+          fallback_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).fallback_summary | default('') }}
+            {% endif %}
+          fallback_source: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).fallback_source | default('') }}
+            {% endif %}
+          ignored_reason: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ 'No qualifying travel itinerary or calendar trip block was found.' }}
+            {% else %}
+              {{ (raw_plan | from_json).ignored_reason | default('') }}
+            {% endif %}
+  - sensor:
+      - name: time_to_home
+        default_entity_id: sensor.me_to_home
+        unique_id: me_to_home
+        availability: >-
+          {{ states('sensor.me_to_home') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
+        state: >-
+          {% set to_home = states('sensor.me_to_home') | int(default=0) %}
+          {% set minutes = to_home % 60 %}
+          {% set hours = (to_home % 1440) // 60 %}
+          {{ '%02d:%02d:00' | format(hours, minutes) }}
+      # Landing time of the NEXT flight home (@@PRIVATE:home_airport_primary_code@@ or @@PRIVATE:home_airport_secondary_code@@). The flight_to_*_today
+      # sensors keep exposing the next not-yet-landed itinerary in their attributes
+      # even while they are off, so this is known days ahead, not just once airborne.
+      - name: Next Flight Home Arrival
+        default_entity_id: sensor.next_flight_home_arrival
+        unique_id: next_flight_home_arrival
+        device_class: timestamp
+        state: >-
+          {% set ns = namespace(best=none) %}
+          {% for ent in ['binary_sensor.flight_to_@@PRIVATE:home_airport_primary_code_lower@@_today', 'binary_sensor.flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_today'] %}
+            {% set raw = state_attr(ent, 'end_time') %}
+            {% if raw not in [none, '', 'unknown', 'unavailable'] %}
+              {% set dt = as_datetime(raw) %}
+              {% if dt is not none and dt.tzinfo is not none and as_timestamp(dt) > as_timestamp(now()) and (ns.best is none or as_timestamp(dt) < as_timestamp(ns.best)) %}
+                {% set ns.best = dt %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.best.isoformat() if ns.best is not none else none }}
+      # When the flying-home clean should START so it is finished by landing:
+      # landing minus the calibrated cycle lead (input_number.pre_arrival_clean_lead_minutes).
+      # Anchored to ARRIVAL, not takeoff: a full vacuum+mop cycle (182-191 min) is
+      # longer than a typical 2.5 h flight, and the house is empty all trip anyway.
+      - name: Pre-Arrival Clean Start
+        default_entity_id: sensor.pre_arrival_clean_start
+        unique_id: pre_arrival_clean_start
+        device_class: timestamp
+        availability: >-
+          {{ states('sensor.next_flight_home_arrival') not in ['unknown', 'unavailable', 'none', 'None', '']
+             and states('input_number.pre_arrival_clean_lead_minutes') | is_number }}
+        state: >-
+          {{ (as_datetime(states('sensor.next_flight_home_arrival'))
+              - timedelta(minutes=states('input_number.pre_arrival_clean_lead_minutes') | float(210))).isoformat() }}

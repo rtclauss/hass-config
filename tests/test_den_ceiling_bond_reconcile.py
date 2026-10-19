@@ -37,6 +37,7 @@ def test_den_ceiling_bond_reconcile_uses_expected_sensors_and_bond_service() -> 
     assert "action: bond.set_light_power_tracked_state" in block
     assert "above: 100" in block
     assert "below: 10" in block
+    assert "action: light.turn_on" not in block
 
 
 def test_den_ceiling_bond_reconcile_excludes_neighboring_spill_lights() -> None:
@@ -56,6 +57,6 @@ def test_den_ceiling_bond_reconcile_has_overnight_force_off_failsafe() -> None:
     assert 'state: "off"' in block
     assert "hours: 1" in block
     assert "action: light.turn_off" in block
-    assert "action: notify.all" in block
+    assert f"action: notify.all" in block
     assert "Den ceiling light failsafe" in block
     assert 'minutes: "/30"' in block

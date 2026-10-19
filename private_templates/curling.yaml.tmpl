@@ -1,0 +1,298 @@
+# Home Assistant package for curling-season travel and UI behavior.
+# It turns seasonal schedules and venue-specific travel into helper states, notifications, and dashboard visibility rules.
+
+################################################################
+## Packages / Curling
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "curling"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    # automation.leave_home_for_curling:
+    #   <<: *customize
+    #   friendly_name: "Leave home for curling"
+    #   icon: mdi:curling
+
+    automation.return_home_from_@@PRIVATE:zone_08_slug@@:
+      <<: *customize
+      friendly_name: "Return home from SPCC"
+      icon: mdi:curling
+
+    automation.toggle_curling_automations_on_season_change:
+      <<: *customize
+      friendly_name: "Toggle Curling season automations"
+      icon: mdi:curling
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    binary_sensor.curling_season:
+      <<: *customize
+      friendly_name: "Curling Season"
+      icon: mdi:calendar
+
+    ################################################
+    ## Groups
+    ################################################
+
+    group.curling_sensors:
+      <<: *customize
+      friendly_name: "Curling Sensors"
+
+    group.curling_automations:
+      <<: *customize
+      friendly_name: "Curling Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.toggle_curling_automation_on_curling_season:
+      <<: *customize
+      friendly_name: "Toggle Curling Automation Based on Boolean Sensor"
+
+    ################################################
+    ## Sensors
+    ################################################
+
+########################
+# Automations
+########################
+automation:
+  - id: leave_home_for_curling
+    alias: leave_home_for_curling
+    description: Run one full-floor pass on the main and upstairs levels when leaving for curling.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.home
+        event: leave
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "15:30:00"
+          before: "20:10:00"
+          weekday:
+            - tue
+            - wed
+            - thu
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+        - condition: state
+          entity_id:
+            - binary_sensor.curling_season
+          state: "on"
+    action:
+      - action: script.vacuum_main_and_upstairs_levels
+      - action: climate.set_preset_mode
+        enabled: false
+        target:
+          entity_id: climate.my_ecobee
+        data:
+          preset_mode: "away_indefinitely"
+      - data:
+          message: Good Curling!
+        action: notify.all
+
+  - id: return_home_from_@@PRIVATE:zone_05_slug@@
+    alias: return_home_from_@@PRIVATE:zone_05_slug@@
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_05_slug@@
+        event: leave
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          weekday:
+            - thu
+            - sun
+        - condition: state
+          entity_id:
+            - binary_sensor.curling_season
+          state: "on"
+    action:
+      # - action: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - action: ecobee.resume_program
+        data:
+          resume_all: true
+          entity_id: climate.my_ecobee
+      - action: notify.all
+        data:
+          message: >-
+            Turning off Ecobee Away mode while driving home from OCC
+
+  - id: return_home_from_@@PRIVATE:zone_08_slug@@
+    alias: return_home_from_@@PRIVATE:zone_08_slug@@
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_08_slug@@
+        event: leave
+    condition:
+      condition: state
+      entity_id:
+        - binary_sensor.curling_season
+      state: "on"
+    action:
+      # - action: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - action: ecobee.resume_program
+        data:
+          resume_all: true
+          entity_id: climate.my_ecobee
+      - action: notify.all
+        data:
+          message: >-
+            Turning off Ecobee away mode while driving home from SPCC
+
+  - id: toggle_curling_automations_on_season_change
+    alias: toggle_curling_automations_on_season_change
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.curling_season
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: script.toggle_curling_automation_on_curling_season
+        data:
+          entity_id: automation.return_home_from_OCC
+      # - action: script.toggle_curling_automation_on_curling_season
+      #   data:
+      #     entity_id: automation.leave_home_for_curling
+      - action: script.toggle_curling_automation_on_curling_season
+        data:
+          entity_id: automation.return_home_from_@@PRIVATE:zone_08_slug@@
+
+  # - id: toggle_curling_tab
+  #   alias: toggle_curling_tab
+  #   trigger:
+  #   - platform: state
+  #     entity_id: binary_sensor.curling_season
+  #   - platform: homeassistant
+  #     event: start
+  #   condition: []
+  #   action:
+  #   - delay: '00:00:{{ (range(1,60)|random|int) }}'
+  #   - action: script.toggle_view
+  #     data_template:
+  #       view_id: curling
+  #       visible: >-
+  #         {{ is_state("binary_sensor.curling_season", 'on') | lower }}
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Groups
+########################
+group:
+  curling_sensors:
+    entities:
+      - binary_sensor.curling_season
+      - sensor.@@PRIVATE:zone_05_slug@@_time
+      - sensor.owatonna_curling_club_bayesian_@@PRIVATE:presence_person_slug@@_home_distance
+      - sensor.owatonna_curling_club_nearest_direction_of_travel
+      - sensor.@@PRIVATE:zone_08_slug@@_time
+      - sensor.st_paul_curling_club_bayesian_@@PRIVATE:presence_person_slug@@_home_distance
+      - sensor.st_paul_curling_club_nearest_direction_of_travel
+  curling_automations:
+    entities:
+      - automation.leave_home_for_curling
+      - automation.return_home_from_@@PRIVATE:zone_05_slug@@
+      - automation.return_home_from_@@PRIVATE:zone_08_slug@@
+
+########################
+# Scripts
+########################
+script:
+  toggle_curling_automation_on_curling_season:
+    trace:
+      stored_traces: 10
+    sequence:
+      - if:
+          - condition: state
+            entity_id: binary_sensor.curling_season
+            state: "on"
+        then:
+          - action: automation.turn_on
+            target:
+              entity_id: "{{ entity_id }}"
+        else:
+          - action: automation.turn_off
+            target:
+              entity_id: "{{ entity_id }}"
+
+########################
+# Sensors
+########################
+sensor: []
+
+################################################
+## Templates
+################################################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.curling_season
+        unique_id: curling_season
+        state: '{{ now().strftime("%m") |int in [1,2,3,10,11,12] }}'
+        name: curling_season
+  - sensor:
+      - name: OCC Time
+        unique_id: @@PRIVATE:zone_05_slug@@_time
+        state: >-
+          {% if states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed is defined %}
+             {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "min"
+        device_class: duration
+      - name: SPCC Time
+        unique_id: @@PRIVATE:zone_08_slug@@_time
+        state: >-
+          {% if states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed is defined %}
+             {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "min"
+        device_class: duration

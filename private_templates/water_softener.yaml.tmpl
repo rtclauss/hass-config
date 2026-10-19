@@ -1,0 +1,819 @@
+# Home Assistant package for the water softener.
+# It turns ESPHome salt-level readings into low-salt alerts, bag inventory tracking, and refill workflows tied to household supply reminders.
+
+################################################################
+## Packages / TEMPLATE
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "water_softener"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Fans
+    ############
+
+    ################################################
+    ## Frontend
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel: []
+
+########################
+## Automation
+########################
+automation:
+  - id: notify_refill_salt
+    alias: Notify Salt Low
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "16:00:00"
+    condition:
+      - alias: "Salt Level Low"
+        condition: numeric_state
+        entity_id: sensor.water_softener_salt_level
+        above: input_number.water_softener_low_salt_threshold_mm
+    action:
+      - alias: "Notify"
+        action: notify.all
+        data:
+          title: Salt level low
+          data:
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
+          message: >-
+            Water softener salt is low at {{states('sensor.water_softener_salt_level')}} mm.
+
+  - id: water_softener_forecast_refill_reminder
+    alias: Water Softener Forecast Refill Reminder
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        id: forecast_changed
+        entity_id: sensor.water_softener_days_until_low_salt
+      - trigger: time_pattern
+        id: hourly_recheck
+        minutes: "15"
+      - trigger: homeassistant
+        id: forecast_startup_recheck
+        event: start
+    action:
+      - choose:
+          - alias: "Track stable forecasts and notify once per refill cycle"
+            conditions:
+              - condition: numeric_state
+                entity_id: sensor.water_softener_days_until_low_salt
+                above: 0
+                below: input_number.water_softener_refill_reminder_days
+              - condition: numeric_state
+                entity_id: sensor.water_softener_salt_level
+                below: input_number.water_softener_low_salt_threshold_mm
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states('input_datetime.water_softener_forecast_window_entered_at') | as_timestamp(default=0) <= 0 }}
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.water_softener_forecast_window_entered_at
+                    data:
+                      timestamp: "{{ as_timestamp(now()) }}"
+              - if:
+                  - alias: "Reminder not already sent this refill cycle"
+                    condition: state
+                    entity_id: input_boolean.water_softener_refill_reminder_sent
+                    state: "off"
+                  - alias: "Forecast has stayed inside the reminder window for six hours"
+                    condition: template
+                    value_template: >-
+                      {% set entered_at = states('input_datetime.water_softener_forecast_window_entered_at') | as_timestamp(default=0) %}
+                      {{ entered_at > 0 and as_timestamp(now()) - entered_at >= 6 * 60 * 60 }}
+                then:
+                  - alias: "Mark reminder sent"
+                    action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.water_softener_refill_reminder_sent
+                  - alias: "Notify before salt is critical"
+                    action: notify.all
+                    data:
+                      title: Softener salt forecast low
+                      data:
+                        url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
+                        tag: water-softener-forecast-low
+                      message: >-
+                        Water softener salt is forecast to reach the low threshold in
+                        {{ states('sensor.water_softener_days_until_low_salt') }} days.
+                        Current level is {{ states('sensor.water_softener_salt_level') }} mm
+                        and there are {{ states('input_number.bags_of_salt_at_home') | int(default=0) }} bags at home.
+          - alias: "Clear the forecast timer only after a known reading leaves the window"
+            conditions:
+              - condition: template
+                value_template: >-
+                  {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+                  {% set reminder_days = states('input_number.water_softener_refill_reminder_days') | float(default=none) %}
+                  {{ days is not none and reminder_days is not none and not (0 < days < reminder_days) }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.water_softener_forecast_window_entered_at
+                data:
+                  timestamp: 0
+
+  - id: water_softener_refill_reminder_reset
+    alias: Water Softener Refill Reminder Reset
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      # Fire on threshold crossings, not on every salt_level update. salt_level
+      # changes hundreds of times a day and every run wrote an automation state
+      # row + trace (47k rows between 2026-09-01 and 2026-10-10), while only a
+      # crossing can change what this automation does. The hourly recheck still
+      # drives the six-hour stability confirmation and the startup trigger
+      # re-evaluates after restarts, so behaviour is unchanged. A crossing re-fired
+      # by an unavailable blip is harmless: the window start is only written when
+      # it is unset.
+      - trigger: numeric_state
+        id: salt_level_below_reset_threshold
+        entity_id: sensor.water_softener_salt_level
+        below: input_number.water_softener_refill_reset_threshold_mm
+      - trigger: numeric_state
+        id: salt_level_above_reset_threshold
+        entity_id: sensor.water_softener_salt_level
+        above: input_number.water_softener_refill_reset_threshold_mm
+      - trigger: time_pattern
+        id: hourly_recheck
+        minutes: "45"
+      - trigger: homeassistant
+        id: refill_startup_recheck
+        event: start
+    action:
+      - choose:
+          - alias: "Track a stable refill and allow the next reminder cycle"
+            conditions:
+              - condition: numeric_state
+                entity_id: sensor.water_softener_salt_level
+                below: input_number.water_softener_refill_reset_threshold_mm
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) <= 0 }}
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.water_softener_refill_window_entered_at
+                    data:
+                      timestamp: "{{ as_timestamp(now()) }}"
+              - if:
+                  - alias: "Refill level has stayed stable for six hours"
+                    condition: template
+                    value_template: >-
+                      {% set entered_at = states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) %}
+                      {{ entered_at > 0 and as_timestamp(now()) - entered_at >= 6 * 60 * 60 }}
+                then:
+                  - if:
+                      - alias: "Reminder has been sent"
+                        condition: state
+                        entity_id: input_boolean.water_softener_refill_reminder_sent
+                        state: "on"
+                    then:
+                      - alias: "Allow next refill-cycle reminder"
+                        action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.water_softener_refill_reminder_sent
+                  - if:
+                      - alias: "Stable refill has not already been recorded"
+                        condition: template
+                        value_template: >-
+                          {% set entered_at = states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) %}
+                          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
+                          {{ entered_at > last_refill_at }}
+                    then:
+                      - alias: "Record the stable refill"
+                        action: input_datetime.set_datetime
+                        target:
+                          entity_id: input_datetime.water_softener_last_refill_at
+                        data:
+                          timestamp: >-
+                            {{ states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) }}
+          - alias: "Clear the refill timer only after a known reading leaves the window"
+            conditions:
+              - condition: template
+                value_template: >-
+                  {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+                  {% set reset_threshold = states('input_number.water_softener_refill_reset_threshold_mm') | float(default=none) %}
+                  {{ level is not none and reset_threshold is not none and level >= reset_threshold }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.water_softener_refill_window_entered_at
+                data:
+                  timestamp: 0
+
+  - id: buy_more_salt
+    alias: buy_more_salt
+    description: >-
+      Prompt for a bag count when we are standing in a DIY store with the salt
+      inventory low. Detection lives in sensor.diy_store_current (see
+      packages/zone.yaml), whose state is which store we are at, because exact
+      place-name matching missed real OSM names and parking-lot geocodes.
+
+      There is deliberately no arrive-home backstop here, unlike the air-filter
+      prompt in climate.yaml: two restock questions on a single arrival is worse
+      than one missed bag of salt.
+    mode: single
+    max_exceeded: silent
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        id: at_diy_store
+        entity_id: sensor.diy_store_current
+    condition:
+      - alias: "Salt Bag Inventory Low"
+        condition: numeric_state
+        entity_id: input_number.bags_of_salt_at_home
+        below: 2
+      - alias: "Store path only on a genuinely new store"
+        condition: template
+        value_template: >-
+          {{ trigger.id != 'at_diy_store'
+             or (trigger.to_state.state not in ['none', 'unknown', 'unavailable']
+                 and trigger.to_state.state != trigger.from_state.state) }}
+    action:
+      - action: @@PRIVATE:mobile_notify_service_02@@
+        data:
+          title: "Buy Softener Salt"
+          message: >-
+            "You only have {{states("input_number.bags_of_salt_at_home")| int}} salt bags at home. How many did you buy?"
+          data:
+            actions:
+              - action: "BOUGHT_SALT"
+                title: "Purchased salt"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                behavior: textInput
+                textInputButtonTitle: Number of bags
+                textInputPlaceholder: 3
+                icon: sfsymbols:bag.badge.questionmark
+
+  - id: salt_purchased
+    alias: salt_purchased
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: BOUGHT_SALT
+    condition: []
+    action:
+      - variables:
+          current_bags: >-
+            {{ states("input_number.bags_of_salt_at_home") | int(default=0) }}
+          purchased_text: >-
+            {{ trigger.event.data.reply_text | default("", true) | trim }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ purchased_text | regex_match('^\d+$') }}
+            sequence:
+              - alias: Increase Number of salt bags in inventory
+                action: input_number.set_value
+                entity_id: input_number.bags_of_salt_at_home
+                data:
+                  value: >-
+                    {{ current_bags + (purchased_text | int(default=0)) }}
+
+  - id: temp_notify_place_name
+    alias: temp_notify_place_name
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        enabled: false
+        entity_id: sensor.@@PRIVATE:presence_person_slug@@_place_place_name
+        to:
+    condition: []
+    action:
+      - alias: "Notify"
+        action: @@PRIVATE:mobile_notify_service_02@@
+        data:
+          message: >-
+            At place_name: {{ states("sensor.@@PRIVATE:presence_person_slug@@_place_place_name") }},
+            of category: {{ states("sensor.@@PRIVATE:presence_person_slug@@_place_place_category") }}
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Cameras
+########################
+camera: []
+
+########################
+# Counter
+########################
+counter: {}
+
+########################
+# Device Trackers
+########################
+device_tracker: []
+
+########################
+# Fans
+########################
+fan: []
+
+########################
+# Frontend
+########################
+frontend: {}
+
+########################
+# Groups
+########################
+group: {}
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  water_softener_refill_reminder_sent:
+    name: Water Softener Refill Reminder Sent
+    icon: mdi:bell-check
+
+########################
+# Input Datetimes
+########################
+input_datetime:
+  water_softener_forecast_window_entered_at:
+    name: Water Softener Forecast Window Entered At
+    has_date: true
+    has_time: true
+  water_softener_refill_window_entered_at:
+    name: Water Softener Refill Window Entered At
+    has_date: true
+    has_time: true
+  water_softener_last_refill_at:
+    name: Water Softener Last Refill At
+    has_date: true
+    has_time: true
+
+########################
+# Input Numbers
+########################
+input_number:
+  bags_of_salt_at_home:
+    name: Bags of Softener Salt at Home
+    icon: mdi:shaker-outline
+    min: 0
+    max: 20
+    mode: box
+    step: 1
+  water_softener_low_salt_threshold_mm:
+    name: Water Softener Low Salt Threshold
+    icon: mdi:arrow-collapse-down
+    min: 200
+    max: 800
+    mode: box
+    step: 10
+    unit_of_measurement: mm
+    # Calibrated as 75% depleted between the two real measured baselines
+    # for this sensor: confirmed-just-refilled (~172mm, the 2026-09-16
+    # refill) and confirmed-empty (~451mm, visually verified brine with no
+    # salt pile at install, reconfirmed via a stable overnight baseline
+    # stdev ~1.1-1.3mm). 172 + 0.75*(451-172) ~= 381, rounded to the
+    # step:10 grid -> 380.
+    #
+    # This replaces an earlier 440 calibration (~10mm short of bare
+    # water) that made "low salt" mean "almost completely out," with the
+    # only lead time coming from the separate
+    # water_softener_refill_reminder_days forecast window (14 days) --
+    # too little buffer relative to how slowly this tank actually
+    # depletes (well under 1mm/day once real multi-window data settled).
+    # 380 gives a meaningfully earlier, percentage-anchored trigger
+    # instead of forecasting all the way to bare water.
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install. The
+    # live value was set directly via input_number.set_value when this
+    # was calibrated; keep this YAML value in sync with the live one if
+    # it's ever recalibrated again, so a fresh deploy doesn't regress to
+    # a stale default.
+    initial: 380
+  water_softener_refill_reset_threshold_mm:
+    name: Water Softener Refill Reset Threshold
+    icon: mdi:arrow-expand-up
+    min: 100
+    max: 600
+    mode: box
+    step: 10
+    unit_of_measurement: mm
+    # Calibrated against the real sensor: a 2026-09-16 refill (4 bags)
+    # brought the raw reading down from the confirmed-empty baseline
+    # (~451mm, see water_softener_low_salt_threshold_mm's comment) to a
+    # stable ~170-174mm within ~5 minutes of pouring, holding flat there
+    # afterward -- no further settling observed. 300mm sits with generous
+    # margin on both sides: ~150mm below the empty baseline (so normal
+    # depletion or sensor jitter near-empty can never misfire this), and
+    # ~128mm above today's specific fill level (so a lighter future
+    # refill -- fewer bags, less full -- still gets correctly detected
+    # rather than requiring this exact fill level again).
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install (see
+    # the matching note on water_softener_low_salt_threshold_mm).
+    initial: 300
+  water_softener_refill_reminder_days:
+    name: Water Softener Refill Reminder Days
+    icon: mdi:calendar-alert
+    min: 1
+    max: 45
+    mode: box
+    step: 1
+    unit_of_measurement: d
+    initial: 14
+  water_softener_minimum_depletion_rate_mm_per_day:
+    name: Water Softener Minimum Depletion Rate
+    icon: mdi:speedometer-slow
+    min: 0.1
+    max: 25
+    mode: box
+    step: 0.1
+    unit_of_measurement: mm/d
+    # Calibrated against real post-2026-09-16-refill data. The original 0.5
+    # default was picked as a generic noise floor before any real depletion
+    # data existed; the recorded steady rate turned out to be ~0.4-0.5
+    # mm/day, right at that floor. 0.2 sits comfortably above the
+    # pure-settling noise observed right after a refill (which ran negative,
+    # -0.05 to -0.32mm/day, from the fresh pile still compacting) while
+    # admitting genuinely slow-but-real depletion. (The 0.448 mm/day 7-day
+    # reading that first prompted the change was itself depressed by the old
+    # derivative sensors' restart amnesia; the floor holds on its own merits.)
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install. The
+    # live value was set directly via input_number.set_value when this was
+    # calibrated.
+    initial: 0.2
+
+########################
+# Input Select
+########################
+input_select: {}
+
+########################
+# iOS
+########################
+ios: {}
+
+########################
+# Light
+########################
+light: []
+
+########################
+# Media Player
+########################
+media_player: []
+
+########################
+# Plant
+########################
+plant: {}
+
+########################
+# Scenes
+########################
+scene: []
+
+########################
+# Scripts
+########################
+script: {}
+
+########################
+# Sensor
+########################
+sensor:
+  - platform: filter
+    # Consumes the normalized-to-mm template sensor (below in the `template:`
+    # section) rather than the raw ESPHome entity directly. The raw entity's
+    # unit_of_measurement depends on HA's unit-system settings (a live
+    # registry setting, not version-controlled), so every mm-scaled
+    # threshold in this file would silently misinterpret its value if HA's
+    # unit system ever reports it in `in` (as observed after the
+    # VL53L0X -> VL53L1X hardware migration re-registered this entity).
+    entity_id: sensor.water_softener_distance_normalized_mm
+    name: "Water Softener Salt Level"
+    filters:
+      # No HA-side `outlier` filter here (deliberately -- see git history
+      # for the version that had one): HA's outlier filter only expands its
+      # comparison window with values it *accepts*, so a genuine step
+      # change bigger than its radius -- exactly what a real salt refill
+      # produces -- gets permanently rejected forever afterward, since
+      # every subsequent (correct) reading keeps comparing against the
+      # same stale pre-refill window. That would silently break refill
+      # detection, the whole point of this sensor. Spike rejection lives
+      # entirely in the firmware-side median filter instead (see
+      # esphome/watersoftener.yaml), which has no such lockout: it just
+      # recomputes over the latest raw samples every cycle, so it reflects
+      # a real step change (like a refill) within seconds rather than
+      # never (caught in review).
+      #
+      # No lowpass either. HA's lowpass is per state update (weight
+      # 1/time_constant, no time term), so its effective time constant is
+      # time_constant x the publish interval and silently changes whenever the
+      # firmware cadence does: time_constant 120 was ~1.7h at the old ~50s
+      # cadence and would be ~10h at a 5-minute cadence. Replaying the recorded
+      # 2026-09/10 data showed it added ~1.6h of lag on top of the 6h average
+      # while the average alone already cuts the ~1 mm per-sample noise to
+      # ~0.01 mm -- far below the ~0.25 mm real daily wobble.
+      #
+      # The time-weighted 6h average is independent of publish cadence, and the
+      # filter platform re-primes it from the recorder at startup.
+      - filter: time_simple_moving_average
+        window_size: "6:00"
+        precision: 3
+
+  # Restart-safe depletion rate, replacing four `derivative` sensors.
+  #
+  # Why: a derivative sensor keeps its window only in memory and divides by the
+  # full window, so every HA restart (19 between 2026-09-15 and 2026-10-10)
+  # silently under-reported the 7d rate for up to a week; a replay of the
+  # recorded data with those restarts reproduces the recorded values exactly.
+  # `statistics` reloads its buffer from the recorder at startup.
+  #
+  # Why a median of 24h changes rather than one long-window slope: a single
+  # step (the 2026-09-16 refill, or the +20 mm slump on 2026-09-20) poisons a
+  # 7d/14d endpoint slope for the whole window, but only one day of 24h-change
+  # samples, which the 14-day median ignores. 24h differences also cancel the
+  # ~0.25 mm daily wobble. On the recorded data this cut the day-to-day swing of
+  # the days-until-low forecast from ~94 days to ~12 days.
+  - platform: statistics
+    name: Water Softener Level Change 24h
+    unique_id: water_softener_level_change_24h
+    entity_id: sensor.water_softener_salt_level
+    state_characteristic: change
+    max_age:
+      hours: 24
+    # salt_level updates a few hundred times a day; keep well above a day's worth.
+    sampling_size: 5000
+    precision: 3
+
+  - platform: statistics
+    name: Water Softener Level Change 24h Median 14d
+    unique_id: water_softener_level_change_24h_median_14d
+    entity_id: sensor.water_softener_level_change_24h
+    state_characteristic: median
+    max_age:
+      days: 14
+    sampling_size: 20000
+    precision: 3
+
+########################
+# Template
+########################
+template:
+  - sensor:
+      - name: Water Softener Distance Normalized MM
+        unique_id: water_softener_distance_normalized_mm
+        icon: mdi:ruler
+        # Deliberately NOT device_class: distance. HA's unit-system
+        # conversion is keyed off device_class, not unit_of_measurement --
+        # declaring "distance" here would make HA treat this sensor's own
+        # native unit as convertible and silently re-convert its mm state
+        # back to inches under an imperial unit system, reintroducing the
+        # exact bug this sensor exists to fix one level downstream (caught
+        # in review of the first version of this normalization sensor).
+        state_class: measurement
+        unit_of_measurement: "mm"
+        # Normalizes the raw ESPHome VL53L1X entity to true millimeters
+        # regardless of HA's unit-system display setting, so the
+        # low-salt/refill thresholds elsewhere in this file (which are bare
+        # numbers, not unit-aware) always compare like-for-like. Fixes the
+        # entity reporting in `in` after the VL53L0X -> VL53L1X hardware
+        # migration re-registered it without the old entity's manual mm
+        # unit override. Kept at 0.1 mm resolution: the firmware publishes
+        # 5-minute averages, which carry sub-millimetre information that whole-mm
+        # rounding would throw away.
+        availability: >-
+          {{ states('sensor.watersoftener_my_water_softener_vl53l1x_sensor')
+             not in ['unknown', 'unavailable'] }}
+        state: >-
+          {% set src = 'sensor.watersoftener_my_water_softener_vl53l1x_sensor' %}
+          {% set value = states(src) | float(default=none) %}
+          {% set unit = state_attr(src, 'unit_of_measurement') %}
+          {% if value is none %}
+            {{ none }}
+          {% elif unit == 'mm' or unit is none %}
+            {{ value | round(1) }}
+          {% elif unit == 'cm' %}
+            {{ (value * 10) | round(1) }}
+          {% elif unit == 'm' %}
+            {{ (value * 1000) | round(1) }}
+          {% elif unit == 'in' %}
+            {{ (value * 25.4) | round(1) }}
+          {% elif unit == 'ft' %}
+            {{ (value * 304.8) | round(1) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
+      # Gate the restart-safe 14-day median of 24h changes on the depletion
+      # floor: flat or negative rates (settling right after a refill, or an
+      # idle softener) have no meaningful days-until-low projection. The
+      # float(default=...) fallback only applies while the input_number is
+      # transiently unknown/unavailable (e.g. HA startup before helpers load);
+      # keep it in sync with that input_number's calibrated value (currently
+      # 0.2), the same class of bug caught in review for the low-salt
+      # threshold's fallbacks.
+      - name: Water Softener Forecast Rate
+        unique_id: water_softener_forecast_rate
+        icon: mdi:chart-line
+        state_class: measurement
+        unit_of_measurement: mm/d
+        availability: >-
+          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.2) %}
+          {% set rate = states('sensor.water_softener_level_change_24h_median_14d') | float(default=none) %}
+          {{ rate is not none and rate > minimum_rate }}
+        state: >-
+          {{ states('sensor.water_softener_level_change_24h_median_14d') | float(default=0) | round(3) }}
+      # The float(default=...) fallbacks below only apply while
+      # input_number.water_softener_low_salt_threshold_mm is transiently
+      # unknown/unavailable (e.g. during HA startup before helpers load).
+      # Keep them in sync with that input_number's calibrated value
+      # (currently 380mm) -- a stale fallback here would silently mask a
+      # real low-salt state during that window (caught in review).
+      - name: Water Softener Days Until Low Salt
+        unique_id: water_softener_days_until_low_salt
+        icon: mdi:calendar-clock
+        state_class: measurement
+        unit_of_measurement: d
+        availability: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=380) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set rate = states('sensor.water_softener_forecast_rate') | float(default=none) %}
+          {{ level is not none and (level >= threshold or (rate is not none and rate > 0)) }}
+        state: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=380) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set rate = states('sensor.water_softener_forecast_rate') | float(default=none) %}
+          {% if level is none %}
+            {{ none }}
+          {% elif level >= threshold %}
+            0
+          {% elif rate is none or rate <= 0 %}
+            {{ none }}
+          {% else %}
+            {{ ((threshold - level) / rate) | round(1) }}
+          {% endif %}
+      - name: Water Softener Forecast Low Salt At
+        unique_id: water_softener_forecast_low_salt_at
+        icon: mdi:calendar-alert
+        device_class: timestamp
+        # Anchored to when the days-until value was computed, not now(): a
+        # now()-based template re-renders every minute, so the projected date
+        # crept forward one minute per minute between forecast updates and
+        # wrote ~600 recorder rows a day.
+        availability: >-
+          {{ states('sensor.water_softener_days_until_low_salt') | float(default=none) is not none }}
+        state: >-
+          {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+          {% set computed_at = states.sensor.water_softener_days_until_low_salt.last_changed %}
+          {{ (computed_at + timedelta(days=days)).isoformat() }}
+      # Same float(default=...) note as Water Softener Days Until Low Salt
+      # above -- keep in sync with the calibrated threshold (currently
+      # 380mm).
+      - name: Water Softener Forecast Status
+        unique_id: water_softener_forecast_status
+        icon: mdi:shaker-outline
+        availability: >-
+          {{ states('sensor.water_softener_salt_level') | float(default=none) is not none }}
+        state: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=380) %}
+          {% set reminder_days = states('input_number.water_softener_refill_reminder_days') | float(default=14) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+          {% if level is none %}
+            unknown
+          {% elif level >= threshold %}
+            low_now
+          {% elif days is not none and days > 0 and days <= reminder_days %}
+            refill_soon
+          {% elif days is not none %}
+            ok
+          {% else %}
+            trend_unknown
+          {% endif %}
+
+########################
+# Switch
+########################
+switch: []
+
+########################
+# Zone
+########################
+zone: {}

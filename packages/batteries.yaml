@@ -130,7 +130,7 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 20 %}
-                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state ~ '%'] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -172,7 +172,7 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 10 %}
-                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state ~ '%'] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -218,7 +218,7 @@ template:
             {% set ns = namespace(lines=[]) %}
             {% for battery in monitored_batteries %}
               {% if battery.state == 'unavailable' %}
-                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state] %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -232,6 +232,8 @@ automation:
     description: Keep the 20 percent battery notification current and send a push message when the situation gets worse.
     mode: queued
     max: 10
+    trace:
+      stored_traces: 10
     trigger:
       - trigger: state
         id: summary_change
@@ -299,6 +301,8 @@ automation:
     description: Keep the 10 percent battery notification current and send a push message when the situation gets worse.
     mode: queued
     max: 10
+    trace:
+      stored_traces: 10
     trigger:
       - trigger: state
         id: summary_change
@@ -366,6 +370,8 @@ automation:
     description: Keep the offline battery notification current and send a push message when a battery-powered device goes unavailable.
     mode: queued
     max: 10
+    trace:
+      stored_traces: 10
     trigger:
       - trigger: state
         id: summary_change

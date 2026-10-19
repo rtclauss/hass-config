@@ -1,0 +1,452 @@
+-- allium: 3
+-- alarm_wakeup.allium
+--
+-- Scope: Owner-suite wake-up scheduling and execution.
+-- Includes:
+--   - iPhone wake-up alarm sync into Home Assistant helper state
+--   - weekday, weekend, and special-meeting alarm branches
+--   - gentle wake-up lighting/blinds sequence
+--   - bathroom-triggered follow-up morning routine audio
+--   - snooze, cancel, midnight reset, and stuck-audio recovery
+-- Excludes:
+--   - exact media URIs, playlist composition, and player-specific API details
+--   - Tesla departure planning that consumes alarm helpers downstream
+--   - Lovelace card layout and presentation
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    wakeup: WakeupState
+    calendar: CalendarContext
+    wakeup_context: WakeupContext
+    wakeup_audio: WakeupAudioContext
+    owner_suite: OwnerSuiteWakeEnvironment
+    house_mode: HouseModeStateMachine
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity CalendarContext {
+    -- Holiday-aware: true only on a weekday that is not a configured holiday.
+    today_is_workday: Boolean
+    tomorrow_is_weekday: Boolean
+    tomorrow_has_holiday: Boolean
+}
+
+external entity WakeupContext {
+    resident_home: Boolean
+    planned_vacation_active: Boolean
+    resident_in_bed: Boolean
+    bathroom_occupied: Boolean
+    guest_mode_enabled: Boolean
+    within_workday_owner_suite_wake_window: Boolean
+    within_alarm_wake_window: Boolean
+    owner_suite_lamps_on: Boolean
+    owner_suite_recent_bathroom_activity: Boolean
+    owner_suite_recent_bedroom_activity: Boolean
+    owner_suite_adaptive_daytime_brightness_percent: Integer
+}
+
+external entity WakeupAudioContext {
+    -- Runtime view of the wake-up audio group used to verify playback before
+    -- the volume ramp. group_playing_requested_source is true only when the
+    -- group is `playing` AND its media changed from the pre-request fingerprint
+    -- (distinguishing a real start from leftover overnight audio or a silent
+    -- failure). primary_retry_attempted latches once the single primary retry
+    -- has been issued.
+    group_playing_requested_source: Boolean
+    primary_retry_attempted: Boolean
+}
+
+------------------------------------------------------------
+-- Entities and Variants
+------------------------------------------------------------
+
+entity WakeupState {
+    weekday_alarm_time: Timestamp?
+    weekend_alarm_time: Timestamp?
+    next_work_meeting_alarm_time: Timestamp?
+    weekday_alarm_enabled: Boolean
+    weekend_alarm_enabled: Boolean
+    special_meeting_enabled: Boolean
+    ios_synced_weekday_alarm: Boolean
+    ios_synced_special_meeting: Boolean
+    morning_routine_started: Boolean
+    wakeup_alarm_firing: Boolean
+}
+
+entity OwnerSuiteWakeEnvironment {
+    lighting_state: sleeping | dim_warm | daylight_ramp | daytime
+    bed_strip_brightness_percent: Integer
+    adaptive_lighting_enabled: Boolean
+    sleep_mode_enabled: Boolean
+    blinds_state: closed | opening | mostly_open
+    switch_leds_off: Boolean
+}
+
+entity HouseModeStateMachine {
+    mode: home | away | night | in_bed | asleep
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    special_meeting_lead: Duration = 5.minutes
+    snooze_duration: Duration = 8.minutes
+    morning_blinds_delay: Duration = 175.seconds
+    morning_light_ramp_duration: Duration = 3.minutes
+    bed_strip_automatic_max_brightness_percent: Integer = 25
+    office_wakeup_peak_volume_percent: Integer = 7
+    wakeup_fallback_source_configured: Boolean = true
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule NormalizePhoneWakeupPayload {
+    when: PhoneWakeupAlarmReceived(raw_alarm_time, raw_alarm_enabled, payload_source)
+    let has_alarm_time = raw_alarm_time != ""
+    let normalized_alarm_time = MinutePrecision(raw_alarm_time)
+    let normalized_alarm_enabled = AlarmFlagEnabled(raw_alarm_enabled, has_alarm_time)
+    ensures: PhoneWakeupAlarmSynced(normalized_alarm_time, normalized_alarm_enabled)
+    @guidance
+        -- Payload may arrive via JSON body, form body, or query string.
+        -- When the explicit enabled flag is missing, the presence of an alarm
+        -- time means the next-day wake-up alarm is treated as enabled.
+}
+
+rule SyncPhoneWakeupAlarm {
+    when: PhoneWakeupAlarmSynced(alarm_time, alarm_enabled)
+    let weekday_alarm_was_enabled = wakeup.weekday_alarm_enabled
+    let special_meeting_was_enabled = wakeup.special_meeting_enabled
+    let meeting_alarm_time = alarm_time - config.special_meeting_lead
+    let tomorrow_is_workday =
+        calendar.tomorrow_is_weekday
+        and not calendar.tomorrow_has_holiday
+    ensures:
+        if alarm_enabled and tomorrow_is_workday:
+            wakeup.weekday_alarm_time = alarm_time
+            wakeup.next_work_meeting_alarm_time = meeting_alarm_time
+            wakeup.weekday_alarm_enabled = true
+            if not weekday_alarm_was_enabled:
+                wakeup.ios_synced_weekday_alarm = true
+            wakeup.special_meeting_enabled = true
+            if not special_meeting_was_enabled:
+                wakeup.ios_synced_special_meeting = true
+        else:
+            if alarm_enabled and not tomorrow_is_workday:
+                wakeup.weekend_alarm_time = alarm_time
+                wakeup.weekend_alarm_enabled = true
+                wakeup.ios_synced_weekday_alarm = false
+                wakeup.ios_synced_special_meeting = false
+            else:
+                if tomorrow_is_workday and wakeup.ios_synced_weekday_alarm:
+                    wakeup.weekday_alarm_enabled = false
+                    wakeup.ios_synced_weekday_alarm = false
+                if tomorrow_is_workday and wakeup.ios_synced_special_meeting:
+                    wakeup.special_meeting_enabled = false
+                    wakeup.ios_synced_special_meeting = false
+                if not tomorrow_is_workday:
+                    wakeup.weekend_alarm_enabled = false
+                    wakeup.ios_synced_weekday_alarm = false
+                    wakeup.ios_synced_special_meeting = false
+}
+
+rule TriggerWeekdayWakeup {
+    when: wakeup.weekday_alarm_time <= now
+    requires: calendar.today_is_workday
+    requires: wakeup.weekday_alarm_enabled
+    requires:
+        not wakeup.special_meeting_enabled
+        or wakeup.weekday_alarm_time < wakeup.next_work_meeting_alarm_time
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
+    ensures: WakeupSequenceRequested(weekday)
+    ensures: MorningAudioRequested(news_briefing, bedroom_suite)
+}
+
+rule TriggerWeekendWakeup {
+    when: wakeup.weekend_alarm_time <= now
+    requires: not calendar.today_is_workday
+    requires: wakeup.weekend_alarm_enabled
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
+    ensures: WakeupSequenceRequested(weekend)
+    ensures: MorningAudioRequested(random_weekend_station, bedroom_suite)
+}
+
+rule TriggerSpecialMeetingWakeup {
+    when: wakeup.next_work_meeting_alarm_time <= now
+    requires: calendar.today_is_workday
+    requires: wakeup.special_meeting_enabled
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
+    ensures: wakeup.special_meeting_enabled = false
+    ensures: WakeupSequenceRequested(special_meeting)
+    ensures: MorningAudioRequested(meeting_track, bedroom_suite)
+}
+
+rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
+    when: OwnerSuiteMorningActivityDetected()
+    requires: calendar.today_is_workday
+    requires: wakeup_context.within_workday_owner_suite_wake_window
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: house_mode.mode in {night, in_bed, asleep}
+    requires: not wakeup.wakeup_alarm_firing
+    requires: not wakeup_context.owner_suite_lamps_on
+    requires: not wakeup_context.resident_in_bed
+    requires: wakeup_context.owner_suite_recent_bathroom_activity
+    requires: wakeup_context.owner_suite_recent_bedroom_activity
+    ensures: WakeupSequenceRequested(workday_morning_activity)
+    @guidance
+        -- The implementation may raise this event from bed-exit, bathroom
+        -- occupancy, or owner-suite bedroom activity signals. The guards keep
+        -- the wake transition scoped to confirmed morning activity in the
+        -- holiday-aware workday wake window.
+}
+
+rule BeginWakeupSequence {
+    when: WakeupSequenceRequested(kind)
+    requires: not wakeup.wakeup_alarm_firing
+    ensures: house_mode.mode = home
+    ensures: wakeup.wakeup_alarm_firing = true
+    ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures: owner_suite.lighting_state = dim_warm
+    ensures: owner_suite.bed_strip_brightness_percent = 1
+    ensures: WakeupRampRequested(kind)
+    ensures: WakeupBlindTransitionRequested(kind)
+    @guidance
+        -- Implementation enables the adaptive lighting switch and immediately
+        -- applies the sleep target: minimum brightness (1 %) and warmest color
+        -- temperature (sleep_color_temp K) with a short transition (≤ 2 s).
+        -- Sleep mode is left on until the ramp begins so the sleep target values
+        -- remain in effect. WakeupRampRequested then hands control to
+        -- FinishWakeupSequence which performs the full config.morning_light_ramp_duration
+        -- transition to the current adaptive daytime target.
+}
+
+rule FinishWakeupSequence {
+    when: WakeupRampRequested(kind)
+    let bed_strip_wake_target_percent =
+        if wakeup_context.owner_suite_adaptive_daytime_brightness_percent > config.bed_strip_automatic_max_brightness_percent:
+            config.bed_strip_automatic_max_brightness_percent
+        else:
+            wakeup_context.owner_suite_adaptive_daytime_brightness_percent
+    ensures: owner_suite.lighting_state = daytime
+    ensures: owner_suite.bed_strip_brightness_percent = bed_strip_wake_target_percent
+    ensures: owner_suite.sleep_mode_enabled = false
+    ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: switch_leds_off remains true (set by goodnight integrity)
+    @guidance
+        -- Implementation turns off sleep mode and applies the full adaptive
+        -- daytime target to the owner-suite lamps with transition =
+        -- config.morning_light_ramp_duration (3 minutes). The bed strip ramps
+        -- for the same duration to the lower of that target and
+        -- config.bed_strip_automatic_max_brightness_percent (25 %), so the
+        -- automatic ceiling does not interrupt the wake ramp. Direct resident
+        -- brightness changes remain manual overrides and may exceed the cap.
+        -- During the ramp, manual-control is locked on the owner-suite lights
+        -- to prevent adaptive lighting's periodic updates from interrupting the
+        -- transition. After config.morning_light_ramp_duration elapses, manual
+        -- control is cleared so adaptive lighting resumes normal periodic
+        -- adjustments without requiring an explicit re-enable.
+}
+
+rule OpenBlindsDuringWakeupTransition {
+    when: WakeupBlindTransitionRequested(kind)
+    ensures: owner_suite.blinds_state = mostly_open
+    @guidance
+        -- The owner-suite morning transition delays blind movement by
+        -- config.morning_blinds_delay and then opens the blinds gradually in
+        -- small steps while the adaptive lighting ramp continues.
+}
+
+rule PrepareMorningAudioGroup {
+    when: MorningAudioRequested(program, target_room)
+    ensures:
+        if target_room = bathroom:
+            WakeupAudioGroupPrepared(bathroom_only)
+        else:
+            if wakeup_context.guest_mode_enabled:
+                WakeupAudioGroupPrepared(bedroom_and_bathroom)
+            else:
+                WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+    @guidance
+        -- Bedroom-suite wake-up audio should prepare its intended speaker group
+        -- before playback begins and should not trigger a second regroup once
+        -- playback is already underway unless an explicit recovery path needs it.
+        -- Bathroom-triggered follow-up audio should stay independent from the
+        -- owner-suite light ramp and should not depend on regrouping the wider
+        -- bedroom wake-up audio zone.
+}
+
+rule RequestWakeupAudioPlayback {
+    when: WakeupAudioGroupPrepared(group)
+    ensures: WakeupAudioPlaybackRequested(group, primary_wakeup_source)
+    @guidance
+        -- Group members are first silenced (volume floor) so the fade-in starts
+        -- from zero, then the primary wake-up source is requested on the
+        -- prepared group. The primary should prefer the most reliable transport
+        -- for the desired station — e.g. a direct publicradio.org Icecast MP3
+        -- stream over the same station via the TuneIn (opml.radiotime.com)
+        -- resolver. A raw http(s) URL is played as a generic stream; a Music
+        -- Assistant URI (spotify:/library:/tunein--) goes through MA.
+}
+
+rule VerifyWakeupAudioPlaybackBeforeVolumeRamp {
+    when: WakeupAudioPlaybackRequested(group, source)
+    ensures:
+        if wakeup_audio.group_playing_requested_source:
+            WakeupAudioPlaybackConfirmed(group)
+        else:
+            WakeupAudioPlaybackUnverified(group, source)
+    @guidance
+        -- Playback is confirmed only when the group is `playing` AND its media
+        -- changed from the pre-request fingerprint. This distinguishes a real
+        -- start from leftover overnight audio and from a request that silently
+        -- failed (the group falls to idle/off/unavailable with media cleared).
+        -- Confirmation is re-evaluated against live state at the top sequence
+        -- level so a value computed inside a nested branch is never read out of
+        -- scope.
+}
+
+rule RetryWakeupAudioOnTransientFailure {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: source = primary_wakeup_source
+    requires: not wakeup_audio.primary_retry_attempted
+    ensures: WakeupAudioPlaybackRequested(group, primary_wakeup_source)
+    @guidance
+        -- Source-resolution failures are usually transient (e.g. a DNS flap
+        -- contacting opml.radiotime.com). After a short backoff the primary
+        -- source is re-requested exactly once before any fallback.
+}
+
+rule FallBackWhenPrimaryWakeupSourceUnavailable {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: source = primary_wakeup_source
+    requires: wakeup_audio.primary_retry_attempted
+    requires: config.wakeup_fallback_source_configured
+    ensures: WakeupAudioPlaybackRequested(group, fallback_wakeup_source)
+    ensures: WakeupPrimarySourceFailureNotified(primary_wakeup_source)
+    @guidance
+        -- When the primary source still cannot be established, switch to an
+        -- alternate source that reaches the station a different way (e.g. the
+        -- TuneIn station when the direct stream is down, or a Spotify morning
+        -- playlist as a last resort) so the alarm still makes sound, and surface
+        -- that the primary source failed.
+}
+
+rule RampWakeupVolumeByRoom {
+    when: WakeupAudioPlaybackConfirmed(group)
+    ensures: WakeupVolumeRampStarted(group)
+    @guidance
+        -- Only runs once playback is verified, so the ramp never fades up a
+        -- silent group. All group members fade in from silence using small,
+        -- evenly-paced volume steps sized from loudness-perception research
+        -- (roughly half the ~1 dB just-noticeable-difference per step,
+        -- spaced well past the ~4s auditory echoic-memory window) so the
+        -- rise reads as a smooth swell rather than audible jumps, landing
+        -- around six minutes rather than the perceptual minimum of under a
+        -- minute. The bedroom ramps to the highest peak — it holds the
+        -- sleeper, so the wake-up has to clear the "still asleep" threshold
+        -- there, not merely be audible. When the group is
+        -- bedroom_bathroom_office_den, the office is capped at
+        -- config.office_wakeup_peak_volume_percent; the remaining rooms ramp
+        -- to the shared non-bedroom peak. This prevents the wake-up routine
+        -- from disturbing work-in-progress in the office.
+}
+
+rule AbortSilentWakeupWhenNoSourcePlays {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: wakeup_audio.primary_retry_attempted
+    requires: source = fallback_wakeup_source or not config.wakeup_fallback_source_configured
+    ensures: WakeupAudioPlaybackFailed(group)
+    ensures: WakeupVolumeRampSkipped(group)
+    ensures: MorningAudioRecoveryApplied(radio_playback)
+    @guidance
+        -- If neither the primary (after retry) nor the fallback can be started,
+        -- the failure is surfaced (persistent notification + logbook) and the
+        -- script stops with an error so the trace reflects failure. The volume
+        -- ramp is skipped so a silent group is never reported as a successful
+        -- wake-up — the defect behind issue #772.
+}
+
+rule ChooseWakeupPlaylistFromConfiguredPool {
+    when: MorningAudioRequested(morning_playlist, target_room)
+    ensures: MorningAudioSelectionChosen(configured_wakeup_playlist_pool, shuffle_optional, repeat_all)
+}
+
+rule ChooseWeekendStationFromConfiguredPool {
+    when: MorningAudioRequested(random_weekend_station, target_room)
+    ensures: MorningAudioSelectionChosen(configured_weekend_station_pool, station_rotation)
+}
+
+rule StartBathroomMorningRoutine {
+    when: BathroomMorningOccupancyDetected()
+    requires: wakeup_context.bathroom_occupied
+    requires: not wakeup_context.resident_in_bed
+    requires: not wakeup.morning_routine_started
+    requires: wakeup_context.within_alarm_wake_window
+    ensures: wakeup.morning_routine_started = true
+    ensures: MorningAudioRequested(morning_playlist, bathroom)
+    ensures: BathroomWakeupVolumeStrategyChosen(gentle_fade_in_or_existing_boost)
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: LED bars remain off; morning routine audio still plays
+    @guidance
+        -- The window is anchored to the resident's own scheduled alarm
+        -- (weekday or weekend, whichever applies today), not a fixed clock
+        -- range: it opens at the enabled alarm's time and stays open for 90
+        -- minutes after. A bathroom trip before the alarm — e.g. waking
+        -- early and going back to bed — must not start wake-up music, and
+        -- if no alarm is enabled for today there is no window at all.
+}
+
+rule SnoozeWakeup {
+    when: BedsideSnoozeButtonPressed()
+    requires: wakeup.wakeup_alarm_firing
+    requires: wakeup_context.resident_home
+    requires: wakeup_context.resident_in_bed
+    ensures: owner_suite.lighting_state = sleeping
+    ensures: MorningAudioStopped(bedroom_suite)
+    ensures: WakeupSequenceRequested(snooze_resume)
+    ensures: MorningAudioResumedAfterSnooze(config.snooze_duration)
+}
+
+rule CancelWakeupAudio {
+    when: BedsideCancelButtonPressed()
+    ensures: MorningAudioStopped(bedroom_suite)
+}
+
+rule ResetMorningRoutineAtDayRollover {
+    when: DayRolledOver()
+    ensures: wakeup.morning_routine_started = false
+}
+
+rule RecoverStuckMorningAudio {
+    when: MorningAudioScriptStalled(script_kind)
+    ensures: wakeup.morning_routine_started = false
+    ensures: MorningAudioRecoveryApplied(script_kind)
+}
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Wake-up alarm firing is force-cleared by a fixed-time automation at 14:34:56. Is that exact timestamp intentional, or should the latch clear when the morning routine completes?"
+open question "The special-meeting branch clears special_meeting_enabled when it fires, but it leaves the iOS-synced marker behind until a later sync. Should the sync marker be consumed at the same time?"

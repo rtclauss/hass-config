@@ -36,7 +36,7 @@ Summer is treated as June 1 through September 30, matching the existing seasonal
 
 EV usage is measured from:
 
-- `sensor.example_vehicle_energy_added`
+- `sensor.<vehicle_slug>_energy_added`
 
 That Tesla entity reports `kWh`, `device_class: energy`, and `state_class: total_increasing`, so it can back `utility_meter` helpers.
 
@@ -82,9 +82,9 @@ Tariffs:
 
 The EV tariff is surfaced on both Tesla dashboard paths:
 
-- storage mode: `.storage/lovelace.example_new_mushroom`, view path `tesla-v2`
+- storage mode: the private UI dashboard, view path `tesla-v2`
 - YAML mode: `lovelace/tiles/tiles_tesla_charging.yaml`
-- storage mode energy view: `.storage/lovelace.example_new_mushroom`, view path `energy`
+- storage mode energy view: the private UI dashboard, view path `energy`
 
 The Tesla dashboards now show:
 
@@ -104,13 +104,13 @@ Use these entities in `Settings > Dashboards > Energy`:
   - energy: `sensor.house_electrical_meter_non_ev`
   - current price: `sensor.house_electrical_rate`
 - EV charging:
-  - energy: `sensor.example_vehicle_energy_added`
+  - energy: `sensor.<vehicle_slug>_energy_added`
   - current price: `sensor.ev_charging_tariff_rate`
 
 Important:
 
 - do not use `sensor.house_electrical_meter` for grid consumption if you add the EV source separately, or EV charging will be counted twice
-- `sensor.house_electrical_meter_non_ev` is derived as whole-house energy minus `sensor.example_vehicle_energy_added`
+- `sensor.house_electrical_meter_non_ev` is derived as whole-house energy minus `sensor.<vehicle_slug>_energy_added`
 - this keeps the built-in Energy panel aligned with the EV tariff, but it still reflects battery-added EV energy rather than wall-side charging losses
 
 The built-in Energy panel preferences are not tracked in this repository, so the panel still needs to be updated manually in the Home Assistant UI after this config is deployed.

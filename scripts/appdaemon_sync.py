@@ -24,6 +24,11 @@ RSYNC_EXCLUDES = (
     "namespaces/",
     "web/",
     "drift_model_data.csv",
+    # Watchdog cooldown/state files - live-only, must never be pulled into the
+    # repo (stale) or pushed back out (clobbers the live cooldown).
+    ".last_host_reboot",
+    ".rtlsdr_watchdog_state.json",
+    ".rtlsdr_watchdog_state.json.tmp",
 )
 
 
@@ -228,7 +233,7 @@ def pull(root: Path, args: argparse.Namespace) -> int:
         cmd = build_rsync_command(
             remote_dir,
             local_dir,
-            delete=True,
+            delete=args.delete,
             dry_run=args.dry_run,
             itemize=not args.quiet or args.dry_run,
         )
@@ -319,6 +324,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pull the live add-on tree into repo/appdaemon and optionally stage it.",
     )
     pull_parser.add_argument("--dry-run", action="store_true")
+    pull_parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Delete repo files missing from the live AppDaemon add-on",
+    )
     pull_parser.add_argument("--stage", action="store_true")
     pull_parser.add_argument("--quiet", action="store_true")
     pull_parser.set_defaults(func=pull)

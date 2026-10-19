@@ -17,10 +17,47 @@
 - If fixed elsewhere, open a linked issue/PR and reference the source PR/comment.
 - Re-check unresolved Codex threads after merge.
 
+## Review guidelines
+- Skip `custom_components/**`. It is vendored third-party code refreshed from HACS, not authored here, so do not review it or leave comments on it.
+- If a PR touches only `custom_components/**`, say that it is a vendored-integration refresh and stop.
+- Spend review attention on our own config: `packages/`, `lovelace/`, `esphome/`, `appdaemon/`, `scripts/`, `tests/`, `docs/`, and `specs/`.
+
 ## Room Intent
 - Use `docs/room_intent.yaml` as the source of truth for room purpose, guest privacy, and room-sensitive automation behavior.
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
 - If convenience behavior conflicts with room intent, preserve privacy-first behavior.
+
+## Behavioral Specs
+- Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
+- Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
+- Use `specs/diffusers.allium` as the source of truth for scent/oil diffuser sleep/wake participation and oil-replacement reminders (owner-approved in PR #925).
+- Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
+- Always compare behavior changes against the relevant Allium spec, but do not update `.allium` definitions unless the owner explicitly approves that spec change.
+
+## E-Ink Displays
+- Use `docs/inky_displays.md` as the source of truth before changing e-ink payloads, renderer behavior, MQTT topics, Pi service deployment, display layouts, or display-triggering automations.
+- The owner-suite display is a Pimoroni Inky wHAT red/black/white `400x300` panel on a Raspberry Pi Zero W. It reports as `Red wHAT (SSD1683)` and must use `INKY_PANEL_TYPE=auto`; do not force the legacy `what` driver for this board.
+- Home Assistant owns desired state and publishes compact retained MQTT payloads. The Pi service owns rendering, duplicate suppression, local cache restore, and physical refresh.
+- Current owner-suite command topic is `home/inky/owner_suite/state`. Keep future health/status topics separate from desired-state topics.
+- E-ink updates are expensive whole-panel refreshes. Do not add `sensor.time`, minute-level clock ticks, animation, or cosmetic-only refresh triggers. The footer update time must reflect the payload publish time, not drive periodic redraws.
+- New display content should be distance-legible: high-contrast `400x300`, one large title, one subtitle, at most four rows, Material Design Icons names where possible, and no dense dashboard-style text.
+- Preserve color semantics: red means urgent/exception on the owner-suite board; yellow means emphasis/hospitality on the future office board.
+- Test renderer changes with `python3 -m pytest tests/test_inky_display_renderer.py tests/test_inky_display_service.py tests/test_inky_displays_package.py`. For physical changes, verify on the Pi Zero W and confirm the panel visibly changes, not just that `show()` returns.
+
+## Media / Music Assistant
+- Use `docs/music_assistant.md` as the source of truth before changing Music Assistant / Sonos playback, sync groups, bedtime/wake audio wiring, or Spotify URIs.
+- Never hardcode a `spotify--<instance>` provider-instance id; use bare `spotify:playlist:<id>` URIs and let MA route to the live instance (it changes on every MA re-onboard).
+- Always target the explicit MA room entities (`media_player.ma_bedroom`,
+  `media_player.ma_bathroom`, `media_player.ma_office`, `media_player.ma_den`,
+  and `media_player.ma_tiki_room`), not generated `*_sonos_2` or native
+  `*_sonos` entities. Keep their entity-registry names room-friendly for the UI,
+  HomeKit, and Siri; set group volume on individual member entities, never the
+  group entity.
+
+## RTL-SDR / Gas Meter Watchdog
+- Use `docs/rtlsdr_watchdog.md` as the source of truth before changing `appdaemon/apps/rtlsdr_watchdog.py`, its `apps.yaml` args, the rtlamr2mqtt add-on, or `rest_command.proxmox_shutdown`.
+- It ships with `dry_run: true`; only flip it to `false` in `apps.yaml` after watching real dry-run notifications for a while, per the doc's rollout section.
+- Test with `uv run --with pytest pytest tests/test_appdaemon_rtlsdr_watchdog.py`.
 
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.

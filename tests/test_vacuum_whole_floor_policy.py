@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -64,34 +66,163 @@ def _script_block(path: Path, script_id: str) -> str:
 def test_whole_floor_helper_starts_both_levels() -> None:
     helper_block = _script_block(VACUUM_PATH, "vacuum_main_and_upstairs_levels")
     main_level_block = _script_block(VACUUM_PATH, "vacuum_main_level_full_floor")
+    policy_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
+    vacuum_only_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_vacuum_only")
+    mop_after_vacuum_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+    mop_only_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_only")
     upstairs_block = _script_block(VACUUM_PATH, "vacuum_upstairs_full_floor")
 
     assert "action: script.vacuum_main_level_full_floor" in helper_block
     assert "action: script.vacuum_upstairs_full_floor" in helper_block
+    assert "force_mop:" in helper_block
     assert "MapSegmentationCapability/clean/set" not in helper_block
     assert '"iterations": 4' not in helper_block
 
-    assert "entity_id: vacuum.valetudo_mainlevel" in main_level_block
-    assert "action: vacuum.start" in main_level_block
-    assert "entity_id: vacuum.valetudo_upstairs_vacuum" in upstairs_block
-    assert "action: vacuum.start" in upstairs_block
+    # Main-level launcher is fire-and-forget (script.turn_on) so callers do not
+    # block for the whole run. Everything funnels through the SINGLE serialized
+    # entry (policy_clean) so different X40 child scripts never overlap on the
+    # device; a forced mop is expressed by marking a mop pending (a latch a
+    # concurrent non-forced call cannot clear), not a separate direct route.
+    assert "action: script.turn_on" in main_level_block
+    assert "entity_id: script.x40_ultra_main_level_policy_clean" in main_level_block
+    assert "input_boolean.x40_ultra_mop_pass_pending" in main_level_block
+    assert "script.turn_on\n        target:\n          entity_id: script.x40_ultra_main_level_mop_after_vacuum" not in main_level_block
+    assert "x40_ultra_force_mop_next" not in main_level_block
+    assert "x40_ultra_force_mop_next" not in policy_block
+
+    # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
+    # be forced to sweeping, then restored. The broken custom-cleaning service
+    # (which 500s while CleanGenius is active) must be gone, and the start is
+    # gated on the mode actually becoming sweeping so a not-due run cannot mop.
+    # It also publishes a run-scoped completion latch: reset off at the start and
+    # set on only on a real `completed` finish of THIS run, so the mop
+    # orchestrator never trusts an ambient (possibly stale) task_status.
+    assert "entity_id: vacuum.x40_ultra" in vacuum_only_block
+    assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
+    assert 'option: "sweeping"' in vacuum_only_block
+    assert 'state: "sweeping"' in vacuum_only_block
+    assert "action: vacuum.start" in vacuum_only_block
+    assert "action: script.x40_ultra_wait_until_docked" in vacuum_only_block
+    assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
+    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in vacuum_only_block
+    # Run-scoped completion latch: turned off first, then on only on a real
+    # `completed` finish (so the mop gate is tied to this run, not ambient state).
+    reset = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed"
+    )
+    completed_check = vacuum_only_block.index('state: "completed"', reset)
+    set_on = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed", completed_check
+    )
+    assert reset < completed_check < set_on
+
+    assert "action: script.x40_ultra_main_level_mop_after_vacuum" in policy_block
+    assert "action: script.x40_ultra_main_level_vacuum_only" in policy_block
+
+    # Mop-after-vacuum is a thin orchestrator: a full vacuum pass, then a
+    # dedicated mop-only pass. It delegates all device work, so it must not
+    # select a mode or start the robot itself, and the vacuum must precede the mop.
+    assert "action: script.x40_ultra_main_level_vacuum_only" in mop_after_vacuum_block
+    assert "action: script.x40_ultra_main_level_mop_only" in mop_after_vacuum_block
+    assert mop_after_vacuum_block.index(
+        "action: script.x40_ultra_main_level_vacuum_only"
+    ) < mop_after_vacuum_block.index("action: script.x40_ultra_main_level_mop_only")
+    assert "action: vacuum.start" not in mop_after_vacuum_block
+    assert 'option: "mopping_after_sweeping"' not in mop_after_vacuum_block
+
+    # Mop-only pass: a standalone `mopping` run (dry debris already vacuumed),
+    # CleanGenius restored, and the schedule updated only on a real `completed`
+    # task status so an arrival-triggered return-to-base (docked/idle without
+    # completion) can't clear the mop debt. The broken multi-value task_status
+    # triggers stay gone.
+    assert 'option: "mopping"' in mop_only_block
+    assert "action: script.x40_ultra_restore_cleangenius" in mop_only_block
+    assert "input_boolean.x40_ultra_mop_pass_pending" in mop_only_block
+    assert "input_datetime.x40_ultra_last_mopped_at" in mop_only_block
+    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in mop_only_block
+    assert "entity_id: sensor.x40_ultra_task_status" in mop_only_block
+    assert 'state: "completed"' in mop_only_block
+    assert 'to: "failed"' not in mop_only_block
+    # Robustness guards (codex P1/P2): only record a mop when the mode actually
+    # applied, the robot really started, and the run reached a real finish.
+    assert 'state: "mopping"' in mop_only_block
+    # Start confirmation uses wait_template (passes immediately if already
+    # cleaning) to avoid the wait_for_trigger already-true race.
+    assert "is_state('vacuum.x40_ultra', 'cleaning')" in mop_only_block
+    assert "action: script.x40_ultra_wait_until_docked" in mop_only_block
+
+    # CleanGenius is toggled off then restored via dedicated helper scripts.
+    prepare_block = _script_block(VACUUM_PATH, "x40_ultra_prepare_deterministic_cleaning")
+    restore_block = _script_block(VACUUM_PATH, "x40_ultra_restore_cleangenius")
+    assert "entity_id: select.x40_ultra_cleangenius" in prepare_block
+    assert 'option: "off"' in prepare_block
+    assert "select.x40_ultra_cleaning_mode" in prepare_block
+    assert "entity_id: select.x40_ultra_cleangenius" in restore_block
+    assert 'option: "deep_cleaning"' in restore_block
+
+    assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in upstairs_block
+    assert "payload: START" in upstairs_block
+
+
+def test_upstairs_vacuum_entity_is_not_required_for_ha_automation_control() -> None:
+    stale_entity_id = "vacuum.valetudo_upstairs_vacuum"
+
+    for path in (VACUUM_PATH, ZONE_PATH, ROOT / "packages" / "cleaning.yaml", ROOT / "packages" / "zigbee_zwave.yaml"):
+        assert stale_entity_id not in path.read_text(encoding="utf-8")
+
+    return_home_block = _automation_block(ZONE_PATH, "vacuum_return_home")
+    assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in return_home_block
+    assert "payload: HOME" in return_home_block
 
 
 def test_departure_transition_no_longer_embeds_weekday_room_rotation() -> None:
-    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
 
-    assert "script.house_transition" in block
+    assert "script.departure_integrity" in block
     assert "MapSegmentationCapability/clean/set" not in block
     assert '"iterations": 4' not in block
     assert "script.vacuum_main_and_upstairs_levels" not in block
+
+
+def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
+    config = VACUUM_PATH.read_text(encoding="utf-8")
+    block = _automation_block(VACUUM_PATH, "x40_ultra_maintenance_clean_after_four_home_days")
+
+    assert "x40_ultra_mop_pass_pending:" in config
+    assert "x40_ultra_last_mopped_at:" in config
+    assert "x40_ultra_home_since_at:" in config
+    assert "input_boolean.x40_ultra_mop_pass_pending" in config
+    assert "input_datetime.x40_ultra_last_mopped_at" in config
+    assert "entity_id: input_boolean.guest_mode" in block
+    assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
+    # Main level only: it must call the X40 main-level launcher, NOT the
+    # main+upstairs helper (which would run bedroom robots at 13:00 while home).
+    assert "action: script.vacuum_main_level_full_floor" in block
+    assert "vacuum_main_and_upstairs_levels" not in block
+    assert "vacuum_upstairs_full_floor" not in block
+    # Must NOT force a mop: forcing on the daily 13:00 trigger would mop every
+    # day after day four; the policy's 3-day timestamp decides instead.
+    assert "force_mop: true" not in block
+    # The four-day streak is measured from a persistent "home since" timestamp
+    # (start of the current streak), not a live state `for:` duration, so it
+    # counts real occupancy and survives HA restarts.
+    assert "for:\n          days: 4" not in block
+    assert "input_datetime.x40_ultra_home_since_at" in block
+    assert "4 * 24 * 60 * 60" in block
+
+    # home_since is recorded by its own automation on the away->home edge (with a
+    # startup seed), NOT the away edge, so a return does not pre-satisfy 4 days.
+    home_block = _automation_block(VACUUM_PATH, "x40_ultra_record_home_since")
+    assert f"entity_id: {PRESENCE_SENSOR}" in home_block
+    assert 'from: "off"' in home_block
+    assert 'to: "on"' in home_block
+    assert "input_datetime.x40_ultra_home_since_at" in home_block
 
 
 def test_away_automations_use_shared_whole_floor_helper() -> None:
     automation_locations = [
         (ZONE_PATH, "vacuum_leave_home"),
         (WORKDAY_PATH, "vacuum_while_working"),
-        (TRIPS_PATH, "vacuum_on_trip"),
-        (TRIPS_PATH, "vacuum_flying_home"),
         (CURLING_PATH, "leave_home_for_curling"),
     ]
 
@@ -100,3 +231,59 @@ def test_away_automations_use_shared_whole_floor_helper() -> None:
         assert "action: script.vacuum_main_and_upstairs_levels" in block
         assert "MapSegmentationCapability/clean/set" not in block
         assert '"iterations": 4' not in block
+
+    trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
+    assert "action: script.vacuum_main_and_upstairs_levels" in trip_wrapper
+    assert "force_mop:" in trip_wrapper
+
+    for automation_id in ("vacuum_on_trip", "vacuum_flying_home"):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "action: script.trip_vacuum_main_and_upstairs_levels" in block
+        assert "MapSegmentationCapability/clean/set" not in block
+        assert '"iterations": 4' not in block
+
+    flying_home_block = _automation_block(TRIPS_PATH, "vacuum_flying_home")
+    # Flying home forces a mop so we arrive to a mopped main floor. The forced
+    # mop is still fail-closed: trip_vacuum_main_and_upstairs_levels requires the
+    # Unattended pet policy before any cleaning starts.
+    assert "force_mop: true" in flying_home_block
+
+
+def test_x40_replaces_mainlevel_vacuum_in_shared_consumers() -> None:
+    stale_entity_id = "vacuum.valetudo_mainlevel"
+
+    for path in (VACUUM_PATH, ZONE_PATH, ROOT / "packages" / "cleaning.yaml"):
+        assert stale_entity_id not in path.read_text(encoding="utf-8")
+
+    return_home_block = _automation_block(ZONE_PATH, "vacuum_return_home")
+    assert "- vacuum.x40_ultra" in return_home_block
+    assert stale_entity_id not in return_home_block
+
+    cleaning_config = (ROOT / "packages" / "cleaning.yaml").read_text(encoding="utf-8")
+    assert "- vacuum.x40_ultra" in cleaning_config
+
+
+def test_cleangenius_restore_waits_retries_verifies_and_fails_loudly() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_restore_cleangenius")
+
+    # Runtime issue #960: the select briefly recovered as `off`, then became
+    # unavailable again while post-mop dock work started. The restore must wait
+    # for stable availability before calling the service.
+    availability_wait = block.index(
+        "states('select.x40_ultra_cleangenius') not in"
+    )
+    stability_delay = block.index("seconds: 2", availability_wait)
+    select_option = block.index("action: select.select_option", stability_delay)
+    assert availability_wait < stability_delay < select_option
+
+    # A service call reporting no exception is not proof of restoration. Verify
+    # the actual postcondition, retry only a bounded number of times, then make
+    # the trace and persistent notification clearly show terminal failure.
+    postcondition_wait = block.index(
+        "is_state('select.x40_ultra_cleangenius',", select_option
+    )
+    retry_limit = block.index("repeat.index >= 3", postcondition_wait)
+    terminal_check = block.index("persistent_notification.create", retry_limit)
+    assert select_option < postcondition_wait < retry_limit < terminal_check
+    assert "notification_id: x40_cleangenius_restore_failed" in block
+    assert "error: true" in block

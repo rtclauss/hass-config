@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+from tests.privacy_ids import HOME_CODE_LIST
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,10 +13,128 @@ ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
+WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
+OCTOPRINT_PATH = ROOT / "packages" / "octoprint.yaml"
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _automation_block(path: Path, automation_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line not in (f"    id: {automation_id}", f"  - id: {automation_id}"):
+            continue
+
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("  - "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find automation block {automation_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _top_level_mapping_block(path: Path, section_name: str, key_name: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    section_header = f"{section_name}:"
+    section_start = None
+
+    for index, line in enumerate(lines):
+        if line == section_header:
+            section_start = index
+            break
+
+    if section_start is None:
+        raise AssertionError(f"Could not find section {section_name!r} in {path.name}")
+
+    key_line = f"  {key_name}:"
+    start = None
+    for index in range(section_start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            break
+        if line == key_line:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find {section_name}.{key_name} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.startswith("  ") and not line.startswith("    ") and line.strip():
+            end = index
+            break
+        if line and not line.startswith(" "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _template_sensor_block(path: Path, unique_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    marker = f"        unique_id: {unique_id}"
+    start = None
+
+    for index, line in enumerate(lines):
+        if line != marker:
+            continue
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("      - name: "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find template sensor {unique_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("      - name: "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _template_state_body(sensor_block: str) -> str:
+    lines = sensor_block.splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line == "        state: >":
+            start = index + 1
+            break
+
+    if start is None:
+        raise AssertionError("Template sensor block has no state template")
+
+    end = len(lines)
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if line.startswith("        ") and not line.startswith("          ") and line.strip():
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
 
 
 def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
@@ -41,6 +162,26 @@ def test_time_to_home_template_handles_unavailable_source_state() -> None:
     assert "'%02d:%02d:00' | format(hours, minutes)" in text
 
 
+def test_trip_templates_treat_private_region_as_home_destination() -> None:
+    text = _read(TRIPS_PATH)
+
+    double_quoted = ", ".join(f'"{code}"' for code in HOME_CODE_LIST)
+    single_quoted = ", ".join(f"'{code}'" for code in HOME_CODE_LIST)
+    assert f'"{HOME_CODE_LIST[5]}"' in text
+    assert f'destination_code not in ["", {double_quoted}]' in text
+    assert f"{{% set home_codes = [{single_quoted}] %}}" in text
+
+def test_trip_mode_manager_can_enable_trip_mode_when_departing_for_scheduled_travel() -> None:
+    block = _automation_block(TRIPS_PATH, "trip_mode_manager")
+
+    assert "id: depart_for_scheduled_trip" in block
+    assert "trigger.id != 'depart_for_scheduled_trip'" in block
+    assert "entity_id: binary_sensor.planned_work_trip_calendar" in block
+    assert "sensor.ecobee_calendar_vacation_schedule" in block
+    assert "scheduled_departure_lead_seconds = 6 * 3600" in block
+    assert "start_ts - scheduled_departure_lead_seconds" in block
+
+
 def test_bedroom_hour_of_day_remains_numeric() -> None:
     text = _read(ZIGBEE_ZWAVE_PATH)
 
@@ -60,6 +201,96 @@ def test_bird_templates_guard_missing_json_fields() -> None:
     assert "value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
 
 
+def test_garden_birds_sensor_is_excluded_from_influxdb() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    influx_block = text.split("influxdb:\n", 1)[1].split("\ncloud:", 1)[0]
+
+    assert "sensor.garden_birds" in influx_block
+
+
+def test_large_z2m_lifecycle_helper_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.z2m_lifecycle_issues" in recorder_block
+    assert "large selection maps as attributes" in recorder_block
+
+
+def test_raw_fr24_large_payload_feeds_are_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.flightradar24_additional_tracked" in recorder_block
+    assert "sensor.flightradar24_airport_arrivals" in recorder_block
+    assert "sensor.flightradar24_airport_departures" in recorder_block
+    assert "full flight lists in attributes" in recorder_block
+
+
+def test_raw_weatheralerts_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.weatheralerts_dakota_mnz070_mnc037" in recorder_block
+    assert "sensor.nws_alerts" not in recorder_block
+    assert "sensor.nws_dakota_county_alerts" not in recorder_block
+    assert "full alert descriptions and instructions" in recorder_block
+
+
+def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+    recorder_entities = {
+        line.strip().removeprefix("- ").strip()
+        for line in recorder_block.splitlines()
+        if line.strip().startswith("- ")
+    }
+
+    assert "sensor.top_50_bird_species" in recorder_entities
+    assert "sensor.top_50_bird_species_2" in recorder_entities
+    assert "full species list in attributes" in recorder_block
+
+
+def test_octoprint_duration_templates_tolerate_unknown_timestamps() -> None:
+    text = _read(OCTOPRINT_PATH)
+    elapsed_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_elapsed")
+    remaining_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_remaining")
+    elapsed_state = _template_state_body(elapsed_block).lower()
+    remaining_state = _template_state_body(remaining_block).lower()
+
+    assert "start_raw = states('sensor.octoprint_start_time')" in text
+    assert "finish_entity = 'sensor.octoprint_estimated_finish_time'" in text
+    assert "finish_raw = states(finish_entity)" in text
+    assert "as_timestamp(start_raw, default=none)" in text
+    assert "as_timestamp(finish_raw, default=none)" in text
+    assert "{{ has_value('sensor.octoprint_start_time') }}" in elapsed_block
+    assert "{{ has_value('sensor.octoprint_estimated_finish_time') }}" in remaining_block
+    assert "start is number" in text
+    assert "finish is number" in text
+    assert "unknown" not in elapsed_state
+    assert "unknown" not in remaining_state
+    assert "start_time: \"{{ states('sensor.octoprint_start_time') }}\"" in text
+    assert "start_time: \"{{ states('sensor.octoprint_estimated_finish_time') }}\"" in text
+
+
+def test_raw_f1_season_results_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+    recorder_entities = {
+        line.strip().removeprefix("- ").strip()
+        for line in recorder_block.splitlines()
+        if line.strip().startswith("- ")
+    }
+
+    assert "sensor.f1_season_results" in recorder_entities
+    assert "full race result payloads in attributes" in recorder_block
+
+
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     text = _read(UTILITIES_PATH)
 
@@ -68,6 +299,21 @@ def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     assert "states('sensor.garbage_pickup_date')" in text
     assert 'message: DO NOT put out bins tonight. Garbage day has changed!' in text
     assert "Put out bins tonight. Garbage tomorrow." in text
+
+
+def test_stale_entity_notification_only_exists_when_entities_are_present() -> None:
+    block = _automation_block(UTILITIES_PATH, "check_non_responding_entities")
+
+    assert "stale_threshold_hours: 12" in block
+    assert "stale_entities:" in block
+    assert "last_reported" in block
+    assert "item.attributes.device_class != 'connectivity'" in block
+    assert "persistent_notification.create" in block
+    assert "persistent_notification.dismiss" in block
+    assert "notification_id: stale-entities" in block
+    assert "stale_entities | trim != ''" in block
+    assert "have not reported in {{ stale_threshold_hours }} hours" in block
+    assert "have not updated in 24 hours" not in block
 
 
 def test_house_electrical_meter_never_emits_literal_unavailable() -> None:
@@ -116,9 +362,24 @@ def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
         1,
     )[0]
 
-    assert "initial_grace_period: 30" in block
+    assert "state_grace: 30" in block
+    assert "initial_grace_period" not in block
     assert "expected_state: 0" in block
     assert block.count("action: number.set_value") == 3
+    assert "count: 2" in block
+    assert block.count("seconds: 30") == 1
+
+
+def test_retry_actions_use_current_state_grace_schema() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH) + _read(WORKDAY_PATH)
+    office_block = _automation_block(
+        WORKDAY_PATH,
+        "turn_off_office_lamp_when_work_tp_camera_active",
+    )
+
+    assert "initial_grace_period" not in text
+    assert "state_grace: 5" in office_block
+    assert 'expected_state:\n            - "off"' in office_block
 
 
 def test_lights_off_except_only_targets_currently_on_lights() -> None:
@@ -131,3 +392,96 @@ def test_lights_off_except_only_targets_currently_on_lights() -> None:
 
     assert "selectattr('state', 'eq', 'on')" in block
     assert "rejectattr('state','in','off')" not in block
+
+
+def test_lights_off_except_skips_light_groups_that_contain_protected_members() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("lights_off_except:\n", 1)[1].split(
+        "\n########################\n# Sensor",
+        1,
+    )[0]
+
+    assert "protected_lights:" in block
+    assert "state_attr(light.entity_id, 'entity_id')" in block
+    assert "opaque_group_members" in block
+    assert "'light.outside_front_lights': [" in block
+    assert "'light.outside_front_door'" in block
+    assert "'light.deck_all': [" in block
+    assert "'light.deck_string'" in block
+    assert "light.entity_id in excluded or (members | select('in', excluded)" in block
+    assert "members | select('in', excluded)" in block
+    assert "rejectattr('entity_id', 'in', protected_lights)" in block
+
+
+def test_circadian_template_sensors_have_adaptive_lighting_fallbacks() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("name: circadian_brightness", 1)[1].split(
+        "\n########################\n# Zone",
+        1,
+    )[0]
+
+    assert "brightness_pct') | int(1)" in block
+    assert "color_temp_kelvin') | int(1000)" in block
+    assert "brightness_pct') |int" not in block
+    assert "color_temp_kelvin') }}\n" not in block
+
+
+def test_light_package_uses_kelvin_color_temperature_keys() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    assert "\n        color_temp:" not in text
+    assert "color_temp_kelvin: 2000" in text
+    assert "color_temp_kelvin: 2591" in text
+
+
+def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
+    block = _automation_block(ZIGBEE_ZWAVE_PATH, "reconfigure_z2m_and_vacuums_on_startup")
+
+    assert "entity_id: vacuum.valetudo_den" in block
+    assert "entity_id: vacuum.valetudo_upstairs_vacuum" not in block
+    assert "entity_id: vacuum.valetudo_mainlevel" not in block
+    assert block.count("condition: not") == 1
+    assert block.count("state: unavailable") == 1
+    assert "action: rest_command.reload_main_level_vacuum" not in block
+    assert "action: rest_command.reload_den_vacuum" in block
+    assert "action: rest_command.reload_upstairs_vacuum" in block
+    assert block.count("continue_on_error: true") == 2
+    assert block.count("mqtt_username: !secret mqtt_user") == 2
+    assert block.count("mqtt_password: !secret mqtt_password") == 2
+
+
+def test_valetudo_reload_commands_use_private_runtime_endpoints() -> None:
+    den = _top_level_mapping_block(ZIGBEE_ZWAVE_PATH, "rest_command", "reload_den_vacuum")
+    upstairs = _top_level_mapping_block(
+        ZIGBEE_ZWAVE_PATH,
+        "rest_command",
+        "reload_upstairs_vacuum",
+    )
+
+    assert "url: !secret private_den_vacuum_mqtt_url" in den
+    assert "payload: !secret private_den_vacuum_mqtt_payload" in den
+    assert "url: !secret private_upstairs_vacuum_mqtt_url" in upstairs
+    assert "payload: !secret private_upstairs_vacuum_mqtt_payload" in upstairs
+
+
+def test_valetudo_reload_payloads_match_current_mqtt_schema() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH)
+    examples = _read(ROOT / "travis_secrets.example.yaml")
+
+    assert "addICBINVMapProperty" not in text
+    assert "ConsumableMonitoringCapability" not in text
+    for name in ("den", "upstairs", "main_level"):
+        key = f"private_{name}_vacuum_mqtt_payload"
+        assert f"payload: !secret {key}" in text
+        example = next(
+            line.split(": ", 1)[1]
+            for line in examples.splitlines()
+            if line.startswith(f"{key}: ")
+        )
+        payload = json.loads(example.strip("'"))
+        credentials = payload["connection"]["authentication"]["credentials"]
+        assert credentials["username"] == "{{ mqtt_username }}"
+        assert credentials["password"] == "{{ mqtt_password }}"
+        assert "CarpetModeControlCapability" in payload["optionalExposedCapabilities"]
