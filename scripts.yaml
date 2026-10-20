@@ -13,8 +13,6 @@ leave_home_transition:
         optional_shutdown_targets:
           - action: media_player.turn_off
             entity_id: media_player.lg_webos_smart_tv
-          - action: switch.turn_off
-            entity_id: switch.christmas_tree
     - repeat:
         for_each: "{{ optional_shutdown_targets }}"
         sequence:
@@ -24,3 +22,5 @@ leave_home_transition:
             action: "{{ repeat.item.action }}"
             target:
               entity_id: "{{ repeat.item.entity_id }}"
+    - continue_on_error: true
+      action: script.turn_off_christmas_lights
