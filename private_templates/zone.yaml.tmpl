@@ -172,6 +172,17 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: goodnight_scene_seasonal_shutdown
+    alias: Goodnight scene seasonal shutdown
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: scene.goodnight
+    action:
+      - continue_on_error: true
+        action: script.turn_off_christmas_lights
+
   - id: @@PRIVATE:presence_person_slug@@_arrival_emitter
     alias: @@PRIVATE:presence_person_slug@@_arrival_emitter
     description: >-
@@ -911,8 +922,6 @@ scene:
       media_player.lg_webos_smart_tv:
         state: "off"
       light.deck_kitchen_door:
-        state: "off"
-      switch.christmas_tree:
         state: "off"
 
   - id: leave_home

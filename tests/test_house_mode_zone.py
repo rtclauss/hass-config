@@ -198,11 +198,21 @@ def test_leave_home_transition_guards_optional_targets() -> None:
 
     assert "entity_id: scene.leave_home" in script
     assert "media_player.lg_webos_smart_tv" in script
-    assert "switch.christmas_tree" in script
+    assert "action: script.turn_off_christmas_lights" in script
     assert "has_value(repeat.item.entity_id)" in script
     assert 'action: "{{ repeat.item.action }}"' in script
     assert "media_player.lg_webos_smart_tv" not in scene
     assert "switch.christmas_tree" not in scene
+
+
+def test_goodnight_scene_shutdown_keeps_seasonal_target_optional() -> None:
+    scene = _scene_block("goodnight")
+    zone = ZONE_PATH.read_text(encoding="utf-8")
+
+    assert "switch.christmas_tree" not in scene
+    assert "id: goodnight_scene_seasonal_shutdown" in zone
+    assert "entity_id: scene.goodnight" in zone
+    assert "action: script.turn_off_christmas_lights" in zone
 
 
 def test_departure_gates_on_bayesian_empty_house_not_derived_tracker() -> None:
