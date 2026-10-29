@@ -739,3 +739,124 @@ def test_sync_github_issues_closes_resolved_spec(
     weed.sync_github_issues([spec], [], "owner/repo", "tok")
 
     assert ("PATCH", "/repos/owner/repo/issues/7") in calls
+
+
+MISSING_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _git(repo: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=repo,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def _two_commit_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / "specs").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    (repo / "specs" / "demo.allium").write_text("-- allium: 3\n", encoding="utf-8")
+    (repo / "specs" / "config.json").write_text(
+        json.dumps({"protected_scopes": [], "classified_gaps": []}), encoding="utf-8"
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "notes.txt").write_text("change\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "change")
+    return repo
+
+
+def _run_main_in_repo(
+    monkeypatch: pytest.MonkeyPatch, repo: Path, *extra: str
+) -> tuple[int, str]:
+    monkeypatch.setattr(weed, "ROOT", repo)
+    monkeypatch.setattr(weed, "run_allium_check", lambda specs, require_allium=False: ([], []))
+    output = repo / "report.md"
+    code = weed.main(
+        [
+            "specs",
+            "--config",
+            str(repo / "specs" / "config.json"),
+            "--format",
+            "markdown",
+            "--output",
+            str(output),
+            *extra,
+        ]
+    )
+    return code, output.read_text(encoding="utf-8")
+
+
+def test_missing_push_base_falls_back_after_history_rewrite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = _two_commit_repo(tmp_path)
+
+    code, report = _run_main_in_repo(
+        monkeypatch, repo, "--changed-from", MISSING_SHA, "--fallback-changed-from", "HEAD^"
+    )
+
+    assert code == 0
+    assert "allium.drift.changedFilesUnavailable" not in report
+    assert "fallback base 'HEAD^'" in report
+
+
+def test_missing_push_base_without_fallback_stays_fail_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = _two_commit_repo(tmp_path)
+
+    code, report = _run_main_in_repo(monkeypatch, repo, "--changed-from", MISSING_SHA)
+
+    assert code == 1
+    assert "allium.drift.changedFilesUnavailable" in report
+
+
+def test_missing_push_base_with_unusable_fallback_stays_fail_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = _two_commit_repo(tmp_path)
+
+    code, report = _run_main_in_repo(
+        monkeypatch, repo, "--changed-from", MISSING_SHA, "--fallback-changed-from", MISSING_SHA[::-1]
+    )
+
+    assert code == 1
+    assert "allium.drift.changedFilesUnavailable" in report
+
+
+def test_existing_push_base_ignores_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = _two_commit_repo(tmp_path)
+    monkeypatch.setattr(weed, "ROOT", repo)
+
+    assert weed.resolve_changed_from("HEAD^", "HEAD") == ("HEAD^", [])
+
+
+def test_sync_github_issues_closes_repo_level_issue_once_drift_base_is_checked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = tmp_path / "specs" / "good.allium"
+    spec.parent.mkdir()
+    spec.write_text("-- allium: 3\n", encoding="utf-8")
+    monkeypatch.setattr(weed, "ROOT", tmp_path)
+    calls: list[tuple[str, str]] = []
+
+    def fake_api(method: str, path: str, token: str, payload=None):
+        calls.append((method, path))
+        if method == "GET":
+            return [{"number": 9, "title": "Allium weed: ."}]
+        return {}
+
+    monkeypatch.setattr(weed, "_github_api", fake_api)
+
+    weed.sync_github_issues([spec], [], "owner/repo", "tok")
+    assert ("PATCH", "/repos/owner/repo/issues/9") not in calls
+
+    weed.sync_github_issues([spec], [], "owner/repo", "tok", drift_base_checked=True)
+    assert ("PATCH", "/repos/owner/repo/issues/9") in calls

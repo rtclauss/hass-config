@@ -35,6 +35,14 @@ def test_esphome_build_checks_all_configs_when_push_history_was_rewritten() -> N
     assert 'diff_output=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")' in workflow_text
 
 
+def test_allium_weed_check_falls_back_when_push_history_was_rewritten() -> None:
+    workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
+    allium_section = workflow_text.split("allium-weed:", maxsplit=1)[1].split("yaml-lint:", maxsplit=1)[0]
+
+    assert 'args+=(--changed-from "$BEFORE_SHA" --fallback-changed-from "HEAD^")' in allium_section
+    assert "fetch-depth: 0" in allium_section
+
+
 def test_home_assistant_config_check_does_not_depend_on_esphome_build() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
     ha_section = workflow_text.split("home-assistant-check-config:", maxsplit=1)[1]
