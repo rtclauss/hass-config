@@ -191,6 +191,17 @@ def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
     assert "input_boolean.trip_guest_visit_active" in lights_off
 
 
+def test_vacation_lights_on_targets_the_selected_scene() -> None:
+    block = _automation_block(TRIPS_PATH, "vacation_lights_on")
+
+    expected_entity = (
+        'entity_id: scene.vacation_group_{{ '
+        'states("input_number.random_vacation_light_group")|int }}'
+    )
+    assert "action: scene.turn_on\n        target:\n          " + expected_entity in block
+    assert "data:\n          target: scene.vacation_group_" not in block
+
+
 def test_relock_reconciles_on_homeassistant_start() -> None:
     lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
 
