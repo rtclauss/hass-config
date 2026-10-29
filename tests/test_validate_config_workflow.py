@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "validate-config.yml"
 
@@ -80,3 +82,18 @@ def test_allium_weed_check_runs_for_develop_validation() -> None:
     assert "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in allium_section
     assert 'args+=(--create-issues)' in allium_section
     assert '"push" || "$EVENT_NAME" == "schedule"' in allium_section
+
+
+def test_workflow_jobs_pin_runner_image_with_python_builds() -> None:
+    # ubuntu-latest moved to 26.04, which has no actions/python-versions build
+    # for the .python-version pin (3.14.3), so setup-python failed before any
+    # repo code ran (#1148). Every job must name an explicit runner image.
+    workflows_dir = WORKFLOW_PATH.parent
+    workflow_paths = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
+    assert workflow_paths
+
+    for path in workflow_paths:
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in workflow["jobs"].items():
+            runs_on = job.get("runs-on")
+            assert runs_on == "ubuntu-24.04", f"{path.name}:{job_name} runs-on is {runs_on!r}"
