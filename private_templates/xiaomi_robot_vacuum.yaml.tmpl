@@ -433,6 +433,13 @@ input_datetime:
     name: X40 Ultra Last Mopped At
     has_date: true
     has_time: true
+  # When a full-floor vacuum pass last genuinely completed (same rules as
+  # x40_ultra_vacuum_pass_completed). vacuum_flying_home_recover reads it to tell
+  # whether the pre-landing clean's vacuum pass actually finished.
+  x40_ultra_last_vacuumed_at:
+    name: X40 Ultra Last Vacuumed At
+    has_date: true
+    has_time: true
   # Persistent "house last became home" timestamp (start of the current home
   # streak). Used instead of a state `for: days: 4` duration (which resets on
   # every HA restart/reload) so the four-continuous-home-days maintenance clean
@@ -715,6 +722,10 @@ script:
     trace:
       stored_traces: 10
     sequence:
+      # When this pass began: a dock-all or arrival after this moment means the
+      # run was cut short, whatever task_status later says.
+      - variables:
+          run_started_ts: "{{ as_timestamp(now()) }}"
       # Reset the run-scoped completion latch: only this pass reaching a real
       # `completed` finish may set it on, so a failed/no-op run leaves it off.
       - action: input_boolean.turn_off
@@ -802,6 +813,15 @@ script:
                 target:
                   entity_id: input_boolean.x40_ultra_active_run_owned
               - action: script.x40_ultra_wait_until_docked
+              # task_status lags the dock by a few seconds: on 2026-10-26 the dock
+              # was seen at 17:29:21Z while task_status still read `cleaning`, and it
+              # only flipped to `completed` at 17:29:24Z, so a finished pass was
+              # treated as unfinished. wait_template passes at once if it is already
+              # `completed`; a run that was docked early never reaches it.
+              - wait_template: "{{ is_state('sensor.x40_ultra_task_status', 'completed') }}"
+                timeout:
+                  minutes: 2
+                continue_on_timeout: true
               # Mark THIS run complete only on a real `completed` task status,
               # checked while CleanGenius is still off (before the restore). An
               # arrival-triggered return-to-base docks WITHOUT `completed`, so the
@@ -810,10 +830,22 @@ script:
                   - condition: state
                     entity_id: sensor.x40_ultra_task_status
                     state: "completed"
+                  # An arrival (vacuum_return_home) or dock-all during this run
+                  # can still end on `completed`; never credit such a run.
+                  - alias: "Not docked early by an arrival or dock-all during this run"
+                    condition: template
+                    value_template: >-
+                      {{ as_timestamp(state_attr('automation.vacuum_return_home', 'last_triggered'), default=0) | float(0) < run_started_ts | float(0)
+                         and as_timestamp(state_attr('script.vacuum_dock_all_robots', 'last_triggered'), default=0) | float(0) < run_started_ts | float(0) }}
                 then:
                   - action: input_boolean.turn_on
                     target:
                       entity_id: input_boolean.x40_ultra_vacuum_pass_completed
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.x40_ultra_last_vacuumed_at
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
         else:
           - action: notify.all
             data:
@@ -990,6 +1022,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
+      # When this pass began: see the identical step in x40_ultra_main_level_vacuum_only.
+      - variables:
+          run_started_ts: "{{ as_timestamp(now()) }}"
       # Reset the run-scoped completion latch FIRST, unconditionally, before
       # the bare policy condition below: that condition STOPS the script
       # outright when it fails (e.g. the policy changed away from Unattended
@@ -1091,6 +1126,15 @@ script:
                 target:
                   entity_id: input_boolean.x40_ultra_active_run_owned
               - action: script.x40_ultra_wait_until_docked
+              # task_status lags the dock by a few seconds: on 2026-10-26 the dock
+              # was seen at 17:29:21Z while task_status still read `cleaning`, and it
+              # only flipped to `completed` at 17:29:24Z, so a finished pass was
+              # treated as unfinished. wait_template passes at once if it is already
+              # `completed`; a run that was docked early never reaches it.
+              - wait_template: "{{ is_state('sensor.x40_ultra_task_status', 'completed') }}"
+                timeout:
+                  minutes: 2
+                continue_on_timeout: true
               # Success requires a real `completed` task status, not just a dock
               # state. An arrival mid-run fires vacuum_return_home ->
               # vacuum.return_to_base, which parks the robot at docked/idle
@@ -1102,6 +1146,13 @@ script:
                   - condition: state
                     entity_id: sensor.x40_ultra_task_status
                     state: "completed"
+                  # An arrival (vacuum_return_home) or dock-all during this run
+                  # can still end on `completed`; never credit such a run.
+                  - alias: "Not docked early by an arrival or dock-all during this run"
+                    condition: template
+                    value_template: >-
+                      {{ as_timestamp(state_attr('automation.vacuum_return_home', 'last_triggered'), default=0) | float(0) < run_started_ts | float(0)
+                         and as_timestamp(state_attr('script.vacuum_dock_all_robots', 'last_triggered'), default=0) | float(0) < run_started_ts | float(0) }}
                 then:
                   - action: input_datetime.set_datetime
                     target:
@@ -1163,7 +1214,9 @@ script:
       lock helper (and its non-atomic check-then-set) is needed. kind=full_floor
       (the default) vacuums the main level and adds a mop when one is pending or
       the last mop is >= 3 days old; kind=segment runs one vacuum-only segment
-      via x40_ultra_segment_vacuum_only. The run is skipped entirely when the X40
+      via x40_ultra_segment_vacuum_only; kind=mop_only runs just the mop pass
+      (x40_ultra_main_level_mop_only) for a floor whose vacuum pass already
+      completed. The run is skipped entirely when the X40
       is already busy with an external (manual/app) run, so we never disable
       CleanGenius or change the mode on a robot we are not driving.
     mode: queued
@@ -1171,7 +1224,10 @@ script:
       stored_traces: 10
     fields:
       kind:
-        description: "full_floor (default) or segment."
+        description: >-
+          full_floor (default), segment, or mop_only. mop_only runs just the mop
+          pass and is only for callers that have confirmed a full vacuum pass of
+          the floor already completed (vacuum_flying_home_recover).
         example: full_floor
       segments:
         description: "For kind=segment: the X40 map segment id."
@@ -1255,24 +1311,28 @@ script:
               - "docked"
               - "idle"
         then:
-          - if:
-              - condition: template
-                value_template: "{{ (kind | default('full_floor')) == 'segment' }}"
-            then:
-              - action: script.x40_ultra_segment_vacuum_only
-                data:
-                  segments: "{{ segments | int }}"
-                  suction_level: "{{ suction_level | default(1) | int }}"
-                  repeats: "{{ repeats | default(1) | int }}"
-            else:
-              - choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ mop_due }}"
-                    sequence:
-                      - action: script.x40_ultra_main_level_mop_after_vacuum
-                default:
-                  - action: script.x40_ultra_main_level_vacuum_only
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ (kind | default('full_floor')) == 'segment' }}"
+                sequence:
+                  - action: script.x40_ultra_segment_vacuum_only
+                    data:
+                      segments: "{{ segments | int }}"
+                      suction_level: "{{ suction_level | default(1) | int }}"
+                      repeats: "{{ repeats | default(1) | int }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ (kind | default('full_floor')) == 'mop_only' }}"
+                sequence:
+                  - action: script.x40_ultra_main_level_mop_only
+              - conditions:
+                  - condition: template
+                    value_template: "{{ mop_due }}"
+                sequence:
+                  - action: script.x40_ultra_main_level_mop_after_vacuum
+            default:
+              - action: script.x40_ultra_main_level_vacuum_only
         else:
           - action: notify.all
             data:
