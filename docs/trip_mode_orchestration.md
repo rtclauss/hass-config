@@ -60,23 +60,49 @@ area presence signal and is idempotently controlled by `script.house_transition`
 
 ## Flying Home: Clean Finishes Before You Land
 
-`vacuum_flying_home` is anchored to the flight's **landing**, not takeoff:
-`start = landing - input_number.pre_arrival_clean_lead_minutes` (default 210).
+`vacuum_flying_home` is anchored to the flight's **landing**, not takeoff, and must be
+**finished** `input_number.pre_arrival_clean_buffer_minutes` (default 30) before it:
+`start = landing - input_number.pre_arrival_clean_lead_minutes` (default 240) and
+`sensor.pre_arrival_clean_finish_by = landing - buffer`.
 
 - `sensor.next_flight_home_arrival` is the `end_time` of the next not-yet-landed
   itinerary in `binary_sensor.flight_to_<private_home_airport_primary_code>_today` / `flight_to_<private_home_airport_secondary_code>_today` (those keep
   exposing the next flight in their attributes while off), so it is known days ahead.
 - `sensor.pre_arrival_clean_start` = arrival minus the lead. The automation uses a
   `time` trigger on that sensor, plus catch-up triggers when it changes and on HA start.
-- **Why 210 min:** a full vacuum+mop cycle measured 182-191 min (vacuum 81-87, mop 97-104)
-  on 2026-10-06..09, which is longer than a typical 2.5 h flight. Starting at takeoff
-  (the previous design) finished the 2026-10-09 clean 49 min after landing. The house is
-  empty for the whole trip, so starting before takeoff is fine.
-- **Late start** (itinerary added late, HA restart, schedule change): with at least
-  195 min left it still runs the full cycle; with at least 100 min left it runs
-  **vacuum-only** (`allow_mop: false`); with less it only notifies. It launches once per
-  landing (`input_datetime.pre_arrival_clean_done_for`, tolerant of a delay that moves the
-  landing by under 6 h).
+- **Why 240 min:** 90 days of recorder history (2026-08-01..10-29) for all three robots.
+  The X40 is the critical path: its two-pass vacuum+mop cycle measured 175-191 min
+  (vacuum 78-90, mop 97-104; one cloud dropout stretched a vacuum pass to 109). The
+  upstairs (<=72 min) and den (<=30 min) robots run in parallel and finish well inside it.
+  240 = worst cycle 191 + the 30 min buffer + ~19 min margin. It is a fixed, reviewed
+  number rather than one recomputed live: `vacuum.*` is excluded from the recorder, so
+  durations must be reconstructed from status sensors, where back-to-back jobs (the
+  13:00 litter pass), stacked queues and cloud dropouts blur the boundaries; a live
+  estimator would absorb those errors silently. Re-measure and change the helper instead.
+  Starting at takeoff (the original design) finished the 2026-10-09 clean 49 min after
+  landing. The house is empty for the whole trip, so starting before takeoff is fine.
+- **Late start** (itinerary added late, HA restart, schedule change): time left is
+  measured to the finish-by deadline. With at least 195 min left it still runs the full
+  cycle; with at least 100 min left it runs **vacuum-only** (`allow_mop: false`); with
+  less it only notifies. Queued requests expire at the finish-by deadline. It launches
+  once per landing (`input_datetime.pre_arrival_clean_done_for`, tolerant of a delay that
+  moves the landing by under 6 h).
+- **Upstairs and den are confirmed.** Their starts are fire-and-forget (an MQTT publish,
+  and a den start its own guards may veto), and on 2026-10-26 neither ran.
+  `script.pre_arrival_confirm_secondary_robots` gives each 3 min to show it is cleaning,
+  re-sends one start through the same guarded scripts, then notifies which robot did not
+  start and why (for example, den doors not confirmed closed).
+- **One recovery retry** (`vacuum_flying_home_recover`). On 2026-10-26 the X40 dropped off
+  the Dreame cloud mid-vacuum and its `task_status` reached `completed` 3 s after the dock
+  was seen, so the vacuum pass was not credited and the mop never ran. The X40 passes now
+  wait up to 2 min for `completed` (never crediting a run docked by an arrival or
+  dock-all) and record `input_datetime.x40_ultra_last_vacuumed_at`. When the dispatcher
+  goes idle, or after an HA restart (which docks every robot), the recover automation
+  checks what finished since the clean started: no vacuum -> full cycle or vacuum-only,
+  whichever still fits before the finish-by deadline; vacuumed but the owed mop missing ->
+  a mop-only pass (`kind: mop_only` on the dispatcher) if at least 110 min remain;
+  otherwise it notifies what is missing. Once per landing
+  (`input_datetime.pre_arrival_clean_retry_for`).
 - **Nothing else stacks on the queue that day:** `binary_sensor.pre_arrival_clean_day`
   makes `vacuum_on_trip` (13:00) and the daily laundry-room litter pass
   (`vacuum_laundry_room_daily_litter`) skip. Both are `not on` checks, so an unavailable
@@ -92,7 +118,9 @@ area presence signal and is idempotently controlled by `script.house_transition`
   the dispatcher, because stopping it mid-run would skip the CleanGenius restore.
 
 Tune the lead with `input_number.pre_arrival_clean_lead_minutes` if the measured cycle time
-changes (for example a larger floor plan or a different mop mode).
+changes (for example a larger floor plan or a different mop mode), keeping
+`lead - buffer >= 195` so the scheduled start still gets the full cycle. Change how early
+it must be finished with `input_number.pre_arrival_clean_buffer_minutes`.
 
 ## Guest Cat Check (Front Door)
 

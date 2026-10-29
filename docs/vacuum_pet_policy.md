@@ -56,6 +56,13 @@ presence on an away-only request, drops it. `allow_mop: false` forces a vacuum-o
 pass. The flying-home clean uses these to finish before landing and never start
 after you are home (see `docs/trip_mode_orchestration.md`).
 
+A pass is credited (`x40_ultra_vacuum_pass_completed`, `x40_ultra_last_vacuumed_at`,
+`x40_ultra_last_mopped_at`) only when `task_status` reaches `completed` after the dock.
+The passes wait up to 2 min for it, because it can lag the dock by seconds (2026-10-26),
+and never credit a run during which `vacuum_return_home` or `vacuum_dock_all_robots`
+fired. `kind: mop_only` on the dispatcher runs just the mop pass; it is only for a caller
+that has confirmed the floor's vacuum pass already completed.
+
 Dashboard controls, approval-gated unattended runs, area mapping, and a quiet
 one-area supervised launcher remain follow-up work because they require validated
 live mappings and native Home Assistant UI/API changes; do not edit `.storage`
