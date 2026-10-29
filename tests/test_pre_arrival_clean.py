@@ -449,6 +449,15 @@ def test_recover_only_retries_once_for_a_launched_landing_while_away() -> None:
     assert actions.index("input_datetime.pre_arrival_clean_retry_for") < actions.index("choose:")
 
 
+def test_recover_completion_window_is_anchored_to_the_launched_landing() -> None:
+    variables = next(a["variables"] for a in _recover()["action"] if "variables" in a)
+
+    # A delay announced mid-clean moves next_flight_home_arrival; the window must not
+    # move with it, or a finished vacuum+mop looks missing and runs again.
+    assert "input_datetime.pre_arrival_clean_done_for" in variables["launched_for_ts"]
+    assert variables["since_ts"].startswith("{{ launched_for_ts -")
+
+
 def _plan(**values) -> str:
     variables = next(a["variables"] for a in _recover()["action"] if "variables" in a)
     env = jinja2.Environment()

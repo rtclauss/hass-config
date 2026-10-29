@@ -1257,9 +1257,12 @@ automation:
           finish_ts: "{{ arrival_ts - buffer_min * 60 }}"
           finish_iso: "{{ ((arrival_ts - buffer_min * 60) | as_datetime | as_local).isoformat() }}"
           finish_label: "{{ (finish_ts | as_datetime | as_local).strftime('%-I:%M %p') }}"
-          # Work finished since this clean could have started (lead + 1 h slack for a
-          # delayed flight) counts; anything older is a previous day's run.
-          since_ts: "{{ arrival_ts - (lead_min + 60) * 60 }}"
+          # Work finished since this clean could have started counts; anything older is
+          # a previous day's run. Anchored to the landing recorded AT LAUNCH
+          # (pre_arrival_clean_done_for), not the live arrival: a delay announced
+          # mid-clean must not push the window past work that already finished.
+          launched_for_ts: "{{ as_timestamp(states('input_datetime.pre_arrival_clean_done_for'), default=0) | float(0) }}"
+          since_ts: "{{ launched_for_ts - (lead_min + 60) * 60 }}"
           vacuum_done: >-
             {{ as_timestamp(states('input_datetime.x40_ultra_last_vacuumed_at'), default=0) | float(0) >= since_ts }}
           mop_done: >-
