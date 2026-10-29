@@ -99,7 +99,9 @@ jobs:
             git fetch --no-tags origin "$BASE_REF"
             args+=(--changed-from "origin/$BASE_REF")
           elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-            args+=(--changed-from "$BEFORE_SHA")
+            # A history rewrite can remove the previous push tip entirely; diff the
+            # pushed commit against its first parent instead of failing the gate.
+            args+=(--changed-from "$BEFORE_SHA" --fallback-changed-from "HEAD^")
           fi
           if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "schedule" ]]; then
             args+=(--create-issues)

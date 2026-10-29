@@ -257,6 +257,39 @@ def load_config(path: Path) -> tuple[list[ProtectedScope], list[dict[str, Any]]]
     return scopes, list(data.get("classified_gaps", []))
 
 
+def git_commit_exists(ref: str) -> bool:
+    """Return True when ``ref`` resolves to a commit object in the local repository."""
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def resolve_changed_from(changed_from: str, fallback: str | None) -> tuple[str, list[str]]:
+    """Pick the base ref for drift gating.
+
+    A history rewrite (force push) can delete the previous push tip that GitHub
+    reports as ``github.event.before``. When the requested base is not a commit
+    in this clone and a fallback is configured, diff against the fallback instead
+    of failing the whole gate. Without a usable fallback the original base is
+    returned unchanged so the gate stays fail-closed.
+    """
+    if not fallback or git_commit_exists(changed_from):
+        return changed_from, []
+    if not git_commit_exists(fallback):
+        return changed_from, []
+    note = (
+        f"Drift base {changed_from!r} is not available in this clone (history was likely rewritten); "
+        f"computed changed files from fallback base {fallback!r} instead."
+    )
+    return fallback, [note]
+
+
 def git_changed_files(changed_from: str) -> list[str]:
     candidates = [
         ["git", "diff", "--name-only", f"{changed_from}...HEAD"],
@@ -578,11 +611,17 @@ def sync_github_issues(
     diagnostics: list[Diagnostic],
     repo: str,
     token: str,
+    drift_base_checked: bool = False,
 ) -> None:
     """Create or update one GitHub issue per failing spec; close issues for specs that now pass.
 
     Only diagnostic errors are tracked — drift findings are ephemeral (PR-specific) and
     are surfaced via the step summary rather than persistent issues.
+
+    Repository-level errors (``file="."``, e.g. an uncomputable drift base) are filed
+    as ``Allium weed: .``. That issue is only auto-closed when ``drift_base_checked``
+    is true, i.e. this run actually computed changed files successfully; runs that
+    skip drift gating (scheduled scans) must not close it.
     """
     _ensure_allium_weed_label(repo, token)
 
@@ -595,6 +634,8 @@ def sync_github_issues(
             )
 
     all_spec_keys = {repo_path(spec) for spec in specs}
+    if drift_base_checked:
+        all_spec_keys.add(".")
 
     for spec_key, rows in errors_by_spec.items():
         title = f"Allium weed: {spec_key}"
@@ -635,6 +676,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("paths", nargs="*", help="Allium files or directories to validate. Defaults to specs/.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Protected scope config JSON.")
     parser.add_argument("--changed-from", help="Git ref/SHA used to compute changed files for drift gating.")
+    parser.add_argument(
+        "--fallback-changed-from",
+        help=(
+            "Git ref used instead of --changed-from when that base is not a commit in this clone "
+            "(e.g. a push base removed by a history rewrite). Errors still fail closed when the "
+            "fallback is also unavailable or the diff cannot be computed."
+        ),
+    )
     parser.add_argument("--format", choices=("terminal", "markdown"), default="terminal")
     parser.add_argument("--output", help="Write the report to this file instead of stdout.")
     parser.add_argument(
@@ -661,11 +710,14 @@ def main(argv: list[str] | None = None) -> int:
     diagnostics, notes = run_allium_check(specs, require_allium=args.require_allium)
     scopes, classified_gaps = load_config(Path(args.config))
     drift_findings: list[DriftFinding] = []
+    drift_base_checked = False
 
     if args.changed_from:
+        changed_from, base_notes = resolve_changed_from(args.changed_from, args.fallback_changed_from)
+        notes.extend(base_notes)
         try:
-            changed_files = git_changed_files(args.changed_from)
-            changed_line_map = git_changed_line_map(args.changed_from)
+            changed_files = git_changed_files(changed_from)
+            changed_line_map = git_changed_line_map(changed_from)
         except RuntimeError as exc:
             diagnostics.append(
                 Diagnostic(
@@ -676,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         else:
+            drift_base_checked = True
             drift_findings = detect_drift_risks(
                 changed_files,
                 scopes,
@@ -702,7 +755,13 @@ def main(argv: list[str] | None = None) -> int:
         gh_repo = os.environ.get("GITHUB_REPOSITORY")
         if gh_token and gh_repo:
             try:
-                sync_github_issues(specs, diagnostics, gh_repo, gh_token)
+                sync_github_issues(
+                    specs,
+                    diagnostics,
+                    gh_repo,
+                    gh_token,
+                    drift_base_checked=drift_base_checked,
+                )
             except Exception as exc:  # noqa: BLE001
                 print(f"Warning: failed to sync GitHub issues: {exc}", file=sys.stderr)
         else:
