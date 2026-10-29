@@ -2019,8 +2019,11 @@ script:
       vetoed by its own guards, so neither reports a failure; on 2026-10-26 neither
       robot ran during the pre-landing clean. Give each robot 3 min to show it is
       cleaning, re-send a start once (through the same guarded scripts), then
-      notify which robot did not start and why. Both finish well inside the X40
-      cycle (upstairs <=72 min, den <=30 min), so a late start still lands in time.
+      notify which robot did not start and why. The upstairs robot is tracked on
+      its Valetudo MQTT status topic (the trusted channel; the upstairs HA vacuum
+      entity is unreliable, see vacuum_upstairs_segment_supervised); the den on
+      vacuum.valetudo_den. Both finish well inside the X40 cycle (upstairs <=72
+      min, den <=30 min), so a late start still lands in time.
     mode: single
     trace:
       stored_traces: 10
@@ -2042,9 +2045,25 @@ script:
         state: "on"
       - variables:
           started: ["cleaning", "returning", "paused"]
+      # The status topic is retained and replayed to a new subscription, so this
+      # sees the CURRENT status at once (verified via HA 2026-10-29).
+      - alias: "Upstairs robot already running (retained MQTT status)"
+        wait_for_trigger:
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: cleaning
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: returning
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: paused
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
       - if:
           - condition: template
-            value_template: "{{ states('vacuum.valetudo_upstairs_vacuum') not in started }}"
+            value_template: "{{ wait.trigger is none }}"
         then:
           - action: script.vacuum_upstairs_full_floor
             continue_on_error: true
@@ -2054,15 +2073,35 @@ script:
         then:
           - action: script.vacuum_den_pet_safe_start
             continue_on_error: true
-      - delay:
+      # Passes at once for a robot that was already running; otherwise gives the
+      # re-sent start up to 3 min.
+      - alias: "Upstairs robot running after the re-send"
+        wait_for_trigger:
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: cleaning
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: returning
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: paused
+        timeout:
           minutes: 3
+        continue_on_timeout: true
       - variables:
-          upstairs_state: "{{ states('vacuum.valetudo_upstairs_vacuum') }}"
+          upstairs_ok: "{{ wait.trigger is not none }}"
+      - alias: "Den robot running after the re-send"
+        wait_template: "{{ states('vacuum.valetudo_den') in started }}"
+        timeout:
+          minutes: 3
+        continue_on_timeout: true
+      - variables:
           den_state: "{{ states('vacuum.valetudo_den') }}"
           problems: >-
             {% set ns = namespace(items=[]) %}
-            {% if upstairs_state not in started %}
-              {% set ns.items = ns.items + ['upstairs robot did not start (it is ' ~ upstairs_state ~ ')'] %}
+            {% if not upstairs_ok %}
+              {% set ns.items = ns.items + ['upstairs robot did not report cleaning on its Valetudo status'] %}
             {% endif %}
             {% if den_state not in started %}
               {% set reason = 'the den doors are not confirmed closed'

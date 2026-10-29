@@ -90,7 +90,8 @@ area presence signal and is idempotently controlled by `script.house_transition`
 - **Upstairs and den are confirmed.** Their starts are fire-and-forget (an MQTT publish,
   and a den start its own guards may veto), and on 2026-10-26 neither ran.
   `script.pre_arrival_confirm_secondary_robots` gives each 3 min to show it is cleaning,
-  re-sends one start through the same guarded scripts, then notifies which robot did not
+  re-sends one start through the same guarded scripts (upstairs is tracked on its retained
+  Valetudo MQTT status topic, not the unreliable HA entity), then notifies which robot did not
   start and why (for example, den doors not confirmed closed).
 - **One recovery retry** (`vacuum_flying_home_recover`). On 2026-10-26 the X40 dropped off
   the Dreame cloud mid-vacuum and its `task_status` reached `completed` 3 s after the dock

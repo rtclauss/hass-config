@@ -510,7 +510,11 @@ def test_secondary_robots_are_confirmed_retried_once_and_reported() -> None:
     # One re-send each, through the same guarded start scripts.
     assert sequence.count("action: script.vacuum_upstairs_full_floor") == 1
     assert sequence.count("action: script.vacuum_den_pet_safe_start") == 1
-    assert "vacuum.valetudo_upstairs_vacuum" in sequence
+    # Upstairs is confirmed on the trusted Valetudo MQTT status topic, never the flaky
+    # upstairs HA vacuum entity; the den on its HA entity.
+    assert "vacuum.valetudo_upstairs_vacuum" not in sequence
+    assert sequence.count("topic: valetudo/upstairs-vacuum/StatusStateAttribute/status") == 6
+    assert "upstairs_ok: \"{{ wait.trigger is not none }}\"" in sequence
     assert "vacuum.valetudo_den" in sequence
     # Says why the den did not start when its doors are the reason.
     assert "binary_sensor.den_doors_contact" in sequence
