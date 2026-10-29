@@ -23,7 +23,7 @@ concurrency:
 jobs:
   pytest:
     name: Pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
 
   allium-weed:
     name: Allium Weed Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
@@ -109,7 +109,7 @@ jobs:
 
   yaml-lint:
     name: YAML Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,7 +144,7 @@ jobs:
 
   detect-esphome-changes:
     name: Detect ESPHome Config Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       esphome_changed: ${{ steps.detect.outputs.esphome_changed }}
       esphome_configs: ${{ steps.detect.outputs.esphome_configs }}
@@ -262,7 +262,7 @@ jobs:
 
   esphome-build:
     name: ESPHome Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ needs.detect-esphome-changes.outputs.esphome_changed == 'true' }}
     needs:
       - yaml-lint
@@ -342,7 +342,7 @@ jobs:
 
   home-assistant-check-config:
     name: Home Assistant Check Config
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: yaml-lint
     steps:
       - name: Checkout
