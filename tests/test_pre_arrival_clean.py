@@ -502,6 +502,11 @@ def test_secondary_robots_are_confirmed_retried_once_and_reported() -> None:
     sequence = _script_block(TRIPS_PATH, "pre_arrival_confirm_secondary_robots").split("    sequence:", 1)[1]
 
     assert sequence.index("input_select.vacuum_pet_policy") < sequence.index("delay:")
+    # An arrival during the delay docks these robots (vacuum_return_home); their start
+    # scripts don't check presence, so away is re-confirmed before any re-send.
+    away = sequence.index(f"entity_id: {PRESENCE_SENSOR}")
+    assert sequence.index("delay:") < away < sequence.index("action: script.vacuum_upstairs_full_floor")
+    assert away < sequence.index("action: script.vacuum_den_pet_safe_start")
     # One re-send each, through the same guarded start scripts.
     assert sequence.count("action: script.vacuum_upstairs_full_floor") == 1
     assert sequence.count("action: script.vacuum_den_pet_safe_start") == 1

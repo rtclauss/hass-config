@@ -1182,6 +1182,9 @@ automation:
       owed) -> a mop-only pass if it fits; otherwise notify what is missing. Once
       per landing (input_datetime.pre_arrival_clean_retry_for).
     mode: single
+    # A dispatcher-idle trigger during the 5 min boot delay is expected; the boot
+    # run re-checks the same state, so drop it quietly.
+    max_exceeded: silent
     trace:
       stored_traces: 10
     trigger:
@@ -2028,6 +2031,15 @@ script:
         state: "Unattended"
       - delay:
           minutes: 3
+      # Neither start script checks presence: if the owner arrived during the delay,
+      # vacuum_return_home has just docked these robots and a re-send would undo it.
+      - alias: "Owner still confirmed away before any re-send"
+        condition: state
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
       - variables:
           started: ["cleaning", "returning", "paused"]
       - if:
