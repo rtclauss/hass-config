@@ -272,7 +272,13 @@ sensor:
     unique_id: adsb_aircraft_raw
     resource: !secret private_adsb_aircraft_resource
     scan_interval: 15
-    value_template: "{{ value_json.now }}"
+    # Guard non-JSON / non-mapping responses (e.g. receiver outage error pages)
+    # so they render 'unknown' instead of a template error every poll (#1146).
+    # Consumers treat 'unknown' as ADS-B down and use the FR24 fallback.
+    value_template: >-
+      {% set payload = value_json if value_json is defined and value_json is mapping else {} %}
+      {% set now_ts = payload.get('now') %}
+      {{ now_ts if now_ts is not none else 'unknown' }}
     json_attributes:
       - aircraft
 
