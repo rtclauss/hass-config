@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
+
+import jinja2
+import yaml
 
 from tests.privacy_ids import HOME_CODE_LIST
 
@@ -444,12 +448,174 @@ def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
     assert "entity_id: vacuum.valetudo_mainlevel" not in block
     assert block.count("condition: not") == 1
     assert block.count("state: unavailable") == 1
-    assert "action: rest_command.reload_main_level_vacuum" not in block
-    assert "action: rest_command.reload_den_vacuum" in block
-    assert "action: rest_command.reload_upstairs_vacuum" in block
+    assert "reload_main_level_vacuum" not in block
+    assert "reload_command: reload_den_vacuum" in block
+    assert "reload_command: reload_upstairs_vacuum" in block
     assert block.count("continue_on_error: true") == 2
-    assert block.count("mqtt_username: !secret mqtt_user") == 2
-    assert block.count("mqtt_password: !secret mqtt_password") == 2
+
+
+class _SecretLoader(yaml.SafeLoader):
+    pass
+
+
+_SecretLoader.add_constructor(
+    "!secret", lambda loader, node: f"!secret {loader.construct_scalar(node)}"
+)
+
+
+def _zigbee_zwave_package() -> dict:
+    return yaml.load(_read(ZIGBEE_ZWAVE_PATH), Loader=_SecretLoader)
+
+
+def _valetudo_retry_script() -> dict:
+    return _zigbee_zwave_package()["script"]["reload_valetudo_mqtt_with_retry"]
+
+
+def _valetudo_retry_loop() -> dict:
+    sequence = _valetudo_retry_script()["sequence"]
+    return next(step["repeat"] for step in sequence if "repeat" in step)
+
+
+def _render(template: str, variables: dict) -> str:
+    return jinja2.Environment().from_string(template).render(**variables).strip()
+
+
+def _render_native(template: str, variables: dict) -> object:
+    """Render like HA script variables: literal results become native types."""
+    rendered = _render(template, variables)
+    try:
+        return ast.literal_eval(rendered)
+    except (ValueError, SyntaxError):
+        return rendered
+
+
+def _simulate_valetudo_retry(statuses: list[int]) -> dict:
+    """Walk the script's repeat loop with HA-like semantics.
+
+    Each status is the HTTP status the rest_command returns on that attempt;
+    0 means the call raised (API not ready), so response_variable is unset.
+    """
+    script = _valetudo_retry_script()
+    loop = _valetudo_retry_loop()
+    variables = {
+        "reload_command": "reload_upstairs_vacuum",
+        "robot_name": "upstairs vacuum",
+    }
+    for key, value in script["variables"].items():
+        variables[key] = _render_native(value, variables) if isinstance(value, str) else value
+    max_attempts = int(variables["max_attempts"])
+
+    calls = 0
+    delays = 0
+    index = 0
+    while True:
+        index += 1
+        variables["repeat"] = {"index": index}
+        for step in loop["sequence"]:
+            if "variables" in step and "reload_response" in step["variables"]:
+                variables["reload_response"] = dict(step["variables"]["reload_response"])
+            elif "action" in step:
+                status = statuses[calls] if calls < len(statuses) else 0
+                calls += 1
+                if status:
+                    variables["reload_response"] = {"status": status, "content": "OK"}
+            elif "variables" in step:
+                for key, value in step["variables"].items():
+                    variables[key] = _render_native(value, variables)
+            elif "if" in step:
+                condition = step["if"][0]["value_template"]
+                if _render(condition, variables) == "True":
+                    delays += 1
+        until = loop["until"][0]["value_template"]
+        if _render(until, variables) == "True":
+            break
+        assert index <= max_attempts, "retry loop is unbounded"
+
+    return {
+        "calls": calls,
+        "delays": delays,
+        "succeeded": variables["reload_ok"] is True,
+        "max_attempts": max_attempts,
+    }
+
+
+def test_valetudo_startup_hands_reloads_to_non_blocking_retry_script() -> None:
+    automation = next(
+        item
+        for item in _zigbee_zwave_package()["automation"]
+        if item["id"] == "reconfigure_z2m_and_vacuums_on_startup"
+    )
+    block = _automation_block(ZIGBEE_ZWAVE_PATH, "reconfigure_z2m_and_vacuums_on_startup")
+
+    # script.turn_on starts each robot's retry without waiting for it, so a
+    # slow robot API never delays the den reload or later startup steps.
+    assert "action: rest_command." not in block
+    assert "action: script.reload_valetudo_mqtt_with_retry" not in block
+    assert block.count("action: script.turn_on") == 2
+    assert block.count("entity_id: script.reload_valetudo_mqtt_with_retry") == 2
+    # Credentials are resolved inside the script so they never become
+    # script variables that land in traces.
+    assert "!secret" not in block
+    assert automation["action"][0] == {"delay": "00:01:00"}
+
+    script = _valetudo_retry_script()
+    assert script["mode"] == "parallel"
+    assert set(script["fields"]["reload_command"]["selector"]["select"]["options"]) == {
+        "reload_den_vacuum",
+        "reload_upstairs_vacuum",
+    }
+
+
+def test_valetudo_retry_loop_is_bounded_and_checks_api_response() -> None:
+    script = _valetudo_retry_script()
+    loop = _valetudo_retry_loop()
+    call = next(step for step in loop["sequence"] if "action" in step)
+
+    assert 1 < script["variables"]["max_attempts"] <= 60
+    assert 0 < script["variables"]["retry_delay_seconds"] <= 300
+    assert call["action"] == "rest_command.{{ reload_command }}"
+    assert call["response_variable"] == "reload_response"
+    assert call["continue_on_error"] is True
+    assert call["data"] == {
+        "mqtt_username": "!secret mqtt_user",
+        "mqtt_password": "!secret mqtt_password",
+    }
+    assert "repeat.index >= max_attempts" in loop["until"][0]["value_template"]
+    assert "reload_ok" in loop["until"][0]["value_template"]
+
+
+def test_valetudo_retry_stops_on_first_accepted_response() -> None:
+    result = _simulate_valetudo_retry([0, 0, 503, 200])
+
+    assert result["succeeded"]
+    assert result["calls"] == 4
+    assert result["delays"] == 3
+
+
+def test_valetudo_retry_succeeds_immediately_without_delay() -> None:
+    result = _simulate_valetudo_retry([200])
+
+    assert result == {**result, "succeeded": True, "calls": 1, "delays": 0}
+
+
+def test_valetudo_retry_gives_up_after_max_attempts_and_reports() -> None:
+    result = _simulate_valetudo_retry([])
+
+    assert not result["succeeded"]
+    assert result["calls"] == result["max_attempts"]
+    # No pointless wait after the final attempt.
+    assert result["delays"] == result["max_attempts"] - 1
+
+    outcome = _valetudo_retry_script()["sequence"][-1]
+    assert outcome["if"][0]["value_template"] == "{{ reload_ok }}"
+    assert outcome["then"][0]["action"] == "persistent_notification.dismiss"
+    failure = outcome["else"][0]
+    assert failure["action"] == "persistent_notification.create"
+    assert failure["data"]["notification_id"] == "{{ notification_id }}"
+    assert _render(
+        _valetudo_retry_script()["variables"]["notification_id"],
+        {"reload_command": "reload_upstairs_vacuum"},
+    ) == "valetudo-mqtt-reload-reload_upstairs_vacuum"
 
 
 def test_valetudo_reload_commands_use_private_runtime_endpoints() -> None:

@@ -1381,6 +1381,9 @@ automation:
     # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
     # Main-level Valetudo reload is intentionally skipped until its current
     # endpoint is verified; the old .local hostname does not resolve from HA.
+    # Each robot reload is handed to script.reload_valetudo_mqtt_with_retry via
+    # script.turn_on, so robots retry independently and in parallel and a slow
+    # robot API never blocks the other startup steps (issue #1100).
     trace:
       stored_traces: 10
     trigger:
@@ -1395,17 +1398,23 @@ automation:
                 entity_id: vacuum.valetudo_den
                 state: unavailable
         then:
-          - action: rest_command.reload_den_vacuum
+          - action: script.turn_on
+            target:
+              entity_id: script.reload_valetudo_mqtt_with_retry
             data:
-              mqtt_username: !secret mqtt_user
-              mqtt_password: !secret mqtt_password
+              variables:
+                reload_command: reload_den_vacuum
+                robot_name: den vacuum
             continue_on_error: true
       # The upstairs robot may be absent from HA discovery when its MQTT
       # configuration needs repair, so retry without checking its entity state.
-      - action: rest_command.reload_upstairs_vacuum
+      - action: script.turn_on
+        target:
+          entity_id: script.reload_valetudo_mqtt_with_retry
         data:
-          mqtt_username: !secret mqtt_user
-          mqtt_password: !secret mqtt_password
+          variables:
+            reload_command: reload_upstairs_vacuum
+            robot_name: upstairs vacuum
         continue_on_error: true
 
 ########################
@@ -1512,6 +1521,87 @@ scene: []
 # Scripts
 ########################
 script:
+  reload_valetudo_mqtt_with_retry:
+    alias: Reload Valetudo MQTT config with bounded retry
+    # Issue #1100: the Valetudo API is not always ready one minute after HA
+    # starts, and its readiness window varies. Instead of guessing a longer
+    # fixed delay, retry the PUT until the API accepts it (2xx response) or
+    # the attempt budget runs out, then leave a persistent notification.
+    icon: mdi:robot-vacuum
+    mode: parallel
+    max: 5
+    trace:
+      stored_traces: 10
+    fields:
+      reload_command:
+        description: rest_command name (without domain) that PUTs the robot's MQTT config.
+        example: reload_upstairs_vacuum
+        required: true
+        selector:
+          select:
+            options:
+              - reload_den_vacuum
+              - reload_upstairs_vacuum
+      robot_name:
+        description: Friendly robot label used in the failure notification.
+        example: upstairs vacuum
+        required: true
+        selector:
+          text:
+    variables:
+      max_attempts: 30
+      retry_delay_seconds: 60
+      notification_id: "valetudo-mqtt-reload-{{ reload_command }}"
+      reload_ok: false
+      last_status: none
+    sequence:
+      - repeat:
+          sequence:
+            # Reset before each call: a client error (API not ready) raises
+            # instead of returning a response, so the previous value must not
+            # leak into this attempt's success check.
+            - variables:
+                reload_response:
+                  status: 0
+            - action: "rest_command.{{ reload_command }}"
+              # Credentials stay as !secret here so they never pass through
+              # script variables or traces.
+              data:
+                mqtt_username: !secret mqtt_user
+                mqtt_password: !secret mqtt_password
+              response_variable: reload_response
+              continue_on_error: true
+            - variables:
+                last_status: "{{ reload_response.status | default(0) | int(0) }}"
+                reload_ok: "{{ last_status | int(0) >= 200 and last_status | int(0) < 300 }}"
+            - if:
+                - condition: template
+                  value_template: "{{ not reload_ok and repeat.index < max_attempts }}"
+              then:
+                - delay:
+                    seconds: "{{ retry_delay_seconds }}"
+          until:
+            - condition: template
+              value_template: "{{ reload_ok or repeat.index >= max_attempts }}"
+      - if:
+          - condition: template
+            value_template: "{{ reload_ok }}"
+        then:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: "{{ notification_id }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              title: Valetudo MQTT reload failed
+              message: >-
+                The {{ robot_name }} Valetudo API did not accept the MQTT
+                configuration after {{ max_attempts }} attempts
+                {{ retry_delay_seconds }}s apart following Home Assistant
+                startup (last HTTP status: {{ last_status if last_status | int(0) > 0 else 'none, request failed or was rejected' }}).
+                Check the robot and re-run `script.reload_valetudo_mqtt_with_retry`
+                or restart Home Assistant once it is reachable.
+              notification_id: "{{ notification_id }}"
   reset_z2m_bindings_and_groups:
     alias: Reset Zigbee Bindings & Groups (Zigbee2MQTT)
     mode: single
