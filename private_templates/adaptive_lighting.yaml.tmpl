@@ -6,9 +6,14 @@ automation:
       kitchen, laundry-room, den, basement, dining-room, owner-suite, and vanity
       tuning survives restarts while preserving each room's intended scene and task-lighting behavior.
       The runtime dining-room Adaptive Lighting switch now uses the current dining-room entity id.
+      The bed strip has its own switch so Adaptive Lighting itself holds it at
+      bed_strip_automatic_max_brightness_percent; a cap automation that re-sent
+      brightness was marked as a manual override and paused the whole owner suite.
     mode: single
     trace:
       stored_traces: 10
+    variables:
+      bed_strip_automatic_max_brightness_percent: 25
     trigger:
       - trigger: homeassistant
         event: start
@@ -75,6 +80,22 @@ automation:
           detect_non_ha_changes: false
       - action: adaptive_lighting.change_switch_settings
         data:
+          entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+          use_defaults: current
+          include_config_in_attributes: true
+          take_over_control: true
+          adapt_only_on_bare_turn_on: true
+          only_once: false
+          initial_transition: 2
+          sleep_transition: 2
+          transition: 5
+          min_brightness: "{{ bed_strip_automatic_max_brightness_percent }}"
+          max_brightness: "{{ bed_strip_automatic_max_brightness_percent }}"
+          sleep_brightness: 1
+          sleep_color_temp: 1000
+          detect_non_ha_changes: false
+      - action: adaptive_lighting.change_switch_settings
+        data:
           entity_id: switch.adaptive_lighting_owner_suite_vanity
           use_defaults: current
           include_config_in_attributes: true
@@ -111,41 +132,6 @@ automation:
       # "reconcile complete" seam for future automations that must run only
       # after all room settings are restored.
       - event: adaptive_lighting_startup_reconciled
-
-  - id: cap_automatic_bed_lightstrip_brightness
-    alias: cap_automatic_bed_lightstrip_brightness
-    description: >
-      Keep automatic bed-strip brightness changes at or below 25% without
-      constraining brightness changes made directly by a user. Change the
-      bed_strip_automatic_max_brightness_percent variable to retune the cap later.
-    mode: restart
-    trace:
-      stored_traces: 10
-    variables:
-      bed_strip_automatic_max_brightness_percent: 25
-    trigger:
-      - trigger: state
-        entity_id: light.bed_lightstrip
-        attribute: brightness
-    condition:
-      - condition: state
-        entity_id: light.bed_lightstrip
-        state: "on"
-      - condition: template
-        alias: "Bed strip is above the automatic brightness cap"
-        value_template: >-
-          {{ (state_attr('light.bed_lightstrip', 'brightness') | float(0) / 2.55)
-             > (bed_strip_automatic_max_brightness_percent | float(25)) + 0.25 }}
-      - condition: template
-        alias: "Allow direct user brightness changes to override the cap"
-        value_template: "{{ trigger.to_state.context.user_id is none }}"
-    action:
-      - action: light.turn_on
-        target:
-          entity_id: light.bed_lightstrip
-        data:
-          brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"
-          transition: 1
 
   - id: clear_hallway_adaptive_sleep_mode_when_house_sleep_ends
     alias: clear_hallway_adaptive_sleep_mode_when_house_sleep_ends
@@ -231,6 +217,7 @@ automation:
             - switch.adaptive_lighting_hallway
           arrival_owner_suite_adaptive_switches:
             - switch.adaptive_lighting_owner_suite
+            - switch.adaptive_lighting_owner_suite_bed_strip
       - variables:
           arrival_adaptive_switches: >-
             {{
@@ -320,6 +307,7 @@ automation:
         - switch.adaptive_lighting_hallway
         - switch.adaptive_lighting_kitchen
         - switch.adaptive_lighting_owner_suite
+        - switch.adaptive_lighting_owner_suite_bed_strip
         - switch.dining_room_adaptive_lighting_dining_room
         - switch.adaptive_control
       main_adaptive_switches: >-
@@ -578,6 +566,7 @@ switch:
       - switch.adaptive_lighting_hallway
       - switch.adaptive_lighting_kitchen
       - switch.adaptive_lighting_owner_suite
+      - switch.adaptive_lighting_owner_suite_bed_strip
       - switch.adaptive_lighting_owner_suite_vanity
       - switch.adaptive_lighting_laundry_room
       - switch.dining_room_adaptive_lighting_dining_room

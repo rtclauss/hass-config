@@ -71,7 +71,6 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         "entity_id: switch.adaptive_lighting_owner_suite",
         "manual_control: true",
         "manual_control: false",
-        "bed_strip_automatic_max_brightness_percent: 25",
         "transition: 2",
         "transition: 180",
         "seconds: 180",
@@ -80,10 +79,10 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         "position: \"{{ repeat.index * 2 }}\"",
         "switch.adaptive_lighting_adapt_brightness_owner_suite",
         "switch.adaptive_lighting_adapt_color_owner_suite",
-        'entity_id: light.bed_lightstrip',
-        "state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct')",
-        "[adaptive_target, bed_strip_automatic_max_brightness_percent | float]",
-        "state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin')",
+        "light.bed_lightstrip",
+        "entity_id: switch.adaptive_lighting_owner_suite_bed_strip",
+        "switch.adaptive_lighting_owner_suite_bed_strip_adapt_brightness",
+        "switch.adaptive_lighting_owner_suite_bed_strip_adapt_color",
     ):
         assert token in block
 
@@ -96,6 +95,10 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
     )[0]
     assert "light.owner_suite_lamps" in daytime_apply
     assert "light.bed_lightstrip" not in daytime_apply
+
+    # The owner suite switch never drives the bed strip; it has its own switch.
+    for owner_suite_call in block.split("entity_id: switch.adaptive_lighting_owner_suite\n")[1:]:
+        assert "light.bed_lightstrip" not in owner_suite_call.split("alias:", maxsplit=1)[0]
 
 
 def test_wake_up_script_uses_shared_owner_suite_morning_transition() -> None:
