@@ -695,6 +695,11 @@ automation:
                   - input_boolean.west_bed_occupied
                   - input_boolean.east_bed_occupied
                 state: "off"
+              # Per-side pads drop out when weight splits across the seam;
+              # stay occupied until the combined-pressure fusion agrees.
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
               - action: input_boolean.turn_off
                 data:
                   entity_id:
@@ -1432,14 +1437,25 @@ binary_sensor:
     device_class: opening
     upper: 0
 
+  # On above 35, off below 15. An empty bed (body pillow included) reads 0;
+  # a split-weight roll overnight never summed below ~23.
+  - platform: threshold
+    name: bed_presence_combined_occupied
+    unique_id: bed_presence_combined_occupied
+    entity_id: sensor.bed_presence_combined_pressure
+    device_class: occupancy
+    upper: 25
+    hysteresis: 10
+
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
     unique_id: bayesian_bed_occupancy
     prior: 0.40
     probability_threshold: 0.60
     observations:
-      # Bed either = ON (strong positive)
-      - entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+      # Combined left+right pressure = ON (strong positive). Used instead of
+      # bed_occupied_either, which misses a roll onto the middle seam.
+      - entity_id: binary_sensor.bed_presence_combined_occupied
         platform: "state"
         to_state: "on"
         prob_given_true: 0.97
@@ -2980,7 +2996,17 @@ rest_command:
 ########################
 # Sensor
 ########################
-sensor: []
+sensor:
+  # Rolling toward the middle splits weight across both pads so neither side
+  # crosses its own trigger; the sum still shows someone is in bed.
+  - platform: min_max
+    name: bed_presence_combined_pressure
+    unique_id: bed_presence_combined_pressure
+    type: sum
+    round_digits: 1
+    entity_ids:
+      - sensor.bed_presence_2d0670_left_pressure
+      - sensor.bed_presence_2d0670_right_pressure
 
 ########################
 # Template
