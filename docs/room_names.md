@@ -26,6 +26,7 @@ Rules:
 | `laundry_room` | `Laundry Room` | `Laundry Room` | `Laundry`, `Laundry Room` |
 | `kitchen` | `Kitchen` | `Kitchen` | `Kitchen` |
 | `hallway` | `Hallway` | `Hallway` | `Hall` |
+| `upstairs_hallway` | `Upstairs Hallway` | `Upstairs Hallway` | — |
 | `main_foyer` | `Main Foyer` | `Main Foyer` | `Main Foyer` |
 | `garage` | `Garage` | `Garage` | `Garage` |
 | `deck` | `Deck` | `Deck` | `Deck` |

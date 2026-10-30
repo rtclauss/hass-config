@@ -62,16 +62,10 @@ def _zigbee2mqtt_prefixes() -> set[str]:
     return prefixes
 
 
-def _vacuum_room_options() -> list[str]:
+def _vacuum_room_ids() -> list[str]:
     text = VACUUM_PATH.read_text(encoding="utf-8")
-    match = re.search(
-        r"^  vacuum_room:\n    name: .*\n    options:\n(?P<body>(?:      - .*\n)+)",
-        text,
-        re.MULTILINE,
-    )
-    if match is None:
-        raise AssertionError("Could not parse input_select.vacuum_room options")
-    return [line.removeprefix("      - ").strip() for line in match.group("body").splitlines()]
+    block = text.split("  vacuum_clean_room:\n", 1)[1].split("    variables:\n", 1)[1].split("      blocker:", 1)[0]
+    return re.findall(r"^        ([a-z_]+): ", block, re.MULTILINE)
 
 
 def test_room_name_registry_covers_room_intent_rooms() -> None:
@@ -100,25 +94,20 @@ def test_owner_suite_and_guest_room_tiles_use_preferred_names() -> None:
     assert "Guest Room" in guest_room_text
 
 
-def test_vacuum_room_picker_uses_registered_room_names() -> None:
-    options = _vacuum_room_options()
-    assert options == [
-        "Select Input",
-        "Master Bedroom",
-        "Guest Room",
-        "Living Room",
-        "Bathroom",
-        "Hallway",
-        "Kitchen",
-        "Office",
-    ]
-    assert [resolve_room_key(option) for option in options[1:]] == [
-        "owner_suite_bedroom",
-        "guest_room",
+def test_vacuum_room_launcher_uses_registered_room_names() -> None:
+    room_ids = _vacuum_room_ids()
+    assert len(room_ids) == 11
+    assert [resolve_room_key(room_id) for room_id in room_ids] == [
         "dining_room",
-        "bathroom",
+        "powder_room",
         "hallway",
         "kitchen",
+        "den",
+        "laundry_room",
+        "owner_suite_bedroom",
+        "guest_room",
+        "bathroom",
+        "upstairs_hallway",
         "office",
     ]
 

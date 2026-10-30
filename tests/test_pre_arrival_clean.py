@@ -438,7 +438,7 @@ def test_recover_only_retries_once_for_a_launched_landing_while_away() -> None:
     conditions = yaml.safe_dump(automation["condition"])
 
     for entity in ("input_boolean.trip", PRESENCE_SENSOR, "input_boolean.guest_mode",
-                   "input_boolean.trip_guest_visit_active", "input_select.vacuum_pet_policy"):
+                   "input_boolean.trip_guest_visit_active"):
         assert entity in conditions
     assert "input_datetime.pre_arrival_clean_done_for" in conditions
     assert "input_datetime.pre_arrival_clean_retry_for" in conditions
@@ -510,15 +510,15 @@ def test_recover_launches_match_the_plan_and_expire_at_the_deadline() -> None:
 def test_secondary_robots_are_confirmed_retried_once_and_reported() -> None:
     sequence = _script_block(TRIPS_PATH, "pre_arrival_confirm_secondary_robots").split("    sequence:", 1)[1]
 
-    assert sequence.index("input_select.vacuum_pet_policy") < sequence.index("delay:")
+    assert "input_select.vacuum_pet_policy" not in sequence
     # An arrival during the delay docks these robots (vacuum_return_home); their start
     # scripts don't check presence, so away is re-confirmed before any re-send.
     away = sequence.index(f"entity_id: {PRESENCE_SENSOR}")
     assert sequence.index("delay:") < away < sequence.index("action: script.vacuum_upstairs_full_floor")
-    assert away < sequence.index("action: script.vacuum_den_pet_safe_start")
+    assert away < sequence.index("action: script.vacuum_den_guarded_start")
     # One re-send each, through the same guarded start scripts.
     assert sequence.count("action: script.vacuum_upstairs_full_floor") == 1
-    assert sequence.count("action: script.vacuum_den_pet_safe_start") == 1
+    assert sequence.count("action: script.vacuum_den_guarded_start") == 1
     # Upstairs is confirmed on the trusted Valetudo MQTT status topic, never the flaky
     # upstairs HA vacuum entity; the den on its HA entity.
     assert "vacuum.valetudo_upstairs_vacuum" not in sequence

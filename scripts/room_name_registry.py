@@ -110,6 +110,12 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         legacy_labels=("Hall",),
     ),
     RoomNameSpec(
+        key="upstairs_hallway",
+        preferred_label="Upstairs Hallway",
+        home_assistant_area="Upstairs Hallway",
+        notes="Upstairs robot vacuum room; the plain Hallway area is the main-level hall.",
+    ),
+    RoomNameSpec(
         key="main_foyer",
         preferred_label="Main Foyer",
         home_assistant_area="Main Foyer",
