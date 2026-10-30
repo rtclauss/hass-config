@@ -769,8 +769,6 @@ script:
     mode: single
     trace:
       stored_traces: 50
-    variables:
-      bed_strip_automatic_max_brightness_percent: 25
     sequence:
       - alias: "Turn the diffusers back on for the day"
         continue_on_error: true
@@ -785,6 +783,9 @@ script:
             - switch.adaptive_lighting_owner_suite
             - switch.adaptive_lighting_adapt_brightness_owner_suite
             - switch.adaptive_lighting_adapt_color_owner_suite
+            - switch.adaptive_lighting_owner_suite_bed_strip
+            - switch.adaptive_lighting_owner_suite_bed_strip_adapt_brightness
+            - switch.adaptive_lighting_owner_suite_bed_strip_adapt_color
             - switch.sleep_mode
       - alias: "Clear any stale owner suite manual control before the wake ramp"
         continue_on_error: true
@@ -793,6 +794,13 @@ script:
           entity_id: switch.adaptive_lighting_owner_suite
           lights:
             - light.owner_suite_lamps
+          manual_control: false
+      - alias: "Clear any stale bed strip manual control before the wake ramp"
+        continue_on_error: true
+        action: adaptive_lighting.set_manual_control
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+          lights:
             - light.bed_lightstrip
           manual_control: false
       - alias: "Apply the owner suite adaptive sleep target"
@@ -802,6 +810,16 @@ script:
           entity_id: switch.adaptive_lighting_owner_suite
           lights:
             - light.owner_suite_lamps
+          adapt_brightness: true
+          adapt_color: true
+          turn_on_lights: true
+          transition: 2
+      - alias: "Apply the bed strip adaptive sleep target"
+        continue_on_error: true
+        action: adaptive_lighting.apply
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+          lights:
             - light.bed_lightstrip
           adapt_brightness: true
           adapt_color: true
@@ -829,6 +847,13 @@ script:
                   entity_id: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.owner_suite_lamps
+                  manual_control: true
+              - alias: "Lock bed strip manual control to protect the 3-minute wake ramp"
+                continue_on_error: true
+                action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+                  lights:
                     - light.bed_lightstrip
                   manual_control: true
               - alias: "Ramp the owner suite lights to the current adaptive daytime target"
@@ -848,21 +873,19 @@ script:
                   adapt_color: true
                   turn_on_lights: true
                   transition: 180
+              # The bed strip switch's max_brightness is the automatic cap, so
+              # its daytime target is already the lower of the room target and
+              # the cap.
               - alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"
                 continue_on_error: true
-                action: light.turn_on
-                target:
-                  entity_id: light.bed_lightstrip
+                action: adaptive_lighting.apply
                 data:
-                  brightness_pct: >-
-                    {% set adaptive_target =
-                      state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct')
-                      | float(bed_strip_automatic_max_brightness_percent) %}
-                    {{ [adaptive_target, bed_strip_automatic_max_brightness_percent | float]
-                       | min | round(0) | int }}
-                  color_temp_kelvin: >-
-                    {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin')
-                       | int(1000) }}
+                  entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+                  lights:
+                    - light.bed_lightstrip
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
                   transition: 180
               - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
                 delay:
@@ -875,6 +898,9 @@ script:
                     - switch.adaptive_lighting_owner_suite
                     - switch.adaptive_lighting_adapt_brightness_owner_suite
                     - switch.adaptive_lighting_adapt_color_owner_suite
+                    - switch.adaptive_lighting_owner_suite_bed_strip
+                    - switch.adaptive_lighting_owner_suite_bed_strip_adapt_brightness
+                    - switch.adaptive_lighting_owner_suite_bed_strip_adapt_color
               - alias: "Clear owner suite adaptive-lighting manual control after the wake ramp"
                 continue_on_error: true
                 action: adaptive_lighting.set_manual_control
@@ -882,6 +908,13 @@ script:
                   entity_id: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.owner_suite_lamps
+                  manual_control: false
+              - alias: "Clear bed strip adaptive-lighting manual control after the wake ramp"
+                continue_on_error: true
+                action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+                  lights:
                     - light.bed_lightstrip
                   manual_control: false
           - sequence:

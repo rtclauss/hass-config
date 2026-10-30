@@ -204,21 +204,30 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: adaptive_lighting_startup_reconciled" in block
 
 
-def test_automatic_bed_strip_brightness_is_capped_but_user_changes_are_allowed() -> None:
-    block = _automation_block("cap_automatic_bed_lightstrip_brightness")
+def test_bed_strip_cap_lives_in_its_own_adaptive_lighting_switch() -> None:
+    reconcile = _automation_block("reconcile_owner_suite_adaptive_lighting")
+    settings = _adaptive_lighting_settings_block("switch.adaptive_lighting_owner_suite_bed_strip")
 
+    assert "bed_strip_automatic_max_brightness_percent: 25" in reconcile
     for token in (
-        "bed_strip_automatic_max_brightness_percent: 25",
-        "entity_id: light.bed_lightstrip",
-        "attribute: brightness",
-        "trigger.to_state.context.user_id is none",
-        "action: light.turn_on",
-        'brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"',
+        "use_defaults: current",
+        "take_over_control: true",
+        "adapt_only_on_bare_turn_on: true",
+        'min_brightness: "{{ bed_strip_automatic_max_brightness_percent }}"',
+        'max_brightness: "{{ bed_strip_automatic_max_brightness_percent }}"',
+        "sleep_brightness: 1",
+        "sleep_color_temp: 1000",
+        "detect_non_ha_changes: false",
     ):
-        assert token in block
+        assert token in settings
 
-    assert "mode: restart" in block
-    assert "state_attr('light.bed_lightstrip', 'brightness')" in block
+    # A non-Adaptive-Lighting brightness command marks the strip as manually
+    # controlled, which paused the whole owner-suite switch (pause_all).
+    text = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8")
+    assert "cap_automatic_bed_lightstrip_brightness" not in text
+
+    for automation_id in ("apply_adaptive_lighting_on_arrival", "nightly_adaptive_lighting_cycle_reset"):
+        assert "switch.adaptive_lighting_owner_suite_bed_strip" in _automation_block(automation_id)
 
 
 def test_owner_suite_vanity_adaptive_lighting_reconciles_scene_safe_baseline() -> None:

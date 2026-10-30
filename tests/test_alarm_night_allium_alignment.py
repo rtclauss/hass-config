@@ -115,8 +115,16 @@ def test_bed_strip_automatic_cap_matches_wakeup_ramp_and_reconciliation() -> Non
         encoding="utf-8"
     )
 
-    assert f"bed_strip_automatic_max_brightness_percent: {cap}" in wakeup_transition
+    # The bed strip switch's min/max brightness are the cap, so its adaptive
+    # daytime target is the lower of the room target and the cap.
     assert f"bed_strip_automatic_max_brightness_percent: {cap}" in adaptive_package
+    bed_strip_ramp = wakeup_transition.split(
+        'alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"',
+        maxsplit=1,
+    )[1].split("alias:", maxsplit=1)[0]
+    assert "action: adaptive_lighting.apply" in bed_strip_ramp
+    assert "entity_id: switch.adaptive_lighting_owner_suite_bed_strip" in bed_strip_ramp
+    assert "transition: 180" in bed_strip_ramp
     assert "owner_suite.bed_strip_brightness_percent = bed_strip_wake_target_percent" in spec_text
     assert "Direct resident" in spec_text
 
