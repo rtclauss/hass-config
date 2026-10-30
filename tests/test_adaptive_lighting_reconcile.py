@@ -423,3 +423,18 @@ def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() 
         "configured lights minus the current manual_control list",
     ):
         assert token in text
+
+
+def test_scenes_set_brightness_as_a_state_attribute() -> None:
+    # Scenes reproduce light state, which honors `brightness` but silently
+    # ignores the light.turn_on-only `brightness_pct` parameter.
+    light_path = ADAPTIVE_LIGHTING_PATH.with_name("light.yaml")
+    text = light_path.read_text(encoding="utf-8")
+    scenes = re.search(r"^scene:\n(.*?)^\S", text, re.M | re.S)
+
+    assert scenes is not None
+    assert "brightness_pct" not in scenes.group(1)
+    assert re.search(
+        r"light\.bed_lightstrip:\n\s+state: \"on\"\n\s+brightness: 64\n",
+        scenes.group(1),
+    )
