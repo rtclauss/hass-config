@@ -243,9 +243,8 @@ def test_away_automations_use_shared_whole_floor_helper() -> None:
         assert '"iterations": 4' not in block
 
     flying_home_block = _automation_block(TRIPS_PATH, "vacuum_flying_home")
-    # Flying home forces a mop so we arrive to a mopped main floor. The forced
-    # mop is still fail-closed: trip_vacuum_main_and_upstairs_levels requires the
-    # Unattended pet policy before any cleaning starts.
+    # Flying home forces a mop so we arrive to a mopped main floor; the mop pass
+    # still rechecks the guest veto immediately before it starts.
     assert "force_mop: true" in flying_home_block
 
 

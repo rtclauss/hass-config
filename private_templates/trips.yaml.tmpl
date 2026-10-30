@@ -1160,7 +1160,7 @@ automation:
           - action: notify.all
             data:
               data:
-                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
               message: >-
                 Pre-landing clean skipped: only {{ remaining_min | int }} min before the
                 {{ finish_label }} finish-by for your {{ landing_label }} landing, not
@@ -1173,8 +1173,8 @@ automation:
       unfinished. On 2026-10-26 the X40 dropped off the Dreame cloud mid-vacuum and
       its task status lagged the dock by 3 s, so the run ended with no mop and
       nothing noticed. Fires when the X40 dispatcher goes idle, or after an HA
-      restart (which kills the running script and docks every robot via
-      vacuum_pet_policy_acclimation_dock). Decides from what actually finished
+      restart (which kills the running script; a robot still physically running
+      is left alone by the at-rest checks below). Decides from what actually finished
       since the clean started (input_datetime.x40_ultra_last_vacuumed_at /
       x40_ultra_last_mopped_at), planning against the finish-by deadline
       (landing - input_number.pre_arrival_clean_buffer_minutes): vacuum missing ->
@@ -1212,9 +1212,6 @@ automation:
         - condition: state
           entity_id: input_boolean.trip_guest_visit_active
           state: "off"
-        - condition: state
-          entity_id: input_select.vacuum_pet_policy
-          state: "Unattended"
         - alias: "a future flight home is known"
           condition: template
           value_template: >-
@@ -1232,8 +1229,7 @@ automation:
             {% set retry = as_timestamp(states('input_datetime.pre_arrival_clean_retry_for'), default=0) | float(0) %}
             {{ retry <= 0 or ((arrival - retry) | abs) >= 6 * 3600 }}
     action:
-      # After a restart, let the startup dock (vacuum_pet_policy_acclimation_dock)
-      # and a boot-time vacuum_flying_home launch happen first.
+      # After a restart, let a boot-time vacuum_flying_home launch happen first.
       - if:
           - condition: trigger
             id: boot
@@ -1300,7 +1296,7 @@ automation:
               - action: notify.all
                 data:
                   data:
-                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
                   message: >-
                     Pre-landing clean did not finish the main level, retrying the
                     vacuum and mop now. It should finish by {{ finish_label }} ✈️
@@ -1317,7 +1313,7 @@ automation:
               - action: notify.all
                 data:
                   data:
-                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
                   message: >-
                     Pre-landing clean did not finish the main level; {{ remaining_min | int }}
                     min left before {{ finish_label }}, so retrying the vacuum only ✈️
@@ -1338,7 +1334,7 @@ automation:
               - action: notify.all
                 data:
                   data:
-                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
                   message: >-
                     Pre-landing clean vacuumed but did not mop; running the mop now.
                     It should finish by {{ finish_label }} ✈️
@@ -1346,7 +1342,7 @@ automation:
           - action: notify.all
             data:
               data:
-                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
               message: >-
                 Pre-landing clean is unfinished ({{ 'main level not vacuumed' if not vacuum_done
                 else 'main level not mopped' }}) and only {{ remaining_min | int }} min remain
@@ -1995,10 +1991,6 @@ script:
           Notification text describing why the trip vacuum pass started.
         example: "Vacuuming the main and upstairs levels while you're away."
     sequence:
-      - alias: "Trip cleaning requires explicit unattended pet policy"
-        condition: state
-        entity_id: input_select.vacuum_pet_policy
-        state: "Unattended"
       - action: script.vacuum_main_and_upstairs_levels
         data:
           force_mop: "{{ force_mop | default(false) | bool }}"
@@ -2007,13 +1999,13 @@ script:
           expires_at: "{{ expires_at | default('', true) | string }}"
       # Also clean the den on trip/flying-home days so all three areas match the
       # departure path. This central boundary already fails closed on den-door
-      # open, guest mode, and non-Unattended policy, so no extra guards here.
-      - action: script.vacuum_den_pet_safe_start
+      # open and guest mode, so no extra guards here.
+      - action: script.vacuum_den_guarded_start
         continue_on_error: true
       - action: notify.all
         data:
           data:
-            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
           message: "{{ notify_message }}"
   pre_arrival_confirm_secondary_robots:
     alias: "Confirm Pre-Arrival Upstairs And Den Robots Started"
@@ -2024,17 +2016,13 @@ script:
       cleaning, re-send a start once (through the same guarded scripts), then
       notify which robot did not start and why. The upstairs robot is tracked on
       its Valetudo MQTT status topic (the trusted channel; the upstairs HA vacuum
-      entity is unreliable, see vacuum_upstairs_segment_supervised); the den on
+      entity is unreliable, see vacuum_upstairs_segment_guarded); the den on
       vacuum.valetudo_den. Both finish well inside the X40 cycle (upstairs <=72
       min, den <=30 min), so a late start still lands in time.
     mode: single
     trace:
       stored_traces: 10
     sequence:
-      # The trip launcher stops at this same gate, so nothing was started to confirm.
-      - condition: state
-        entity_id: input_select.vacuum_pet_policy
-        state: "Unattended"
       - delay:
           minutes: 3
       # Neither start script checks presence: if the owner arrived during the delay,
@@ -2074,7 +2062,7 @@ script:
           - condition: template
             value_template: "{{ states('vacuum.valetudo_den') not in started }}"
         then:
-          - action: script.vacuum_den_pet_safe_start
+          - action: script.vacuum_den_guarded_start
             continue_on_error: true
       # Passes at once for a robot that was already running; otherwise gives the
       # re-sent start up to 3 min.
@@ -2120,7 +2108,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2"
               message: "Pre-landing clean: {{ problems | trim }}."
   # toggle_automations_showing_house:
   #   sequence:

@@ -47,11 +47,9 @@ That keeps `switch.vacation_simulation` and
 ## Guest And House-Sitter Policy
 
 Guest mode is the current privacy-preserving house-sitter signal. Trip vacuuming
-is suppressed when `input_boolean.guest_mode` is on and also requires the exact
-`input_select.vacuum_pet_policy` state `Unattended`, matching
+is suppressed when `input_boolean.guest_mode` is on, matching
 `docs/room_intent.yaml` guidance that automatic vacuuming should not intrude on
-guest-capable rooms or bypass the cat-safe cleaning policy. Under `Unattended`,
-the main floor is cleaned as two passes — a full vacuum, then a mop — with the
+guest-capable rooms. The main floor is cleaned as two passes — a full vacuum, then a mop — with the
 mop running when it is due (a mop is pending or the last mop is at least three
 days old); flying home additionally forces the mop so we arrive to a mopped
 floor. Only the main-floor X40 mops; the upstairs and den robots are vacuum-only.
@@ -169,22 +167,19 @@ automations if a real lock entity is added.
    emits `trip_mode_resolution_requested` instead of directly clearing vacation
    entities.
 4. Run `vacuum_on_trip` with guest mode on and confirm no vacuum starts.
-5. Run `vacuum_on_trip` with guest mode off, trip mode on, the house empty, and
-   pet policy set to `Acclimation`; confirm no vacuum starts and no success
-   notification is sent.
-6. After an owner explicitly selects `Unattended`, repeat step 5 and confirm
-   `script.vacuum_main_and_upstairs_levels` starts once, the main floor vacuums
-   then mops (if due), the upstairs and den robots start, and the den only runs
-   with its door closed.
-7. With a flight home on the calendar, check `sensor.next_flight_home_arrival` (the landing)
-   and `sensor.pre_arrival_clean_start` (landing minus the lead). Under `Unattended`,
+5. Run `vacuum_on_trip` with guest mode off, trip mode on, and the house empty;
+   confirm `script.vacuum_main_and_upstairs_levels` starts once, the main floor
+   vacuums then mops (if due), the upstairs and den robots start, and the den
+   only runs with its door closed.
+6. With a flight home on the calendar, check `sensor.next_flight_home_arrival` (the landing)
+   and `sensor.pre_arrival_clean_start` (landing minus the lead). With
    trip on and the house empty, confirm `vacuum_flying_home` fires at that start time,
    the main floor vacuums then mops even if the last mop is under three days old
    (forced mop), the X40 is `docked` before the landing, and neither `vacuum_on_trip` nor
    the laundry litter pass runs that day.
-8. Catch-up: set the lead so under 195 but at least 100 minutes remain before landing and
+7. Catch-up: set the lead so under 195 but at least 100 minutes remain before landing and
    confirm the trace takes the vacuum-only path (`allow_mop: false`, no mop owed); with
    under 100 minutes it only notifies. Restore the lead afterwards.
-9. Call `script.x40_ultra_main_level_policy_clean` with the owner home and
+8. Call `script.x40_ultra_main_level_policy_clean` with the owner home and
    `require_away: true`, and again with a past `expires_at`; both must be dropped with
    a notification and without touching the robot.

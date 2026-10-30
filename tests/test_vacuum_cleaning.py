@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from privacy_ids import PRESENCE_SENSOR
-
+import re
 from pathlib import Path
 
 
@@ -12,7 +11,12 @@ WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
 CURLING_PATH = ROOT / "packages" / "curling.yaml"
 TRIPS_PATH = ROOT / "packages" / "trips.yaml"
 ROOM_INTENT_PATH = ROOT / "docs" / "room_intent.yaml"
-POLICY_DOC_PATH = ROOT / "docs" / "vacuum_pet_policy.md"
+CLEANING_DOC_PATH = ROOT / "docs" / "vacuum_cleaning.md"
+TEMPLATE_PATHS = (
+    ROOT / "private_templates" / "xiaomi_robot_vacuum.yaml.tmpl",
+    ROOT / "private_templates" / "trips.yaml.tmpl",
+    ROOT / "private_templates" / "zone.yaml.tmpl",
+)
 
 
 def _automation_block(path: Path, automation_id: str) -> str:
@@ -62,28 +66,32 @@ def _script_block(path: Path, script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def _assert_unattended_gate(block: str) -> None:
-    assert "condition: state" in block
-    assert "entity_id: input_select.vacuum_pet_policy" in block
-    assert 'state: "Unattended"' in block
+def test_pet_policy_is_fully_removed() -> None:
+    # The owner removed the cat pet-safety policy; no helper, gate, automation,
+    # or room-intent rule may still reference it.
+    for path in TEMPLATE_PATHS:
+        text = path.read_text(encoding="utf-8")
+        for needle in (
+            "vacuum_pet_policy",
+            "Unattended",
+            "Acclimation",
+            "Supervised",
+            "pet_safe",
+            "input_select.vacuum_room",
+        ):
+            assert needle not in text, f"{needle!r} still in {path.name}"
+    room_intent = ROOM_INTENT_PATH.read_text(encoding="utf-8")
+    assert "cat_safe_robot_cleaning" not in room_intent
+    assert not (ROOT / "docs" / "vacuum_pet_policy.md").exists()
 
 
-def test_pet_policy_helper_restores_last_value_and_omits_forced_initial() -> None:
+def test_restart_no_longer_docks_every_robot() -> None:
     config = VACUUM_PATH.read_text(encoding="utf-8")
-    helper = config.split("  vacuum_pet_policy:", 1)[1].split("\n  vacuum_room:", 1)[0]
-
-    assert "name: Vacuum Pet Safety Policy" in helper
-    assert "- Acclimation" in helper
-    assert "- Supervised" in helper
-    assert "- Unattended" in helper
-    # No `initial:` — the helper restores its last selected value across
-    # restarts/reloads instead of being forced back to Acclimation every time.
-    # The fail-closed guarantee lives in the automatic boundaries (exact
-    # "Unattended" gate + unknown-state-fails-closed), not in a forced re-init.
-    assert not any(line.strip().startswith("initial:") for line in helper.splitlines())
+    assert "vacuum_pet_policy_acclimation_dock" not in config
+    assert "vacuum_dock_supervised_on_presence_loss" not in config
 
 
-def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> None:
+def test_every_automatic_cleaning_path_routes_through_a_guarded_boundary() -> None:
     shared_floor_callers = (
         (ZONE_PATH, "vacuum_leave_home"),
         (WORKDAY_PATH, "vacuum_while_working"),
@@ -102,51 +110,32 @@ def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> N
 
     den_retry = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
     departure = _automation_block(ZONE_PATH, "vacuum_leave_home")
-    assert "action: script.vacuum_den_pet_safe_start" in den_retry
-    assert "action: script.vacuum_den_pet_safe_start" in departure
+    assert "action: script.vacuum_den_guarded_start" in den_retry
+    assert "action: script.vacuum_den_guarded_start" in departure
 
 
-def test_den_error_retry_does_not_countermand_the_startup_dock_reconcile() -> None:
-    # Removing `initial: Acclimation` means the policy can restore to Unattended
-    # across a restart, so the den error-retry must not fire on the transient
-    # unknown/unavailable -> error transition, and must yield to the
-    # homeassistant-start dock reconcile for a settle window.
+def test_den_error_retry_ignores_the_restart_transition() -> None:
+    # The entity reconnects through unknown/unavailable after a restart; that
+    # transient -> error must not auto-start the den robot.
     block = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
 
     assert "not_from:" in block
     assert '- "unknown"' in block
     assert '- "unavailable"' in block
-    assert "automation.vacuum_pet_policy_acclimation_dock" in block
-    assert "last_triggered" in block
-    assert "action: script.vacuum_den_pet_safe_start" in block
+    assert "action: script.vacuum_den_guarded_start" in block
 
 
-def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy() -> None:
-    for script_id in (
-        "vacuum_den_pet_safe_start",
-        "x40_ultra_main_level_vacuum_only",
-        "vacuum_main_level_full_floor",
-        "vacuum_main_and_upstairs_levels",
-        "x40_ultra_main_level_mop_after_vacuum",
-        "x40_ultra_main_level_mop_only",
-        "trip_vacuum_main_and_upstairs_levels",
-    ):
-        path = TRIPS_PATH if script_id == "trip_vacuum_main_and_upstairs_levels" else VACUUM_PATH
-        _assert_unattended_gate(_script_block(path, script_id))
+def test_den_boundary_keeps_guest_and_door_guards() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_den_guarded_start")
+    start = block.index("action: vacuum.start")
+    assert block.index("entity_id: input_boolean.guest_mode") < start
+    assert block.index("entity_id: input_boolean.trip_guest_visit_active") < start
+    assert block.index("entity_id: binary_sensor.den_doors_contact") < start
 
 
-def test_entering_acclimation_immediately_docks_all_robots() -> None:
-    automation = _automation_block(VACUUM_PATH, "vacuum_pet_policy_acclimation_dock")
+def test_dock_all_robots_covers_all_three() -> None:
     dock_script = _script_block(VACUUM_PATH, "vacuum_dock_all_robots")
 
-    assert "entity_id: input_select.vacuum_pet_policy" in automation
-    assert 'to: "Acclimation"' in automation
-    assert "action: script.vacuum_dock_all_robots" in automation
-    # The helper restores its last value on restart, so a reboot that comes up
-    # already in Acclimation fires no state transition; the homeassistant start
-    # trigger reconciles the fail-closed dock regardless of robot state.
-    assert "trigger: homeassistant" in automation
-    assert "event: start" in automation
     assert dock_script.count("action: vacuum.return_to_base") == 2
     assert "entity_id: vacuum.valetudo_den" in dock_script
     assert "entity_id: vacuum.x40_ultra" in dock_script
@@ -155,64 +144,116 @@ def test_entering_acclimation_immediately_docks_all_robots() -> None:
     assert dock_script.count("continue_on_error: true") == 3
 
 
-def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
-    block = _script_block(VACUUM_PATH, "vacuum_supervised_clean")
+def test_manual_start_routes_every_robot_through_guarded_scripts() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_manual_start")
 
-    # Allowed under Supervised or Unattended (owner present), never Acclimation.
-    assert "entity_id: input_select.vacuum_pet_policy" in block
-    assert '- "Supervised"' in block
-    assert '- "Unattended"' in block
-    # Guest mode still vetoes.
-    assert "entity_id: input_boolean.guest_mode" in block
-    assert 'state: "off"' in block
-    # Vacuum-only: never launches a mop path from the supervised launcher.
-    assert "script.x40_ultra_main_level_mop" not in block
-    assert 'option: "mopping"' not in block
-    # mode: single rejects a concurrent press rather than queuing it with a
-    # stale (mutable) room selection.
-    assert "mode: single" in block
-    # Upstairs Valetudo rooms route through the shared supervised boundary (which
-    # rechecks policy/guest at the launch), not the raw per-room scripts directly.
-    assert "action: script.vacuum_upstairs_segment_supervised" in block
-    assert "room_script: script.vacuum_master_bedroom" in block
-    assert "action: script.vacuum_master_bedroom\n" not in block
-    # X40 rooms must route through the single deterministic dispatcher as a
-    # segment run (which serializes with automatic runs and forces sweeping),
-    # NOT the raw segment scripts that could mop under CleanGenius.
-    assert "action: script.x40_ultra_main_level_policy_clean" in block
+    assert "robot:" in block
+    assert "action: script.vacuum_main_level_full_floor" in block
+    assert "action: script.vacuum_upstairs_full_floor" in block
+    assert "action: script.vacuum_den_guarded_start" in block
+    # "all" runs all three robots.
+    for want in ("want_main", "want_upstairs", "want_den"):
+        assert re.search(rf"{want}: .*'all'", block), want
+    # Never a raw start that would bypass the guards or the X40 sweeping flow.
+    assert "action: vacuum.start" not in block
+    assert "vacuum.clean_area" not in block.split("sequence:", 1)[1]
+    assert "payload: START" not in block
+    # The main level lets the dispatcher decide the mop (no forced flag).
+    assert "force_mop" not in block
+    # A blocked start notifies instead of failing silently, before any start.
+    first_start = block.index("action: script.vacuum_main_level_full_floor")
+    assert block.index("input_boolean.guest_mode") < first_start
+    assert block.index("input_boolean.trip_guest_visit_active") < first_start
+    assert block.index("action: notify.all") < first_start
+    # The den reports an open door rather than silently skipping.
+    den = block.index("action: script.vacuum_den_guarded_start")
+    assert block.index("entity_id: binary_sensor.den_doors_contact") < den
+    assert "den doors are not confirmed" in block
+
+
+def test_room_launcher_takes_the_room_as_a_field_and_is_vacuum_only() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_clean_room")
+
+    # A call-time field, never the old shared selector, so a queued request
+    # cleans exactly the tapped room.
+    assert "fields:\n      room:" in block
+    assert "input_select" not in block
+    # X40 rooms go through the single dispatcher as a segment run (forces
+    # sweeping, serializes with automatic runs); upstairs rooms through the
+    # guarded upstairs boundary.
+    assert "entity_id: script.x40_ultra_main_level_policy_clean" in block
     assert "kind: segment" in block
+    assert "entity_id: script.vacuum_upstairs_segment_guarded" in block
+    # Vacuum-only: no mop path, no raw segment/start calls.
+    assert "mop" not in block.split("sequence:", 1)[1]
+    assert "dreame_vacuum.vacuum_clean_segment" not in block
+    assert "action: vacuum.start" not in block
     assert "action: script.vacuum_kitchen" not in block
-    assert "action: script.vacuum_living_room" not in block
+    # Guest veto notifies before any dispatch.
+    dispatch = block.index("entity_id: script.x40_ultra_main_level_policy_clean")
+    assert block.index("input_boolean.guest_mode") < dispatch
+    assert block.index("action: notify.all") < dispatch
 
 
-def test_upstairs_supervised_boundary_rechecks_policy_before_delegating() -> None:
-    block = _script_block(VACUUM_PATH, "vacuum_upstairs_segment_supervised")
+def test_room_launcher_maps_x40_rooms_to_the_entity_area_mapping() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_clean_room")
+    x40 = dict(re.findall(r"^        ([a-z_]+): (\d)$", block, re.MULTILINE))
+    assert x40 == {
+        "dining_room": "1",
+        "powder_room": "2",
+        "hallway": "3",
+        "kitchen": "4",
+        "den": "5",
+        "laundry_room": "6",
+    }
+    upstairs = dict(re.findall(r"^        ([a-z_]+): (script\.[a-z_]+)$", block, re.MULTILINE))
+    assert upstairs == {
+        "bedroom": "script.vacuum_master_bedroom",
+        "guest_room": "script.vacuum_guest_room",
+        "bathroom": "script.vacuum_bathroom",
+        "upstairs_hallway": "script.vacuum_hallway",
+        "office": "script.vacuum_office",
+    }
 
-    # Recheck policy (Supervised/Unattended) and guest immediately before
-    # delegating to the per-room script that publishes the segment START.
-    policy = block.index("entity_id: input_select.vacuum_pet_policy")
+
+def test_upstairs_boundary_rechecks_guest_and_holds_until_terminal() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_upstairs_segment_guarded")
+
     guest = block.index("entity_id: input_boolean.guest_mode")
     delegate = block.index("{{ room_script }}")
-    assert policy < delegate
     assert guest < delegate
-    assert '- "Supervised"' in block
-    assert '- "Unattended"' in block
-    # The per-room scripts are fire-and-forget, so after delegating the boundary
-    # must BLOCK until the upstairs run reaches a terminal state — keeping the
-    # caller's mode: single held so a second (stale-room) press is rejected. It
-    # tracks this via the Valetudo MQTT status topic, NOT the flaky vacuum entity
-    # the config avoids by design.
+    # mode: queued plus the terminal hold serializes upstairs room requests. It
+    # tracks the run via the Valetudo MQTT status topic, NOT the flaky vacuum
+    # entity the config avoids by design.
+    assert "mode: queued" in block
     assert "valetudo/upstairs-vacuum/StatusStateAttribute/status" in block
     assert "vacuum.valetudo_upstairs_vacuum" not in block
     hold = block.index("payload: docked", delegate)
     assert delegate < hold
 
 
-def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
+def test_start_blocker_sensor_mirrors_the_launcher_guards() -> None:
+    config = VACUUM_PATH.read_text(encoding="utf-8")
+    sensor = config.split("default_entity_id: sensor.vacuum_start_blocker", 1)[1].split("\n\n", 1)[0]
+    assert "input_boolean.guest_mode" in sensor
+    assert "input_boolean.trip_guest_visit_active" in sensor
+    assert "den_doors_closed" in sensor
+    for state in ("guest_mode", "trip_guest", "ok"):
+        assert state in sensor
+
+
+def test_notifications_link_to_the_live_cleaning_view() -> None:
+    for path in TEMPLATE_PATHS[:2]:
+        text = path.read_text(encoding="utf-8")
+        assert 'new-mushroom/cleaning"' not in text
+        assert 'new-mushroom/cleaning-v2"' in text
+
+
+def test_x40_segment_launcher_forces_sweeping() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
 
     # CleanGenius off, mode forced to sweeping and verified before any start, so
-    # a leftover mopping mode cannot mop during a "vacuum-only" supervised run.
+    # a leftover mopping mode cannot mop during a vacuum-only room run.
     assert "action: script.x40_ultra_prepare_deterministic_cleaning" in block
     assert 'option: "sweeping"' in block
     assert 'state: "sweeping"' in block
@@ -245,11 +286,9 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     # not bypass to restore after a short timeout and change CleanGenius mid-run.
     fail_closed = block.index("continue_on_timeout: false", wait_before_restore)
     assert wait_before_restore < fail_closed < restore
-    # Policy and guest are also rechecked between the sweeping guard and the
-    # dispatch (they can change during the up-to-30s CleanGenius wait).
-    policy_recheck = block.index("entity_id: input_select.vacuum_pet_policy", guard)
+    # Guest mode is also rechecked between the sweeping guard and the dispatch
+    # (it can change during the up-to-30s CleanGenius wait).
     guest_recheck = block.index("entity_id: input_boolean.guest_mode", guard)
-    assert guard < policy_recheck < start
     assert guard < guest_recheck < start
 
 
@@ -267,16 +306,6 @@ def test_mode_select_is_rechecked_for_rest_after_preparation() -> None:
         select = block.index(f'option: "{mode}"', prepare)
         rest = block.rindex("entity_id: vacuum.x40_ultra", prepare, select)
         assert prepare < rest < select
-
-
-def test_supervised_run_docks_when_owner_presence_is_lost() -> None:
-    automation = _automation_block(VACUUM_PATH, "vacuum_dock_supervised_on_presence_loss")
-    assert f"entity_id: {PRESENCE_SENSOR}" in automation
-    assert 'to: "off"' in automation
-    # Only while the policy is Supervised, and it docks all robots.
-    assert "entity_id: input_select.vacuum_pet_policy" in automation
-    assert 'state: "Supervised"' in automation
-    assert "action: script.vacuum_dock_all_robots" in automation
 
 
 def test_full_floor_children_wait_for_rest_before_restoring_cleangenius() -> None:
@@ -297,58 +326,21 @@ def test_full_floor_children_wait_for_rest_before_restoring_cleangenius() -> Non
         assert wait_rest < fail_closed < restore
 
 
-def test_supervised_requires_owner_home_but_unattended_does_not() -> None:
-    # Supervised means the owner is present to watch the cats, so a remote/away
-    # dashboard press must not start it; Unattended is the explicit hands-off mode
-    # and must still run without presence. Enforced at every launch boundary.
-    for script_id in (
-        "vacuum_supervised_clean",
-        "x40_ultra_segment_vacuum_only",
-        "vacuum_upstairs_segment_supervised",
-    ):
-        block = _script_block(VACUUM_PATH, script_id)
-        assert PRESENCE_SENSOR in block
-        # The gate allows Unattended regardless of presence, else requires home.
-        assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in block
-        assert f"is_state('{PRESENCE_SENSOR}', 'on')" in block
-
-
 def test_trip_path_cleans_all_three_areas() -> None:
     trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
 
-    # Main + upstairs via the shared helper, and the den via its pet-safe
+    # Main + upstairs via the shared helper, and the den via its guarded
     # boundary, so trip/flying-home days cover the same areas as departure.
     assert "action: script.vacuum_main_and_upstairs_levels" in trip_wrapper
-    assert "action: script.vacuum_den_pet_safe_start" in trip_wrapper
+    assert "action: script.vacuum_den_guarded_start" in trip_wrapper
 
 
-def test_mopping_only_runs_under_unattended_even_when_forced() -> None:
+def test_flying_home_may_force_a_mop() -> None:
     policy = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
-    trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
     flying_home = _automation_block(TRIPS_PATH, "vacuum_flying_home")
 
-    # The mop schedule itself is gated on Unattended...
-    assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in policy
-    # ...and flying home may force a mop, but only after the trip wrapper's
-    # Unattended condition passes, so a forced mop still fails closed.
     assert "force_mop: true" in flying_home
-    _assert_unattended_gate(trip_wrapper)
-
-
-def test_x40_rechecks_policy_after_preparation_and_before_each_start() -> None:
-    for script_id in (
-        "x40_ultra_main_level_vacuum_only",
-        "x40_ultra_main_level_mop_only",
-    ):
-        block = _script_block(VACUUM_PATH, script_id)
-        prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
-        policy_recheck = block.index(
-            "entity_id: input_select.vacuum_pet_policy",
-            prepare,
-        )
-        start = block.index("action: vacuum.start", policy_recheck)
-
-        assert prepare < policy_recheck < start
+    assert "allow_mop | default(true) | bool" in policy
 
 
 def test_main_level_mop_after_vacuum_is_two_ordered_passes() -> None:
@@ -393,15 +385,16 @@ def test_mop_is_gated_on_a_run_scoped_completed_vacuum_pass() -> None:
 def test_full_floor_starts_recheck_guest_mode_before_start() -> None:
     # Guest mode can be enabled during the (up-to-30s) CleanGenius wait or the
     # hours-long vacuum pass; both starts must recheck the guest veto right
-    # before vacuum.start, not only the pet policy.
+    # before vacuum.start.
     for script_id in (
         "x40_ultra_main_level_vacuum_only",
         "x40_ultra_main_level_mop_only",
     ):
         block = _script_block(VACUUM_PATH, script_id)
-        guest = block.index("entity_id: input_boolean.guest_mode")
+        prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
+        guest = block.index("entity_id: input_boolean.guest_mode", prepare)
         start = block.index("action: vacuum.start", guest)
-        assert guest < start
+        assert prepare < guest < start
 
 
 def test_full_floor_starts_require_robot_at_rest_before_starting() -> None:
@@ -422,7 +415,7 @@ def test_full_floor_starts_require_robot_at_rest_before_starting() -> None:
 
 
 def test_single_queued_dispatcher_serializes_full_floor_and_segment() -> None:
-    # Both the automatic full-floor path and the supervised segment path are
+    # Both the automatic full-floor path and the room segment path are
     # invocations of ONE mode:queued script, so the queue serializes them
     # atomically — no separate lock (and its non-atomic check-then-set) needed.
     dispatcher = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
@@ -434,28 +427,22 @@ def test_single_queued_dispatcher_serializes_full_floor_and_segment() -> None:
     assert "action: script.x40_ultra_segment_vacuum_only" in dispatcher
     assert "kind | default('full_floor')" in dispatcher
 
-    # The full-floor launcher and the supervised X40 rooms both route through it.
+    # The full-floor launcher and the X40 rooms both route through it.
     full_floor_launcher = _script_block(VACUUM_PATH, "vacuum_main_level_full_floor")
     assert "script.x40_ultra_main_level_policy_clean" in full_floor_launcher
-    supervised = _script_block(VACUUM_PATH, "vacuum_supervised_clean")
-    assert "action: script.x40_ultra_main_level_policy_clean" in supervised
-    assert "kind: segment" in supervised
+    room = _script_block(VACUUM_PATH, "vacuum_clean_room")
+    assert "entity_id: script.x40_ultra_main_level_policy_clean" in room
+    assert "kind: segment" in room
 
     # The lock helper and its acquire/release are gone (replaced by the queue).
     config = VACUUM_PATH.read_text(encoding="utf-8")
     assert "x40_ultra_deterministic_lock" not in config
 
 
-def test_upstairs_launch_rechecks_policy_before_start() -> None:
-    # The whole-house gate can pass under Unattended, then the owner flips to
-    # Acclimation before the upstairs MQTT START; publishing START unconditionally
-    # would restart the robot the dock automation just sent HOME. Recheck policy
-    # (and guest) right before the START publish so it fails closed.
+def test_upstairs_launch_rechecks_guest_before_start() -> None:
     block = _script_block(VACUUM_PATH, "vacuum_upstairs_full_floor")
-    policy = block.index("entity_id: input_select.vacuum_pet_policy")
     guest = block.index("entity_id: input_boolean.guest_mode")
     start = block.index("payload: START")
-    assert policy < start
     assert guest < start
 
 
@@ -472,7 +459,7 @@ def test_dispatcher_skips_when_x40_busy_with_external_run() -> None:
     assert '- "idle"' in dispatcher
 
 
-def test_supervised_segment_waits_for_dock_before_restoring_cleangenius() -> None:
+def test_x40_segment_waits_for_dock_before_restoring_cleangenius() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
 
     # vacuum_clean_segment only dispatches, so the launcher must hold sweeping
@@ -484,14 +471,9 @@ def test_supervised_segment_waits_for_dock_before_restoring_cleangenius() -> Non
     assert segment < wait_dock < restore
 
 
-def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:
-    room_intent = ROOM_INTENT_PATH.read_text(encoding="utf-8")
-    policy = POLICY_DOC_PATH.read_text(encoding="utf-8")
-
-    assert "cat_safe_robot_cleaning" in room_intent
-    assert "docs/vacuum_pet_policy.md" in room_intent
-    assert "Acclimation" in policy
-    assert "Supervised" in policy
-    assert "Unattended" in policy
-    assert "owner decision" in policy
-    assert "robot-free refuge" in policy
+def test_cleaning_doc_documents_dashboard_controls() -> None:
+    doc = CLEANING_DOC_PATH.read_text(encoding="utf-8")
+    assert "script.vacuum_manual_start" in doc
+    assert "script.vacuum_clean_room" in doc
+    assert "sensor.vacuum_start_blocker" in doc
+    assert "never calls `vacuum.start`, `vacuum.clean_area`" in doc
