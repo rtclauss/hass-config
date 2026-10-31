@@ -35,7 +35,9 @@ group:
     name: Diffusers
     entities:
       - switch.owner_suite_cat_diffuser
-      - switch.dining_room_cat_diffuser
+      # switch.dining_room_cat_diffuser is deliberately NOT in this group: it now
+      # holds a human-scent (palo santo) dispenser that is too strong running
+      # continuously, so it is pulsed by dining_room_diffuser_pulse_on/off below.
 
 ################################################
 ## Input Booleans
@@ -62,6 +64,51 @@ input_datetime:
 ## Automation
 ################################################
 automation:
+  # Dining room human-scent dispenser: a short burst at the top of each waking
+  # hour gives a faint background note instead of a saturated room. Ten minutes
+  # on / fifty off lets the scent decay before the next pulse (and noses fade to
+  # it quickly), so it reads as "lightly scented" rather than "reeks of palo
+  # santo". Stateless time triggers, so a restart mid-cycle self-heals at :10.
+  - id: dining_room_diffuser_pulse_on
+    alias: dining_room_diffuser_pulse_on
+    description: Start a 10-minute scent pulse at the top of each daytime/evening hour.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time_pattern
+        minutes: "0"
+    condition:
+      - condition: time
+        after: "09:00:00"
+        before: "21:00:00"
+      # Same trip guard as the afternoon fallback: nobody to smell it while away.
+      - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.dining_room_cat_diffuser
+
+  - id: dining_room_diffuser_pulse_off
+    alias: dining_room_diffuser_pulse_off
+    description: End the scent pulse ten minutes after the hour (also catches stragglers).
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time_pattern
+        minutes: "10"
+    condition: []
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.dining_room_cat_diffuser
+
   # Fallback for days with no morning wake (slept through / away): if the
   # diffusers are still off from last night's goodnight shutdown, turn them on
   # so they run for the evening. On a normal day the wake transition has already
