@@ -526,6 +526,54 @@
       ],
       "classification": "arrival-lighting implementation detail",
       "reason": "PR #1156 adds the bed-strip Adaptive Lighting switch to the owner-suite arrival switch list and removes the bed-strip cap automation. Arrival still skips disabled switches, excludes the owner suite when the bed is occupied, and preserves manual_control lights."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "packages/diffusers.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "+",
+        "-*- switch.dining_room_cat_diffuser",
+        "+*# switch.dining_room_cat_diffuser is deliberately NOT in this group: it now",
+        "+*# holds a human-scent (palo santo) dispenser that is too strong running",
+        "+*# continuously, so it is pulsed by dining_room_diffuser_pulse_on/off below.",
+        "+*# Dining room human-scent dispenser: a short burst at the top of each waking",
+        "+*# hour gives a faint background note instead of a saturated room. Ten minutes",
+        "+*# on / fifty off lets the scent decay before the next pulse (and noses fade to",
+        "+*# it quickly), so it reads as \"lightly scented\" rather than \"reeks of palo",
+        "+*# santo\". Stateless time triggers, so a restart mid-cycle self-heals at :10.",
+        "+*- id: dining_room_diffuser_pulse_on",
+        "+*alias: dining_room_diffuser_pulse_on",
+        "+*description: Start a 10-minute scent pulse at the top of each daytime/evening hour.",
+        "+*mode: single",
+        "+*trace:",
+        "+*stored_traces: 10",
+        "+*trigger:",
+        "+*- trigger: time_pattern",
+        "+*minutes: \"0\"",
+        "+*condition:",
+        "+*- condition: time",
+        "+*after: \"09:00:00\"",
+        "+*before: \"21:00:00\"",
+        "+*# Same trip guard as the afternoon fallback: nobody to smell it while away.",
+        "+*- condition: state",
+        "+*entity_id: binary_sensor.planned_vacation_calendar",
+        "+*state: \"off\"",
+        "+*entity_id: input_boolean.trip",
+        "+*action:",
+        "+*- action: switch.turn_on",
+        "+*target:",
+        "+*entity_id: switch.dining_room_cat_diffuser",
+        "+*- id: dining_room_diffuser_pulse_off",
+        "+*alias: dining_room_diffuser_pulse_off",
+        "+*description: End the scent pulse ten minutes after the hour (also catches stragglers).",
+        "+*minutes: \"10\"",
+        "+*condition: []",
+        "+*- action: switch.turn_off"
+      ],
+      "classification": "dining room human-scent dispenser pulse (spec divergence pending owner approval)",
+      "reason": "switch.dining_room_cat_diffuser now holds a human-scent (palo santo) dispenser that is too strong running continuously, so it is removed from group.diffusers and pulsed 10 min per hour 09:00-21:00 by dedicated automations. It therefore no longer participates in goodnight off, morning-wake on, or the afternoon fallback; the owner-suite diffuser and the shared oil-replacement reminder are unchanged. specs/diffusers.allium is intentionally not edited without owner approval."
     }
   ]
 }
