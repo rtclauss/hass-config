@@ -81,6 +81,8 @@ def test_combined_bed_occupancy_threshold_has_hysteresis() -> None:
     assert "entity_id: sensor.bed_presence_combined_pressure" in block
     assert "upper: 25" in block
     assert "hysteresis: 10" in block
+    # YAML threshold rejects unique_id and drops the whole sensor.
+    assert "unique_id" not in block
 
 
 def test_bayesian_bed_occupancy_uses_combined_pressure() -> None:
