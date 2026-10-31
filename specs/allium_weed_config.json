@@ -561,19 +561,35 @@
         "+*entity_id: binary_sensor.planned_vacation_calendar",
         "+*state: \"off\"",
         "+*entity_id: input_boolean.trip",
+        "+*# Follow the set's sleep/wake state: group.diffusers is turned off by the",
+        "+*# goodnight shutdown and on by the morning wake / 16:00 fallback, so the",
+        "+*# dining dispenser only pulses while the diffusers are \"awake\".",
+        "+*entity_id: group.diffusers",
+        "+*state: \"on\"",
         "+*action:",
         "+*- action: switch.turn_on",
         "+*target:",
         "+*entity_id: switch.dining_room_cat_diffuser",
         "+*- id: dining_room_diffuser_pulse_off",
         "+*alias: dining_room_diffuser_pulse_off",
-        "+*description: End the scent pulse ten minutes after the hour (also catches stragglers).",
+        "+*description: >-",
+        "+*End the scent pulse ten minutes after the hour, immediately when the",
+        "+*diffusers go to sleep (goodnight), and on startup if a restart missed :10.",
         "+*minutes: \"10\"",
-        "+*condition: []",
+        "+*# Goodnight turns group.diffusers off; cut a pulse in progress right then.",
+        "+*- trigger: state",
+        "+*to: \"off\"",
+        "+*# A restart can swallow the :10 trigger; reconcile on boot.",
+        "+*- trigger: homeassistant",
+        "+*event: start",
+        "+*# On startup only, leave a pulse alone if we are still inside its window.",
+        "+*- condition: template",
+        "+*value_template: >-",
+        "+*{{ trigger.platform != 'homeassistant' or now().minute >= 10 }}",
         "+*- action: switch.turn_off"
       ],
       "classification": "dining room human-scent dispenser pulse (spec divergence pending owner approval)",
-      "reason": "switch.dining_room_cat_diffuser now holds a human-scent (palo santo) dispenser that is too strong running continuously, so it is removed from group.diffusers and pulsed 10 min per hour 09:00-21:00 by dedicated automations. It therefore no longer participates in goodnight off, morning-wake on, or the afternoon fallback; the owner-suite diffuser and the shared oil-replacement reminder are unchanged. specs/diffusers.allium is intentionally not edited without owner approval."
+      "reason": "switch.dining_room_cat_diffuser now holds a human-scent (palo santo) dispenser that is too strong running continuously, so it is removed from group.diffusers and pulsed 10 min per hour 09:00-21:00 by dedicated automations. It still follows the set's sleep/wake state (pulses only while group.diffusers is on and is cut off when goodnight turns the group off); the owner-suite diffuser and the shared oil-replacement reminder are unchanged. specs/diffusers.allium is intentionally not edited without owner approval."
     }
   ]
 }

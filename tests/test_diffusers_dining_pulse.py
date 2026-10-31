@@ -37,6 +37,10 @@ def test_dining_room_pulse_is_ten_minutes_on_per_hour() -> None:
     assert off["trigger"][0]["minutes"] == "10"
     assert on["action"][0]["action"] == "switch.turn_on"
     assert off["action"][0]["action"] == "switch.turn_off"
-    assert off["condition"] == []  # always turns off, even outside the window
     entities = {c.get("entity_id") for c in on["condition"]}
     assert {"input_boolean.trip", "binary_sensor.planned_vacation_calendar"} <= entities
+    # Sleep/wake participation: pulses only while the diffuser set is on, and a
+    # goodnight (group off) or a missed :10 across a restart also turns it off.
+    assert "group.diffusers" in entities
+    triggers = {t["trigger"] for t in off["trigger"]}
+    assert {"time_pattern", "state", "homeassistant"} <= triggers

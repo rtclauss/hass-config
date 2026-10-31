@@ -89,6 +89,12 @@ automation:
       - condition: state
         entity_id: input_boolean.trip
         state: "off"
+      # Follow the set's sleep/wake state: group.diffusers is turned off by the
+      # goodnight shutdown and on by the morning wake / 16:00 fallback, so the
+      # dining dispenser only pulses while the diffusers are "awake".
+      - condition: state
+        entity_id: group.diffusers
+        state: "on"
     action:
       - action: switch.turn_on
         target:
@@ -96,14 +102,27 @@ automation:
 
   - id: dining_room_diffuser_pulse_off
     alias: dining_room_diffuser_pulse_off
-    description: End the scent pulse ten minutes after the hour (also catches stragglers).
+    description: >-
+      End the scent pulse ten minutes after the hour, immediately when the
+      diffusers go to sleep (goodnight), and on startup if a restart missed :10.
     mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: time_pattern
         minutes: "10"
-    condition: []
+      # Goodnight turns group.diffusers off; cut a pulse in progress right then.
+      - trigger: state
+        entity_id: group.diffusers
+        to: "off"
+      # A restart can swallow the :10 trigger; reconcile on boot.
+      - trigger: homeassistant
+        event: start
+    condition:
+      # On startup only, leave a pulse alone if we are still inside its window.
+      - condition: template
+        value_template: >-
+          {{ trigger.platform != 'homeassistant' or now().minute >= 10 }}
     action:
       - action: switch.turn_off
         target:
