@@ -355,6 +355,7 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
         "switch.adaptive_lighting_kitchen",
         "switch.adaptive_lighting_den",
         "switch.adaptive_lighting_hallway",
+        "switch.adaptive_lighting_stairway",
         "switch.adaptive_lighting_owner_suite",
         "if is_state('binary_sensor.bayesian_bed_occupancy', 'off')",
         "is_state(adaptive_switch, 'on')",

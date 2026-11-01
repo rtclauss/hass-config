@@ -2469,6 +2469,25 @@ script:
               endpoint: 1
             - device: "Hall/Upstairs/Switch"
               endpoint: 1
+        # Bulb 1 is at the top of the stairs, bulb 6 at the bottom. The
+        # switch joins on endpoint 1 for LED/state sync; the bulbs join on
+        # their Hue endpoint 11 so the group and endpoint 2 binding drive them.
+        - group: "Hall/Stairway Bulbs"
+          members:
+            - device: "Hall/Stairway"
+              endpoint: 1
+            - device: "Hall/Stairway Bulb 1"
+              endpoint: 11
+            - device: "Hall/Stairway Bulb 2"
+              endpoint: 11
+            - device: "Hall/Stairway Bulb 3"
+              endpoint: 11
+            - device: "Hall/Stairway Bulb 4"
+              endpoint: 11
+            - device: "Hall/Stairway Bulb 5"
+              endpoint: 11
+            - device: "Hall/Stairway Bulb 6"
+              endpoint: 11
         - group: "Kitchen/All"
           members:
             - device: "Kitchen/Bay Switch"
@@ -2579,6 +2598,12 @@ script:
         - from: "Hall/Garage Laundry Switch"
           from_endpoint: 2
           to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Stairway"
+          from_endpoint: 2
+          to: "Hall/Stairway Bulbs"
           clusters:
             - genLevelCtrl
             - genOnOff

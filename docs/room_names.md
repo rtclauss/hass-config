@@ -40,3 +40,22 @@ Rules:
 
 - `tests/test_room_name_registry.py` validates that `docs/room_intent.yaml`, Zigbee2MQTT room prefixes, and selected user-facing names stay inside the registry.
 - GitHub Actions now runs `uv run --with pytest pytest`, so unexpected room-name drift fails in CI instead of waiting for a manual review.
+
+## Zigbee2MQTT Device Naming
+
+Pattern: `<Room namespace>/<Fixture> [N]`, with `Switch` appended for Inovelli wall switches and a plural noun for groups.
+
+Stairway (Hall namespace):
+
+| Z2M friendly name | Device | IEEE |
+| --- | --- | --- |
+| `Hall/Stairway` | Inovelli VZM31-SN switch (name predates the pattern; keep until a safe-refactor issue renames it) | `0xe0798dfffed2d17f` |
+| `Hall/Stairway Bulbs` | Z2M group (switch endpoint 1 + all six bulbs) | — |
+| `Hall/Stairway Bulb 1` | Hue filament ST19 (top of stairs) | `0x001788010bf70f29` |
+| `Hall/Stairway Bulb 2` | Hue filament ST19 | `0x001788010bfa1470` |
+| `Hall/Stairway Bulb 3` | Hue filament ST19 | `0x001788010bfa39d0` |
+| `Hall/Stairway Bulb 4` | Hue filament ST23 | `0x001788010f83e730` |
+| `Hall/Stairway Bulb 5` | Hue filament ST23 | `0x001788010f83f27b` |
+| `Hall/Stairway Bulb 6` | Hue filament ST23 (bottom of stairs) | `0x001788010f83f38a` |
+
+The bulb numbering follows the Z2M list order until each bulb is physically confirmed with Identify. The switch binds endpoint 2 to the group and joins it on endpoint 1; `reset_inovelli_switches` replays both.
