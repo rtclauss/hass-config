@@ -185,7 +185,8 @@ def build_dashboard(existing: dict, root: str, states: dict[str, dict] | None = 
     exceptions = []
     for key, label in READINESS:
         card = tile(f"sensor.dashboard_readiness_{key}", label)
-        card["visibility"] = [{"condition": "state", "entity": card["entity"], "state": "blocked"}]
+        card["visibility"] = [{"condition": "state", "entity": card["entity"],
+                               "state": ["blocked", "unknown"] if key in {"security", "water"} else "blocked"}]
         exceptions.append(card)
     for entity, label in [("binary_sensor.washing_machine_running", "Washer running"), ("binary_sensor.dryer_running", "Dryer running"), ("input_boolean.mail_delivered", "Delivery waiting")]:
         card = tile(entity, label)

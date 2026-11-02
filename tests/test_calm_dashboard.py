@@ -326,6 +326,15 @@ def test_rooms_and_fan_use_accessible_native_controls(original):
     assert fan["grid_options"]["columns"] == 12
 
 
+def test_missing_critical_monitoring_is_visible_independent_of_context(original):
+    home = build_dashboard(original, "/example-dashboard")["views"][0]
+    exceptions = home["sections"][3]
+    for kind in ["security", "water"]:
+        card = next(c for c in exceptions["cards"] if c.get("entity") == f"sensor.dashboard_readiness_{kind}")
+        assert card["visibility"][0]["state"] == ["blocked", "unknown"]
+        assert card["visibility"][0] in exceptions["visibility"][0]["conditions"]
+
+
 @pytest.mark.parametrize("root", ["relative", "/ends-with-slash/"])
 def test_invalid_root_is_rejected(original, root):
     with pytest.raises(ValueError):
