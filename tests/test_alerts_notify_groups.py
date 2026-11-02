@@ -2,8 +2,70 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from jinja2 import StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
+import pytest
+import yaml
+
 
 ALERTS_PATH = Path(__file__).resolve().parents[1] / "packages" / "alerts.yaml"
+
+
+@pytest.mark.parametrize("service", ["all", "notify_all"])
+@pytest.mark.parametrize(
+    ("payload", "tv_state", "expected"),
+    [
+        ({"message": "Kitchen leak detected"}, "on", True),
+        ({"message": "Mail arrived", "title": "Mail", "data": {"tag": "mail"}}, "on", True),
+        ({"message": "Kitchen leak detected"}, "off", False),
+        ({"message": "Kitchen leak detected"}, "unavailable", False),
+        ({"message": "Kitchen leak detected"}, "unknown", False),
+        ({"message": "clear_notification", "data": {"tag": "mail"}}, "on", False),
+        ({"message": " CLEAR_NOTIFICATION \n"}, "on", False),
+        ({"message": "Hall sensor battery is low"}, "on", False),
+        ({"message": "Replace the batteries"}, "on", False),
+        ({"message": "Hall sensor: 5%", "title": "LOW BATTERY"}, "on", False),
+        ({"message": "Hall sensor: 5%", "title": "Low Batteries"}, "on", False),
+        ({"message": "Hall sensor: 5%", "data": {"tag": "battery_alert"}}, "on", False),
+        ({"message": "Hall sensor: 5%", "data": {"channel": "Batteries"}}, "on", False),
+        ({"message": "Hall sensor: 5%", "data": {"group": "Battery alerts"}}, "on", False),
+        ({"message": "Mail arrived", "title": None, "data": None}, "on", True),
+        ({"message": "Mail arrived", "data": {"tag": None}}, "on", True),
+        ({"message": ""}, "on", False),
+        ({"message": " \n"}, "on", False),
+        ({"message": None}, "on", False),
+        ({}, "on", False),
+    ],
+)
+def test_lg_tv_notification_routing(payload: dict, tv_state: str, expected: bool, service: str) -> None:
+    """Render the configured guards against shared-notification payloads."""
+    text = ALERTS_PATH.read_text(encoding="utf-8")
+    block = "  - alias: mirror_shared_notifications_to_lg_tv_when_on"
+    mirror_yaml = block + text.split(block, maxsplit=1)[1].split("\n  - alias:", maxsplit=1)[0]
+    mirror = yaml.safe_load(mirror_yaml)[0]
+    event_data = {"domain": "notify", "service": service, "service_data": payload}
+    assert any(
+        all(event_data[key] == value for key, value in trigger["event_data"].items())
+        for trigger in mirror["trigger"]
+    )
+    env = NativeEnvironment(undefined=StrictUndefined)
+    context = {"trigger": {"event": {"data": event_data}}}
+    for name, template in mirror["variables"].items():
+        context[name] = env.from_string(template).render(**context)
+
+    results = []
+    for condition in mirror["condition"]:
+        if condition["condition"] == "state":
+            assert condition["entity_id"] == "media_player.lg_webos_smart_tv"
+            results.append(tv_state == condition["state"])
+        else:
+            assert condition["condition"] == "template"
+            results.append(bool(env.from_string(condition["value_template"]).render(**context)))
+    assert all(results) is expected
+    if expected:
+        data = mirror["action"][0]["data"]
+        assert env.from_string(data["message"]).render(**context) == payload["message"]
+        assert env.from_string(data["data"]).render(**context) == (payload.get("data") or {})
 
 
 def test_notify_groups_do_not_include_lg_webos_service() -> None:
