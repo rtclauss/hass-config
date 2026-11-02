@@ -27,22 +27,31 @@
   {% if trip and not began %}{% set began = now().isoformat() %}{% endif %}
   {% set candidate = as_timestamp(states('sensor.next_flight_home_arrival'), 0) %}
   {% set old_landing = 0 if fresh else as_timestamp(old.get('landing_at'), 0) %}
-  {% set start = as_timestamp(states('sensor.pre_arrival_clean_start'), 0) %}
-  {% set finish = as_timestamp(states('sensor.pre_arrival_clean_finish_by'), 0) %}
+  {# Derive both bounds from this landing and the existing policy helpers.
+     Dependent template sensors can still describe the previous flight. #}
+  {% set lead = states('input_number.pre_arrival_clean_lead_minutes') | float(none) %}
+  {% set buffer = states('input_number.pre_arrival_clean_buffer_minutes') | float(none) %}
+  {% set valid_bounds = lead is not none and buffer is not none and lead > buffer >= 0 %}
+  {% set start = candidate - lead * 60 if valid_bounds else 0 %}
+  {% set finish = candidate - buffer * 60 if valid_bounds else 0 %}
   {% set ns = namespace(landing='' if fresh else old.get('landing_at', ''),
     window='' if fresh else old.get('window_start', ''),
     deadline='' if fresh else old.get('finish_by', ''),
     identity='' if fresh else old.get('cycle_id', '')) %}
   {# A future itinerary must not replace a landing that has just occurred. #}
-  {% if trip and candidate > as_timestamp(now()) and start > 0 and finish > start
+  {% if trip and candidate > as_timestamp(now())
       and (old_landing == 0 or old_landing > as_timestamp(now()) or (candidate - old_landing) | abs < 21600) %}
     {% set same = old_landing > 0 and (candidate - old_landing) | abs < 21600 %}
     {% set ns.landing = states('sensor.next_flight_home_arrival') %}
-    {% set eligible_start = [start, as_timestamp(began, start)] | max %}
-    {% set old_start = as_timestamp(old.get('window_start'), eligible_start) %}
-    {% set ns.window = (([old_start, eligible_start] | min if same else eligible_start) | as_datetime).isoformat() %}
-    {% set ns.deadline = states('sensor.pre_arrival_clean_finish_by') %}
     {% set ns.identity = old.get('cycle_id', '') if same else ns.landing %}
+    {% if valid_bounds %}
+      {% set eligible_start = [start, as_timestamp(began, start)] | max %}
+      {% set old_start = as_timestamp(old.get('window_start'), eligible_start) %}
+      {% set ns.window = (([old_start, eligible_start] | min if same else eligible_start) | as_datetime).isoformat() %}
+      {% set ns.deadline = (finish | as_datetime).isoformat() %}
+    {% else %}
+      {% set ns.window = '' %}{% set ns.deadline = '' %}
+    {% endif %}
   {% endif %}
   {{ dict(cycle_id=ns.identity, landing_at=ns.landing, window_start=ns.window,
     finish_by=ns.deadline, trip_started_at=began, closed_at=ended) | to_json }}

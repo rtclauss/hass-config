@@ -30,7 +30,9 @@ The trigger-based templates require YAML for restored evidence attributes.
   home, or unknown. Dates are interpreted in HA's timezone. A future itinerary
   alone never makes an active return context. Sleep takes precedence at home.
 - `sensor.dashboard_return_cycle`: associates a return landing with a cleaning
-  window. Sub-six-hour flight changes retain the cycle identity; a different
+  window derived from the selected landing and existing lead/buffer helpers,
+  avoiding races with dependent timestamp sensors. Missing calibration leaves
+  the window unknown. Sub-six-hour flight changes retain the cycle identity; a different
   future landing starts a new cycle. A landing that has occurred is retained
   rather than overwritten by a later itinerary. A new trip resets old evidence;
   trip end closes the evidence window. Initial installation cannot reconstruct

@@ -30,7 +30,9 @@ class States:
 
 
 def render(macro, *, values=None, attrs=None, now=NOW, args=()):
-    values, attrs = values or {}, attrs or {}
+    values = {"input_number.pre_arrival_clean_lead_minutes": "240",
+              "input_number.pre_arrival_clean_buffer_minutes": "30", **(values or {})}
+    attrs = attrs or {}
 
     def as_datetime(value, default=None):
         if isinstance(value, datetime):
@@ -104,6 +106,26 @@ def test_cycle_missing_trip_signal_does_not_close_restored_cycle(cycle_attrs):
     result = render("cycle", values={"input_boolean.trip": "unavailable"},
                     args=(cycle_attrs, SimpleNamespace(platform="homeassistant")))
     assert result == cycle_attrs
+
+
+def test_new_landing_does_not_capture_previous_dependent_sensor_window(cycle_attrs):
+    landing = NOW + timedelta(days=1)
+    values = {"input_boolean.trip": "on", "sensor.next_flight_home_arrival": landing.isoformat(),
+              "sensor.pre_arrival_clean_start": cycle_attrs["window_start"],
+              "sensor.pre_arrival_clean_finish_by": cycle_attrs["finish_by"]}
+    result = render("cycle", values=values, args=(cycle_attrs, event()))
+    assert result["cycle_id"] == landing.isoformat()
+    assert result["window_start"] == (landing - timedelta(hours=4)).isoformat()
+    assert result["finish_by"] == (landing - timedelta(minutes=30)).isoformat()
+    values["sensor.pre_arrival_clean_start"] = result["window_start"]
+    values["sensor.pre_arrival_clean_finish_by"] = result["finish_by"]
+    assert render("cycle", values=values, args=(result, event())) == result
+    attrs = {"sensor.dashboard_return_cycle": result}
+    old_success = {"input_datetime.x40_ultra_last_vacuumed_at": NOW.replace(hour=14, minute=30).isoformat()}
+    assert report("vacuum_main", old_success, attrs)["status"] != "complete"
+    values["input_number.pre_arrival_clean_lead_minutes"] = "unavailable"
+    unknown = render("cycle", values=values, args=(cycle_attrs, event()))
+    assert unknown["window_start"] == "" and unknown["finish_by"] == ""
 
 
 def test_cycle_delayed_flight_preserves_identity_and_window(cycle_attrs):
