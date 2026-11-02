@@ -1,5 +1,9 @@
 # Calm contextual dashboard
 
+Read [Dashboard design guide](dashboard_design.md) for the owner's brief,
+design vocabulary, decision rationale, and ongoing agent instructions. This
+document covers the implementation, reporting contract, deployment, and soak.
+
 The daily dashboard remains UI-editable Lovelace storage configuration. Home,
 Rooms, House, Travel, and More provide stable navigation; the context panel
 changes emphasis without moving favorite controls. Existing numeric view
