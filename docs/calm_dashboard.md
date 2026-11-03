@@ -147,4 +147,4 @@ examples at equivalent dimensions and appearances. The browser viewport override
 did not take effect during this pass; a temporary same-origin iframe harness
 provides genuine 390/600/768/1280px HA document widths instead. Record those checks
 as browser frame tests, not physical-device verification. Remove the temporary
-static harness after QA. Keep full screenshots and runtime exports private. A fresh client load still records one generic MutationObserver error; the visible primary cards render, and the error is tracked separately from successful layout checks.
+static harness after QA. Keep full screenshots and runtime exports private. The temporary iframe harness records one generic MutationObserver error; direct Home and Travel loads show no new console errors. Do not attribute the frame-only error to a dashboard card without reproducing it outside the harness.
