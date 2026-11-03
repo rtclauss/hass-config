@@ -59,3 +59,5 @@ Stairway (Hall namespace):
 | `Hall/Stairway Bulb 6` | Hue filament ST23 (bottom of stairs) | `0x001788010f83f38a` |
 
 The bulb numbering follows the Z2M list order until each bulb is physically confirmed with Identify. The switch binds endpoint 2 to the group and joins it on endpoint 1; `reset_inovelli_switches` replays both.
+
+Keep `select.hall_stairway_smartbulbmode` set to `Smart Bulb Mode` so the six Hue bulbs retain continuous power. Control their light output through Zigbee rather than cutting or dimming their mains supply. The reset script must preserve this setting; the switch's output mode remains `Dimmer`.

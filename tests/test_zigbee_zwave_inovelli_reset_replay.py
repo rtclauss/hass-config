@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
@@ -194,6 +196,26 @@ def test_reset_script_does_not_restore_deck_flood_lights_smart_bulb_mode() -> No
 
     assert "select.deck_flood_lights_smartbulbmode" not in smart_bulb_option
     assert "select.deck_flood_lights_smartbulbmode" in disabled_option
+
+
+def test_reset_script_keeps_stairway_hue_bulbs_powered_with_smart_bulb_mode() -> None:
+    block = _script_block("reset_inovelli_switches")
+    replay = yaml.safe_load(
+        _section(
+            block,
+            "inovelli_smart_bulb_mode_replay:",
+            "inovelli_mmwave_wired_control_replay:",
+        )
+    )["inovelli_smart_bulb_mode_replay"]
+
+    # A reset must neither cut power to the six Hue bulbs nor replay a later
+    # Disabled entry that would undo the Smart Bulb Mode setting.
+    assigned_options = [
+        entry["option"]
+        for entry in replay
+        if "select.hall_stairway_smartbulbmode" in entry["entities"]
+    ]
+    assert assigned_options == ["Smart Bulb Mode"]
 
 
 def test_reset_script_replays_current_live_group_memberships_and_bindings() -> None:
