@@ -227,6 +227,9 @@ automation:
 
   - alias: mirror_shared_notifications_to_lg_tv_when_on
     id: mirror_shared_notifications_to_lg_tv_when_on
+    description: >-
+      Mirror household alerts while the TV is on, excluding battery alerts
+      and mobile-app notification dismissal commands.
     mode: queued
     trace:
       stored_traces: 10
@@ -252,6 +255,15 @@ automation:
         state: "on"
       - condition: template
         value_template: "{{ notify_message | trim != '' }}"
+      - condition: template
+        value_template: "{{ notify_message | trim | lower != 'clear_notification' }}"
+      - condition: template
+        value_template: >-
+          {% set text = [notify_message, notify_title,
+                         notify_data.tag | default('', true),
+                         notify_data.channel | default('', true),
+                         notify_data.group | default('', true)] | join(' ') | lower %}
+          {{ 'battery' not in text and 'batteries' not in text }}
     action:
       - action: notify.lg_webos_tv_oled65c4aua_dusqljr
         data:
