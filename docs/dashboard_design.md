@@ -25,6 +25,11 @@ or a substitute for checking the current configuration.
 
 - **Calm and clear:** a minimalist interface with readable labels, neutral
   surfaces, restrained state colors, and little visual noise.
+- **Match the renders:** owner feedback on 2026-11-02 established that the first
+  implementation did not resemble the examples closely enough. Their hierarchy,
+  two-column room composition, spacing, and compact panels are visual acceptance
+  criteria. Functional parity alone is insufficient; sample entity values remain
+  illustrative and must never become fabricated live status.
 - **Rooms first:** work with groups of items, then open room details for
   individual devices. Also provide whole-house lighting, climate, media, and
   household tasks.
@@ -101,9 +106,18 @@ privacy and important exceptions remain applicable in every presentation.
   [the theme](../themes/calm-home.yaml) for exact values instead of copying them
   into individual cards.
 - Prefer native Sections for reflow and native Tiles/controls for familiar
-  interaction and accessibility. Use reusable composition functions and shared
-  templates for consistency. Keep styling centralized and card-mod narrowly
-  scoped to demonstrated needs.
+  interaction and accessibility. Installed Mushroom Template cards provide richer
+  room summaries using native Tile semantics. Use reusable composition functions
+  and shared templates for consistency. Keep styling centralized and card-mod
+  narrowly scoped to demonstrated needs.
+- Home leads with the contextual header, status chips, and context panel, then a
+  two-column room grid. Media and whole-house panels follow; compact quick
+  controls and independently visible exceptions remain accessible. Do not let
+  large sliders dominate the first screen again. Room cards use a 144px minimum
+  height with left-aligned icons and text, soft surfaces, and no outline border.
+- The theme owns visual tokens and shared card classes. Markdown typography uses
+  one shared JSON style snippet in the composer because theme-YAML styling did
+  not initialize in the tested client. Do not introduce per-instance variations.
 - Keep labels visible and concise. Use text plus icons for status; reserve
   stronger emphasis for actionable exceptions. Do not add decorative motion,
   persistent camera feeds, wallpaper, blur, or dense telemetry to Home without
@@ -134,7 +148,7 @@ in [PR #1167](https://github.com/rtclauss/hass-config/pull/1167).
 | D01 | Keep storage-mode Lovelace. It preserves UI editing, HA integration, existing URLs, and a manageable maintenance burden. No separate frontend/view engine was needed for v1. | A concrete, tested requirement cannot be met within Lovelace. |
 | D02 | Keep five stable destinations and one contextual section. This supports habitual control while changing emphasis for travel or sleep. | Owner feedback demonstrates a recurring navigation problem. |
 | D03 | Show room groups first and keep specialist details reachable. This matches the owner's working style and avoids a device inventory on Home. | A group does not match actual room intent or hides necessary member differences. |
-| D04 | Use native room Tiles. The initially considered custom button card did not expose keyboard focus in live testing. | A replacement demonstrates equivalent or better touch, keyboard, and assistive access. |
+| D04 | Use Tile-derived room controls. The original custom button card lacked keyboard focus; plain native Tiles restored access but did not reproduce the renders. The visual pass uses installed Mushroom Template cards for richer summaries and native focus semantics. The whole card is the labelled action; decorative icons do not create duplicate unnamed controls. | A replacement demonstrates equivalent or better visual fidelity, touch, keyboard, and assistive access. |
 | D05 | Use Navbar Card for labelled bottom navigation below 1200px and a side rail on wider screens, with safe-area handling and automatic padding. Retain native HA tabs that reveal on keyboard focus because the tested Navbar release lacked keyboard route semantics. | The dependency gains verified keyboard access or HA offers an equivalent native navigation option. |
 | D06 | Centralize minimal accessibility styling. Live testing found 36px native tile icons and narrow fan speed buttons; shared 44px sizing and a full-row fan control corrected the new controls. | HA changes its component sizing/DOM or responsive testing finds another constraint. |
 | D07 | Keep Home lightweight and load cameras on demand. This reduces visual load and avoids continuous media work during routine control. | A specific remote workflow needs a visible feed and its cost is measured. |
@@ -142,7 +156,9 @@ in [PR #1167](https://github.com/rtclauss/hass-config/pull/1167).
 | D09 | Require cycle-associated success evidence. A dock, activity timestamp, retained MQTT message, feeder schedule, or launch marker cannot establish completion. Missing critical monitoring is visible on Home. | A device exposes trustworthy fresh result evidence and tests establish its semantics. |
 | D10 | Derive reporting bounds from the selected landing and existing lead/buffer helpers. Review found that dependent timestamp sensors can briefly describe the previous flight, contaminating a newly saved cycle. Missing calibration leaves the window unknown. | The underlying travel contract changes; update race/restart/delay regression cases together. |
 | D11 | Preserve restored evidence through restarts, delay, and arrival. An unavailable trip helper must not close the cycle; a new trip must not inherit previous results. | Verified source behavior or owner-approved travel policy changes require a different association. |
-| D12 | Use native controls even where the dashboard-designer skill defaults to button-card. The owner explicitly approved this hybrid plan, and live accessibility findings support it. Conceptual HTML mockups were inspiration, not proof of native HA rendering. | Owner direction or verified component constraints change. |
+| D12 | Use native controls even where the dashboard-designer skill defaults to button-card. The owner explicitly approved this hybrid plan, and live accessibility findings support it. HTML examples establish the visual target; actual HA screenshots establish whether it was achieved. | Owner direction or verified component constraints change. |
+| D13 | Treat visual fidelity as a separate acceptance check. The owner rejected the slider-led, four-across room composition as too different from the renders. Restore rooms first, two columns, compact panels, and the original spacing rhythm; compare actual HA views at equivalent sizes before declaring completion. | Owner feedback changes the target composition. |
+| D14 | Keep styling centralized while avoiding a theme-YAML initialization failure observed during the visual pass. Shared theme CSS styles card classes; a shared JSON snippet styles Markdown. Navbar padding explicitly reserves the widened rail's space. | A dependency update is verified to remove the workaround, or card DOM/sizing changes. |
 
 These are concise decision records, not universal rules about every HA dashboard.
 Version-specific observations must be rechecked before carrying a workaround

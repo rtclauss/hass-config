@@ -318,21 +318,78 @@ def test_new_ui_references_and_private_fixture_contract(original):
 def test_rooms_and_fan_use_accessible_native_controls(original):
     result = build_dashboard(original, "/example-dashboard")
     rooms = next(v for v in result["views"] if v.get("path") == "rooms")
-    room = rooms["sections"][1]["cards"][1]
-    assert room["type"] == "tile"
-    assert room["tap_action"] == room["icon_tap_action"]
+    grid = rooms["sections"][1]["cards"][1]
+    assert grid["type"] == "grid" and grid["columns"] == 2
+    room = grid["cards"][0]
+    assert room["type"] == "custom:mushroom-template-card"
+    assert room["icon_tap_action"]["action"] == "none"
     assert room["tap_action"]["action"] == "navigate"
-    fan = result["views"][0]["sections"][1]["cards"][2]
-    assert fan["grid_options"]["columns"] == 12
+    quick = result["views"][0]["sections"][-1]["cards"][1]["cards"]
+    fan = next(c for c in quick if c.get("entity") == "fan.owner_suite")
+    assert fan["tap_action"]["action"] == "more-info"
 
 
 def test_missing_critical_monitoring_is_visible_independent_of_context(original):
     home = build_dashboard(original, "/example-dashboard")["views"][0]
-    exceptions = home["sections"][3]
+    exceptions = next(s for s in home["sections"] if s["cards"][0].get("heading") == "Needs attention")
     for kind in ["security", "water"]:
         card = next(c for c in exceptions["cards"] if c.get("entity") == f"sensor.dashboard_readiness_{kind}")
         assert card["visibility"][0]["state"] == ["blocked", "unknown"]
         assert card["visibility"][0] in exceptions["visibility"][0]["conditions"]
+
+
+def test_home_matches_rooms_first_render_hierarchy(original):
+    home = build_dashboard(original, "/example-dashboard")["views"][0]
+    assert home["max_columns"] == 2
+    rooms = home["sections"][1]
+    assert rooms["cards"][0]["heading"] == "Your rooms"
+    assert rooms["cards"][1]["columns"] == 2
+    assert [r["primary"] for r in rooms["cards"][1]["cards"]] == ["Owner suite", "Office", "Kitchen", "Den"]
+    assert home["sections"][2]["cards"][0]["type"] == "custom:vertical-stack-in-card"
+    assert home["sections"][3]["cards"][0]["type"] == "custom:vertical-stack-in-card"
+    assert home["sections"][-1]["cards"][0]["heading"] == "Quick controls"
+
+
+def test_room_summary_uses_reported_values_without_missing_temperature_as_zero():
+    from scripts.calm_dashboard import ROOMS, room_card
+    card = room_card(ROOMS[0], "/example-dashboard")
+    values = {"light.owner_suite_lamps": "on", "cover.owner_suite_blinds_ha": "closed", "sensor.bedroom_temperature_2": "70"}
+    attrs = {"light.owner_suite_lamps": {"brightness": 128}}
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    env.globals.update(entity=card["entity"], states=States(values, attrs), state_attr=lambda e, a: attrs.get(e, {}).get(a))
+    text = env.from_string(card["secondary"]).render()
+    assert "Lamps 50%" in text and "Blinds closed" in text and "70°" in text
+    values.update({"light.owner_suite_lamps": "unavailable", "sensor.bedroom_temperature_2": "unavailable"})
+    text = env.from_string(card["secondary"]).render()
+    assert "Lamps unavailable" in text and "0°" not in text
+
+
+def test_idle_cached_media_title_is_not_presented_as_playing(original):
+    home = build_dashboard(original, "/example-dashboard")["views"][0]
+    audio = home["sections"][2]["cards"][0]["cards"][0]
+    attrs = {audio["entity"]: {"media_title": "Previous track"}}
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    env.globals.update(entity=audio["entity"], states=States({audio["entity"]: "idle"}, attrs),
+                       state_attr=lambda e, a: attrs.get(e, {}).get(a))
+    assert env.from_string(audio["secondary"]).render() == "Idle · Previous track"
+    volume = home["sections"][2]["cards"][0]["cards"][1]
+    assert volume["tap_action"]["action"] == "none"
+    assert volume["icon_tap_action"]["action"] == "none"
+
+
+def test_travel_checklist_is_one_panel_and_supply_controls_stay_explicit(original):
+    travel = next(v for v in build_dashboard(original, "/example-dashboard")["views"] if v.get("path") == "travel")
+    checklist = next(s for s in travel["sections"] if s["cards"][0].get("heading") == "Arrival readiness")
+    rows = checklist["cards"][1]["cards"]
+    assert len(rows) == len(READINESS)
+    assert all(c["type"] == "custom:mushroom-template-card" for c in rows)
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    for row in rows:
+        assert env.from_string(row["icon"]).render(entity=row["entity"], states=lambda e: "unknown") == "mdi:help-circle-outline"
+    controls = next(s for s in travel["sections"] if s["cards"][0].get("heading") == "Security and water")
+    for card in controls["cards"][1]["cards"]:
+        if card.get("entity") in {"lock.front_door_lock", "cover.garage_door", "switch.basement_water_shutoff"}:
+            assert card["icon_tap_action"]["action"] == "more-info"
 
 
 @pytest.mark.parametrize("root", ["relative", "/ends-with-slash/"])

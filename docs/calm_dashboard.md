@@ -16,12 +16,25 @@ resolve view-theme dark mode correctly; a fixed-appearance backend theme cannot
 provide that mode to views on its own. The
 existing backend theme automation is not changed. Navbar Card 1.8.0 provides
 labelled navigation, with bottom navigation below 1200px, a side rail above it,
-safe-area support, and automatic padding. Native vertical Tiles provide keyboard-accessible room summaries. A shared
-button-card template renders read-only readiness rows without instance styling.
+safe-area support, and automatic padding. Tile-derived Mushroom Template cards
+provide keyboard-accessible room summaries. Shared factories and theme classes
+render rooms and read-only readiness rows without instance-specific styling.
+Readiness rows share one panel rather than separate oversized cards.
 Navbar routes lack keyboard semantics in the installed stable release, so native
 HA tabs remain available and reveal themselves on keyboard focus. A small shared
 card-mod theme rule raises native tile icons/features to 44px; fan controls use
 a full row to avoid narrow speed buttons.
+
+The visual follow-up in issue #1169 restores the rendered examples' hierarchy:
+context/header and status chips, two-column room cards, compact media/whole-house
+panels, then quick controls. Sliders remain available in the relevant controls
+and room details. Core HA sidebar visibility remains a native client preference;
+More includes Settings, Profile/appearance, and History. The widened desktop
+navigation rail reserves 184px through Navbar's padding configuration.
+
+Typography uses one shared JSON card-mod snippet from the composer, with token
+values in the theme. Theme-YAML styling did not initialize in the tested client;
+do not replace the snippet with that path without verifying a fresh client load.
 
 ## Reporting contract
 
@@ -128,3 +141,10 @@ fixture is not proof of physical cleaning or feeding. Current integrations do
 not expose dependable secondary-robot completion or fresh feeder dispensing
 reports, so these remain unverified. Do not promote develop to main until the
 owner has completed the device and travel soak.
+
+For the visual follow-up, compare actual HA screenshots with the original
+examples at equivalent dimensions and appearances. The browser viewport override
+did not take effect during this pass; a temporary same-origin iframe harness
+provides genuine 390/600/768/1280px HA document widths instead. Record those checks
+as browser frame tests, not physical-device verification. Remove the temporary
+static harness after QA. Keep full screenshots and runtime exports private.
