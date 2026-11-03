@@ -19,7 +19,7 @@ labelled navigation, with bottom navigation below 1200px, a side rail above it,
 safe-area support, and automatic padding. Tile-derived Mushroom Template cards
 provide keyboard-accessible room summaries. Shared factories and theme classes
 render rooms and read-only readiness rows without instance-specific styling.
-Readiness rows share one panel rather than separate oversized cards.
+Readiness rows share one native, single-column grid panel rather than separate oversized cards. Grouping avoids the legacy stack wrapper's class-placement differences; shared theme rules style the panel surface and row dividers.
 Navbar routes lack keyboard semantics in the installed stable release, so native
 HA tabs remain available and reveal themselves on keyboard focus. A small shared
 card-mod theme rule raises native tile icons/features to 44px; fan controls use
@@ -147,4 +147,4 @@ examples at equivalent dimensions and appearances. The browser viewport override
 did not take effect during this pass; a temporary same-origin iframe harness
 provides genuine 390/600/768/1280px HA document widths instead. Record those checks
 as browser frame tests, not physical-device verification. Remove the temporary
-static harness after QA. Keep full screenshots and runtime exports private.
+static harness after QA. Keep full screenshots and runtime exports private. A fresh client load still records one generic MutationObserver error; the visible primary cards render, and the error is tracked separately from successful layout checks.

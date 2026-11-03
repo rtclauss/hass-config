@@ -355,8 +355,9 @@ def test_home_matches_rooms_first_render_hierarchy(original):
     assert rooms["cards"][0]["heading"] == "Your rooms"
     assert rooms["cards"][1]["columns"] == 2
     assert [r["primary"] for r in rooms["cards"][1]["cards"]] == ["Owner suite", "Office", "Kitchen", "Den"]
-    assert home["sections"][2]["cards"][0]["type"] == "custom:vertical-stack-in-card"
-    assert home["sections"][3]["cards"][0]["type"] == "custom:vertical-stack-in-card"
+    for section in home["sections"][2:4]:
+        assert section["cards"][0]["type"] == "grid"
+        assert section["cards"][0]["columns"] == 1
     assert home["sections"][-1]["cards"][0]["heading"] == "Quick controls"
 
 

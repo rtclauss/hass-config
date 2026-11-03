@@ -135,7 +135,7 @@ def two_columns(cards: list[dict]) -> dict:
 
 
 def panel(cards: list[dict]) -> dict:
-    return {"type": "custom:vertical-stack-in-card", "cards": cards,
+    return {"type": "grid", "columns": 1, "square": False, "cards": cards,
             "card_mod": {"class": "calm-panel"},
             "grid_options": {"columns": "full", "rows": "auto"}}
 
