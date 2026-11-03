@@ -39,12 +39,12 @@ def test_user_facing_templates_use_entity_name_helper() -> None:
 
 def test_migrated_templates_keep_entity_id_fallbacks() -> None:
     expected_helpers = {
-        "packages/battery_alerts.yaml.disabled": "entity_name(entity_id) | default(entity_id, true)",
-        "private_templates/alerts.yaml.tmpl": "entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)",
-        "private_templates/media_player.yaml.tmpl": "entity_name(trigger.entity_id) | default(trigger.entity_id, true)",
+        "packages/battery_alerts.yaml.disabled": "device_name(entity_id)",
+        "private_templates/alerts.yaml.tmpl": "device_name(trigger.from_state.entity_id)",
+        "private_templates/media_player.yaml.tmpl": "device_name(trigger.entity_id)",
         "private_templates/plants.yaml.tmpl": "entity_name(plant.entity_id) | default(plant.entity_id, true)",
         "private_templates/weather.yaml.tmpl": "entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true)",
-        "private_templates/zone.yaml.tmpl": "entity_name(entity_id) | default(entity_id, true)",
+        "private_templates/zone.yaml.tmpl": "device_name(entity_id)",
     }
 
     for relative_path, helper in expected_helpers.items():

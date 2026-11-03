@@ -138,12 +138,12 @@ automation:
                 data:
                   title: Wet floor
                   message: >-
-                    {{ entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true) }} is wet.
+                    {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} is wet.
                   notification_id: wet-floor-alert
               - action: notify.all
                 data:
                   message: >-
-                    {{ entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true) }} is wet.
+                    {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} is wet.
           - conditions:
               - condition: trigger
                 id: dry
@@ -153,12 +153,12 @@ automation:
                 data:
                   title: Dry floor
                   message: >-
-                    {{ entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true) }} is dry.
+                    {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} is dry.
                   notification_id: wet-floor-alert
               - action: notify.all
                 data:
                   message: >-
-                    {{ entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true) }} has dried.
+                    {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} has dried.
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
@@ -181,7 +181,7 @@ automation:
         {% if trigger.entity_id == 'binary_sensor.any_egress_open' %}
           {{ open_egress_points if open_egress_points else 'an egress point' }}
         {% else %}
-          {{ entity_name(trigger.to_state.entity_id) | default(trigger.to_state.entity_id, true) }}
+          {{ ((device_name(trigger.to_state.entity_id) ~ ' ') if device_name(trigger.to_state.entity_id) else '') ~ (entity_name(trigger.to_state.entity_id) | default(trigger.to_state.entity_id, true)) }}
         {% endif %}
     condition:
       - condition: state
@@ -281,7 +281,7 @@ automation:
       - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           message: >-
-            Stream from {{ entity_name(trigger.to_state.entity_id) | default(trigger.to_state.entity_id, true) }}
+            Stream from {{ ((device_name(trigger.to_state.entity_id) ~ ' ') if device_name(trigger.to_state.entity_id) else '') ~ (entity_name(trigger.to_state.entity_id) | default(trigger.to_state.entity_id, true)) }}
           data:
             # camera_entity_id attaches a snapshot from the associated camera
             # to the iOS/Android companion app notification. Rendered as a
