@@ -1229,19 +1229,19 @@ script:
             {%- for entity_id in departure_media_off_targets -%}
               {%- set ok_states = media_off_states.get(entity_id, ['off']) -%}
               {%- if states(entity_id) not in ok_states -%}
-                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set name = entity_name(entity_id) | default(entity_id, true) -%}
                 {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
               {%- endif -%}
             {%- endfor -%}
             {%- for entity_id in departure_ma_targets -%}
               {%- if states(entity_id) in ['playing', 'buffering', 'unknown', 'unavailable'] -%}
-                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set name = entity_name(entity_id) | default(entity_id, true) -%}
                 {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
               {%- endif -%}
             {%- endfor -%}
             {%- for entity_id in departure_camera_targets -%}
               {%- if states(entity_id) != 'on' -%}
-                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set name = entity_name(entity_id) | default(entity_id, true) -%}
                 {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
               {%- endif -%}
             {%- endfor -%}
