@@ -27,6 +27,11 @@
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
 - If convenience behavior conflicts with room intent, preserve privacy-first behavior.
 
+## Dashboard Design
+- Read `docs/dashboard_design.md` before changing dashboard layout, navigation, theme, controls, context, or readiness reporting. It contains the owner's design brief, vocabulary, decision rationale, and instructions for future agents.
+- Keep that guide current in the same change when design intent, decisions, evidence semantics, or validation lessons evolve. Distinguish owner-approved preferences, observed constraints, and proposals; do not turn an assumption into an owner preference.
+- Use `docs/calm_dashboard.md` for implementation, deployment, rollback, and soak details. Preserve room intent and the relevant behavioral specs when applying the design guide.
+
 ## Behavioral Specs
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.

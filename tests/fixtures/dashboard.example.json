@@ -3,6 +3,754 @@
     "config": {
       "views": [
         {
+          "title": "Home",
+          "path": "home",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
+            {
+              "type": "grid",
+              "column_span": 4,
+              "cards": [
+                {
+                  "type": "vertical-stack",
+                  "grid_options": {
+                    "columns": "full"
+                  },
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "text_only": true,
+                      "entity_id": [
+                        "sensor.dashboard_context",
+                        "input_select.house_mode",
+                        "input_boolean.trip"
+                      ],
+                      "content": "{% set c = states('sensor.dashboard_context') %}\n# {{ {'home': 'Your home, at a glance', 'morning': 'A clear start to the day', 'evening': 'A quiet evening', 'sleep': 'Keeping things quiet', 'departure': 'Ready to leave?', 'away': 'A clear view of home', 'return': 'Home is getting ready'}.get(c, 'Home status needs a look') }}\n{{ {'return': 'Check actual arrival-readiness results below.', 'away': 'Security, pet care, temperature, and water.', 'departure': 'Review the house before your trip.', 'sleep': 'Your controls stay available when you need them.'}.get(c, 'Room groups first. Details when you need them.') }}"
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Travel and readiness",
+                      "icon": "mdi:airplane-check",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/travel"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "visibility": [
+                        {
+                          "condition": "state",
+                          "entity": "sensor.dashboard_context",
+                          "state": [
+                            "return",
+                            "away",
+                            "departure"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Often used",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_lamps",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Lamps",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "fan.owner_suite",
+                  "grid_options": {
+                    "columns": 12
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Ceiling fan",
+                  "features": [
+                    {
+                      "type": "fan-speed"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.owner_suite_blinds_ha",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Blinds",
+                  "features": [
+                    {
+                      "type": "cover-position"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_bathroom_lights_2",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Bathroom lights",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "media_player.ma_bedroom",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Bedroom audio",
+                  "features": [
+                    {
+                      "type": "media-player-playback"
+                    },
+                    {
+                      "type": "media-player-volume-slider"
+                    }
+                  ]
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Alarms",
+                  "icon": "mdi:alarm",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/owner-suite"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Your rooms",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_lamps",
+                  "name": "Owner suite",
+                  "icon": "mdi:bed-king-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/owner-suite"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/owner-suite"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.office_all",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/office-v2"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/office-v2"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.kitchen_all",
+                  "name": "Kitchen",
+                  "icon": "mdi:countertop-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.den_all",
+                  "name": "Den",
+                  "icon": "mdi:sofa-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Needs attention",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_security",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Security",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_security",
+                      "state": [
+                        "blocked",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_climate",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Temperature",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_climate",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_water",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Water supply",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_water",
+                      "state": [
+                        "blocked",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_vacuum_main",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Main floor vacuum",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_main",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_mop_main",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Main floor mop",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_mop_main",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_vacuum_den",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Den vacuum",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_den",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_vacuum_upstairs",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Upstairs vacuum",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_upstairs",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.dashboard_readiness_pet_care",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Pet care",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_pet_care",
+                      "state": "blocked"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.washing_machine_running",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Washer running",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "binary_sensor.washing_machine_running",
+                      "state": "on"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.dryer_running",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Dryer running",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "binary_sensor.dryer_running",
+                      "state": "on"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.mail_delivered",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Delivery waiting",
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "input_boolean.mail_delivered",
+                      "state": "on"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "fan.owner_suite",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "fan.owner_suite",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_lamps",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "light.owner_suite_lamps",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.owner_suite_blinds_ha",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "cover.owner_suite_blinds_ha",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "media_player.ma_bedroom",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "visibility": [
+                    {
+                      "condition": "state",
+                      "entity": "media_player.ma_bedroom",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "visibility": [
+                {
+                  "condition": "or",
+                  "conditions": [
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_security",
+                      "state": [
+                        "blocked",
+                        "unknown"
+                      ]
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_climate",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_water",
+                      "state": [
+                        "blocked",
+                        "unknown"
+                      ]
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_main",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_mop_main",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_den",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_vacuum_upstairs",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "sensor.dashboard_readiness_pet_care",
+                      "state": "blocked"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "binary_sensor.washing_machine_running",
+                      "state": "on"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "binary_sensor.dryer_running",
+                      "state": "on"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "input_boolean.mail_delivered",
+                      "state": "on"
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "fan.owner_suite",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "light.owner_suite_lamps",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "cover.owner_suite_blinds_ha",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    {
+                      "condition": "state",
+                      "entity": "media_player.ma_bedroom",
+                      "state": [
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "House status",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_select.house_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "House mode"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.guest_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Guest mode"
+                },
+                {
+                  "type": "tile",
+                  "entity": "climate.my_ecobee",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Temperature"
+                },
+                {
+                  "type": "tile",
+                  "entity": "weather.tomorrow_io_the_brewery_daily",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Weather"
+                }
+              ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": false,
+          "dense_section_placement": false,
+          "footer": {
+            "card": {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
+          }
+        },
+        {
           "title": "Main Floor",
           "sections": [
             {
@@ -38,6 +786,57 @@
                 }
               ]
             }
+          ],
+          "path": "main-floor",
+          "theme": "Calm Home",
+          "subview": true,
+          "back_path": "/example-dashboard/rooms",
+          "cards": [
+            {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
           ]
         },
         {
@@ -61,6 +860,56 @@
                   "icon_color": "binary_sensor.dryer_running"
                 }
               ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": true,
+          "back_path": "/example-dashboard/more",
+          "cards": [
+            {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
             }
           ]
         },
@@ -87,8 +936,56 @@
             },
             {
               "entity": "sensor.derivative_10_10_minutes_house_temp_change"
+            },
+            {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
             }
-          ]
+          ],
+          "theme": "Calm Home",
+          "subview": true,
+          "back_path": "/example-dashboard/more"
         },
         {
           "path": "music-assistant",
@@ -97,8 +994,56 @@
             {
               "type": "custom:mass-player-card",
               "entity": "media_player.ma_bedroom"
+            },
+            {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
             }
-          ]
+          ],
+          "theme": "Calm Home",
+          "subview": true,
+          "back_path": "/example-dashboard/more"
         },
         {
           "title": "Synthetic contract",
@@ -124,6 +1069,51 @@
             },
             {
               "entity": "sensor.average_daily_ev_savings_vs_30mpg"
+            },
+            {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
             }
           ],
           "examples": [
@@ -150,9 +1140,1258 @@
             "Den Stall Evidence",
             "Upstairs Stall Evidence",
             "script.uplift_desk_manual_stop"
+          ],
+          "theme": "Calm Home",
+          "subview": true,
+          "back_path": "/example-dashboard/more"
+        },
+        {
+          "title": "Rooms",
+          "path": "rooms",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
+            {
+              "type": "grid",
+              "column_span": 4,
+              "cards": [
+                {
+                  "type": "vertical-stack",
+                  "grid_options": {
+                    "columns": "full"
+                  },
+                  "cards": [
+                    {
+                      "type": "heading",
+                      "heading": "Rooms",
+                      "heading_style": "title"
+                    },
+                    {
+                      "type": "markdown",
+                      "text_only": true,
+                      "content": "Control a room together. Open its details for individual devices."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Upstairs",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_lamps",
+                  "name": "Owner suite",
+                  "icon": "mdi:bed-king-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/owner-suite"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/owner-suite"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.office_all",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/office-v2"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/office-v2"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.guest_room_ceiling",
+                  "name": "Guest room",
+                  "icon": "mdi:bed-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/upstairs"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/upstairs"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Main floor",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.kitchen_all",
+                  "name": "Kitchen",
+                  "icon": "mdi:countertop-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.den_all",
+                  "name": "Den",
+                  "icon": "mdi:sofa-outline",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.dining_room_all",
+                  "name": "Dining room",
+                  "icon": "mdi:table-furniture",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.hall_all",
+                  "name": "Hallway",
+                  "icon": "mdi:door-open",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Other spaces",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.all_basement_lights",
+                  "name": "Basement",
+                  "icon": "mdi:television",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/basement-v2"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/basement-v2"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.deck_all",
+                  "name": "Deck",
+                  "icon": "mdi:outdoor-lamp",
+                  "vertical": true,
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/outside"
+                  },
+                  "icon_tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/outside"
+                  },
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                }
+              ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": false,
+          "dense_section_placement": false,
+          "footer": {
+            "card": {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
+          }
+        },
+        {
+          "title": "House",
+          "path": "house",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
+            {
+              "type": "grid",
+              "column_span": 4,
+              "cards": [
+                {
+                  "type": "vertical-stack",
+                  "grid_options": {
+                    "columns": "full"
+                  },
+                  "cards": [
+                    {
+                      "type": "heading",
+                      "heading": "Whole house",
+                      "heading_style": "title"
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Climate details",
+                      "icon": "mdi:thermostat",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/climate"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Media and groups",
+                      "icon": "mdi:speaker-multiple",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/media-players"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Room light groups",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.owner_suite_lamps",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Owner suite",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.office_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Office",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.kitchen_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Kitchen",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.den_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Den",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.dining_room_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Dining room",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.hall_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Hallway",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.all_basement_lights",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Basement",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.guest_room_ceiling",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Guest room",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.deck_all",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Deck",
+                  "features": [
+                    {
+                      "type": "light-brightness"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Comfort",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "climate.my_ecobee",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Thermostat",
+                  "features": [
+                    {
+                      "type": "target-temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Climate",
+                  "icon": "mdi:arrow-right",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/climate"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Household",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Cleaning and laundry",
+                  "icon": "mdi:robot-vacuum",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/cleaning-v2"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Deliveries",
+                  "icon": "mdi:package-variant",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/deliveries"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "todo-list",
+                  "entity": "todo.shopping_list"
+                }
+              ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": false,
+          "dense_section_placement": false,
+          "footer": {
+            "card": {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
+          }
+        },
+        {
+          "title": "Travel",
+          "path": "travel",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
+            {
+              "type": "grid",
+              "column_span": 4,
+              "cards": [
+                {
+                  "type": "vertical-stack",
+                  "grid_options": {
+                    "columns": "full"
+                  },
+                  "cards": [
+                    {
+                      "type": "heading",
+                      "heading": "Travel",
+                      "heading_style": "title"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "input_boolean.trip",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Trip mode"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "input_boolean.trip_guest_visit_active",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Guest visit"
+                    },
+                    {
+                      "type": "markdown",
+                      "text_only": true,
+                      "entity_id": [
+                        "sensor.dashboard_return_cycle",
+                        "sensor.dashboard_context"
+                      ],
+                      "content": "{% set landing = state_attr('sensor.dashboard_return_cycle', 'landing_at') %}\n{{ 'Flight landing: ' ~ (as_datetime(landing) | as_local).strftime('%a %-I:%M %p %Z') if landing else 'No current return flight is associated.' }}\n\nWater restoration follows the existing trip-end flow. Completion below requires evidence; docking and launch attempts are not proof."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Security and water",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "alarm_control_panel.home_alarm",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Alarm"
+                },
+                {
+                  "type": "tile",
+                  "entity": "lock.front_door_lock",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Front door",
+                  "icon_tap_action": {
+                    "action": "more-info"
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.garage_door",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Garage",
+                  "icon_tap_action": {
+                    "action": "more-info"
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "switch.basement_water_shutoff",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Water supply",
+                  "icon_tap_action": {
+                    "action": "more-info"
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Arrival readiness",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_security",
+                  "name": "Security",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_climate",
+                  "name": "Temperature",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_water",
+                  "name": "Water supply",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_vacuum_main",
+                  "name": "Main floor vacuum",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_mop_main",
+                  "name": "Main floor mop",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_vacuum_den",
+                  "name": "Den vacuum",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_vacuum_upstairs",
+                  "name": "Upstairs vacuum",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "template": "calm_readiness",
+                  "entity": "sensor.dashboard_readiness_pet_care",
+                  "name": "Pet care",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Pet care",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.main_level_cat_feeder_error",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Main-floor feeder"
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.upstairs_cat_feeder_error",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Upstairs feeder"
+                },
+                {
+                  "type": "tile",
+                  "entity": "select.main_level_cat_feeder_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Main-floor schedule"
+                },
+                {
+                  "type": "tile",
+                  "entity": "select.upstairs_cat_feeder_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Upstairs schedule"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Cameras · open on demand",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "camera.front_door",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Front entrance"
+                },
+                {
+                  "type": "tile",
+                  "entity": "camera.livingroomcamera",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Dining room"
+                },
+                {
+                  "type": "tile",
+                  "entity": "camera.tikiroomcamera",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Tiki room"
+                }
+              ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": false,
+          "dense_section_placement": false,
+          "footer": {
+            "card": {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
+          }
+        },
+        {
+          "title": "More",
+          "path": "more",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
+            {
+              "type": "grid",
+              "column_span": 4,
+              "cards": [
+                {
+                  "type": "vertical-stack",
+                  "grid_options": {
+                    "columns": "full"
+                  },
+                  "cards": [
+                    {
+                      "type": "heading",
+                      "heading": "More",
+                      "heading_style": "title"
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Security dashboard",
+                      "icon": "mdi:shield-home-outline",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/security"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Flight Deck",
+                      "icon": "mdi:airplane-clock",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/flight-deck"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Specialist views",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Main Floor",
+                  "icon": "mdi:view-dashboard-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/main-floor"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Cleaning-v2",
+                  "icon": "mdi:view-dashboard-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/2"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Details",
+                  "icon": "mdi:view-dashboard-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/testing"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Music Assistant",
+                  "icon": "mdi:view-dashboard-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/music-assistant"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Synthetic contract",
+                  "icon": "mdi:view-dashboard-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/example-dashboard/5"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                }
+              ]
+            }
+          ],
+          "theme": "Calm Home",
+          "subview": false,
+          "dense_section_placement": false,
+          "footer": {
+            "card": {
+              "type": "custom:navbar-card",
+              "routes": [
+                {
+                  "url": "/example-dashboard/home",
+                  "label": "Home",
+                  "icon": "mdi:home-outline"
+                },
+                {
+                  "url": "/example-dashboard/rooms",
+                  "label": "Rooms",
+                  "icon": "mdi:view-grid-outline"
+                },
+                {
+                  "url": "/example-dashboard/house",
+                  "label": "House",
+                  "icon": "mdi:tune-variant"
+                },
+                {
+                  "url": "/example-dashboard/travel",
+                  "label": "Travel",
+                  "icon": "mdi:airplane"
+                },
+                {
+                  "url": "/example-dashboard/more",
+                  "label": "More",
+                  "icon": "mdi:dots-horizontal"
+                }
+              ],
+              "desktop": {
+                "min_width": 1200,
+                "position": "left",
+                "show_labels": true
+              },
+              "mobile": {
+                "show_labels": true,
+                "safe_area": true
+              },
+              "layout": {
+                "auto_padding": {
+                  "enabled": true
+                },
+                "reflect_child_state": true
+              }
+            }
+          }
+        }
+      ],
+      "button_card_templates": {
+        "calm_readiness": {
+          "show_name": true,
+          "show_state": true,
+          "show_label": true,
+          "size": "22px",
+          "icon": "mdi:progress-check",
+          "label": "[[[ const a = entity?.attributes || {}; const d = new Date(a.evidence_at); const when = a.evidence_at && !isNaN(d) ? new Intl.DateTimeFormat(undefined, {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:hass.config.time_zone,timeZoneName:'short'}).format(d) : ''; return (a.reason || 'Evidence unavailable') + (when ? ' · Evidence: ' + when : ''); ]]]",
+          "tap_action": {
+            "action": "more-info"
+          },
+          "styles": {
+            "card": [
+              {
+                "border-radius": "16px"
+              },
+              {
+                "padding": "16px"
+              },
+              {
+                "min-height": "110px"
+              },
+              {
+                "box-shadow": "none"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"i n s\" \". l l\""
+              },
+              {
+                "grid-template-columns": "30px 1fr auto"
+              }
+            ],
+            "name": [
+              {
+                "justify-self": "start"
+              },
+              {
+                "font-size": "14px"
+              },
+              {
+                "font-weight": "500"
+              }
+            ],
+            "state": [
+              {
+                "font-size": "12px"
+              }
+            ],
+            "label": [
+              {
+                "white-space": "normal"
+              },
+              {
+                "text-align": "left"
+              },
+              {
+                "font-size": "13px"
+              },
+              {
+                "line-height": "1.5"
+              },
+              {
+                "padding-top": "8px"
+              },
+              {
+                "color": "var(--secondary-text-color)"
+              }
+            ]
+          },
+          "state": [
+            {
+              "value": "blocked",
+              "icon": "mdi:alert-circle-outline",
+              "color": "var(--error-color)"
+            },
+            {
+              "value": "unknown",
+              "icon": "mdi:help-circle-outline",
+              "color": "var(--secondary-text-color)"
+            },
+            {
+              "value": "complete",
+              "icon": "mdi:check-circle-outline",
+              "color": "var(--primary-color)"
+            }
           ]
         }
-      ]
+      },
+      "background": "var(--primary-background-color)"
     }
   }
 }

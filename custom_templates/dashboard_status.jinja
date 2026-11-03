@@ -1,0 +1,172 @@
+{# Observation only. No control policy or physical actions belong in this file. #}
+{% macro context() -%}
+  {% set mode = states('input_select.house_mode') %}
+  {% set trip = states('input_boolean.trip') %}
+  {% set start = as_datetime(state_attr('sensor.ecobee_calendar_vacation_schedule', 'start'), none) %}
+  {% if mode not in ['home', 'away', 'night', 'in_bed', 'asleep'] or trip not in ['on', 'off'] %}unknown
+  {% elif mode in ['in_bed', 'asleep'] and trip == 'off' %}sleep
+  {% elif trip == 'on' and (is_state('binary_sensor.pre_arrival_clean_day', 'on') or is_state('binary_sensor.flying_home_today', 'on')) %}return
+  {% elif trip == 'on' %}away
+  {% elif mode != 'away' and start is not none and start.tzinfo is not none and (start | as_local).date() == now().date() and start > now() %}departure
+  {% elif mode == 'away' %}away
+  {% elif mode == 'night' %}evening
+  {% elif now().hour < 12 %}morning
+  {% else %}home{% endif %}
+{%- endmacro %}
+
+{% macro cycle(previous, event) -%}
+  {% set old = previous | default({}, true) %}
+  {% set trip = is_state('input_boolean.trip', 'on') %}
+  {% set fresh = event is defined and event.platform | default('') == 'state'
+    and event.entity_id | default('') == 'input_boolean.trip'
+    and event.from_state is not none and event.from_state.state == 'off'
+    and event.to_state is not none and event.to_state.state == 'on' %}
+  {% set began = now().isoformat() if fresh else old.get('trip_started_at', '') %}
+  {% set ended = '' if fresh else old.get('closed_at', '') %}
+  {% if is_state('input_boolean.trip', 'off') and began and not ended %}{% set ended = now().isoformat() %}{% endif %}
+  {% if trip and not began %}{% set began = now().isoformat() %}{% endif %}
+  {% set candidate = as_timestamp(states('sensor.next_flight_home_arrival'), 0) %}
+  {% set old_landing = 0 if fresh else as_timestamp(old.get('landing_at'), 0) %}
+  {# Derive both bounds from this landing and the existing policy helpers.
+     Dependent template sensors can still describe the previous flight. #}
+  {% set lead = states('input_number.pre_arrival_clean_lead_minutes') | float(none) %}
+  {% set buffer = states('input_number.pre_arrival_clean_buffer_minutes') | float(none) %}
+  {% set valid_bounds = lead is not none and buffer is not none and lead > buffer >= 0 %}
+  {% set start = candidate - lead * 60 if valid_bounds else 0 %}
+  {% set finish = candidate - buffer * 60 if valid_bounds else 0 %}
+  {% set ns = namespace(landing='' if fresh else old.get('landing_at', ''),
+    window='' if fresh else old.get('window_start', ''),
+    deadline='' if fresh else old.get('finish_by', ''),
+    identity='' if fresh else old.get('cycle_id', '')) %}
+  {# A future itinerary must not replace a landing that has just occurred. #}
+  {% if trip and candidate > as_timestamp(now())
+      and (old_landing == 0 or old_landing > as_timestamp(now()) or (candidate - old_landing) | abs < 21600) %}
+    {% set same = old_landing > 0 and (candidate - old_landing) | abs < 21600 %}
+    {% set ns.landing = states('sensor.next_flight_home_arrival') %}
+    {% set ns.identity = old.get('cycle_id', '') if same else ns.landing %}
+    {% if valid_bounds %}
+      {% set eligible_start = [start, as_timestamp(began, start)] | max %}
+      {% set old_start = as_timestamp(old.get('window_start'), eligible_start) %}
+      {% set ns.window = (([old_start, eligible_start] | min if same else eligible_start) | as_datetime).isoformat() %}
+      {% set ns.deadline = (finish | as_datetime).isoformat() %}
+    {% else %}
+      {% set ns.window = '' %}{% set ns.deadline = '' %}
+    {% endif %}
+  {% endif %}
+  {{ dict(cycle_id=ns.identity, landing_at=ns.landing, window_start=ns.window,
+    finish_by=ns.deadline, trip_started_at=began, closed_at=ended) | to_json }}
+{%- endmacro %}
+
+{% macro readiness(kind) -%}
+  {% set ns = namespace(status='unknown', reason='Evidence unavailable', source='', evidence='') %}
+  {% set cycle = state_attr('sensor.dashboard_return_cycle', 'window_start') %}
+  {% set began = as_timestamp(cycle, 0) %}
+  {% set deadline = as_timestamp(state_attr('sensor.dashboard_return_cycle', 'finish_by'), 0) %}
+  {% set current = as_timestamp(now()) %}
+  {% set closed = as_timestamp(state_attr('sensor.dashboard_return_cycle', 'closed_at'), current) %}
+  {% set guest = states('input_boolean.guest_mode') %}
+  {% set visit = states('input_boolean.trip_guest_visit_active') %}
+  {% if kind == 'security' %}
+    {% set ns.source = 'lock.front_door_lock,cover.garage_door,alarm_control_panel.home_alarm' %}
+    {% set alarm = states('alarm_control_panel.home_alarm') %}
+    {% if not has_value('lock.front_door_lock') or not has_value('cover.garage_door') or not has_value('alarm_control_panel.home_alarm') %}
+      {% set ns.reason = 'One or more security devices are unavailable' %}
+    {% elif alarm in ['triggered', 'pending'] %}
+      {% set ns.status = 'blocked' %}{% set ns.reason = 'Alarm requires attention' %}
+    {% elif visit == 'on' %}
+      {% set ns.status = 'running' %}{% set ns.reason = 'Guest visit in progress; check individual security states' %}
+    {% elif not is_state('lock.front_door_lock', 'locked') or not is_state('cover.garage_door', 'closed') %}
+      {% set ns.status = 'blocked' %}{% set ns.reason = 'Front door unlocked or garage not closed' %}
+    {% elif is_state('input_boolean.trip', 'on') and not alarm.startswith('armed_') %}
+      {% set ns.status = 'blocked' %}{% set ns.reason = 'Trip active; alarm is ' ~ alarm %}
+    {% else %}
+      {% set ns.status = 'complete' %}{% set ns.reason = 'Door locked; garage closed; alarm ' ~ alarm %}
+    {% endif %}
+  {% elif kind == 'water' %}
+    {% set leaks = ['binary_sensor.basement_unfinished_leak_water_leak', 'binary_sensor.kitchen_sink_leak_water_leak', 'binary_sensor.laundry_room_leak_water_leak'] %}
+    {% set ns.source = 'switch.basement_water_shutoff,' ~ leaks | join(',') %}
+    {% set leak = namespace(on=false, missing=false) %}
+    {% for entity in leaks %}{% if is_state(entity, 'on') %}{% set leak.on = true %}{% elif not has_value(entity) %}{% set leak.missing = true %}{% endif %}{% endfor %}
+    {% if leak.on %}{% set ns.status = 'blocked' %}{% set ns.reason = 'Leak detected; inspect before changing water supply' %}
+    {% elif states('switch.basement_water_shutoff') not in ['on', 'off'] %}{% set ns.reason = 'Water switch unavailable; supply not verified' %}
+    {% elif leak.missing %}{% set ns.reason = 'Supply reported ' ~ states('switch.basement_water_shutoff') ~ '; leak monitoring partly unavailable' %}
+    {% elif is_state('switch.basement_water_shutoff', 'on') %}
+      {% set ns.status = 'complete' %}{% set ns.reason = 'Supply reported on by device; flow not independently verified' %}
+    {% else %}
+      {% set ns.status = 'scheduled' if is_state('input_boolean.trip', 'on') else 'blocked' %}
+      {% set ns.reason = 'Supply reported off; restoration follows trip-end flow, not landing' if is_state('input_boolean.trip', 'on') else 'Supply reported off; restoration not confirmed' %}
+    {% endif %}
+  {% elif kind == 'climate' %}
+    {% set ns.source = 'climate.my_ecobee' %}
+    {% set temp = state_attr(ns.source, 'current_temperature') | float(none) %}
+    {% set target = state_attr(ns.source, 'temperature') | float(none) %}
+    {% set low = state_attr(ns.source, 'target_temp_low') | float(none) %}
+    {% set high = state_attr(ns.source, 'target_temp_high') | float(none) %}
+    {% if not has_value(ns.source) or temp is none %}{% set ns.reason = 'Thermostat reading unavailable' %}
+    {% elif states(ns.source) == 'off' %}{% set ns.reason = 'Thermostat off; temperature ' ~ temp ~ '; no active comfort target' %}
+    {% elif target is none and (low is none or high is none) %}{% set ns.reason = 'Temperature ' ~ temp ~ '; active target unavailable' %}
+    {% else %}
+      {% set ready = (temp - target) | abs <= 1 if target is not none else low <= temp <= high %}
+      {% set ns.status = 'complete' if ready else 'running' %}
+      {% set ns.reason = 'Temperature ' ~ temp ~ '; reported target ' ~ (target if target is not none else low ~ '–' ~ high) %}
+    {% endif %}
+    {% set ns.reason = ns.reason ~ '; HVAC ' ~ (state_attr(ns.source, 'hvac_action') | default('unreported', true)) %}
+  {% elif kind in ['vacuum_main', 'mop_main'] %}
+    {% set vacuum = kind == 'vacuum_main' %}
+    {% set ns.source = 'input_datetime.x40_ultra_last_vacuumed_at' if vacuum else 'input_datetime.x40_ultra_last_mopped_at' %}
+    {% set finished = as_timestamp(states(ns.source), 0) %}
+    {% set active = 'script.x40_ultra_main_level_vacuum_only' if vacuum else 'script.x40_ultra_main_level_mop_only' %}
+    {% if began <= 0 %}{% set ns.reason = 'No associated return cycle; previous runs are not arrival evidence' %}
+    {% elif finished >= began and finished <= [current, closed] | min %}
+      {% set ns.status = 'complete' %}{% set ns.reason = 'Successful full-floor pass in this return cycle' %}{% set ns.evidence = (finished | as_datetime).isoformat() %}
+    {% elif guest == 'on' or visit == 'on' %}
+      {% set ns.status = 'blocked' %}{% set ns.reason = 'Guest privacy policy prevents automatic cleaning' %}
+    {% elif guest not in ['on', 'off'] or visit not in ['on', 'off'] %}{% set ns.reason = 'Guest context unavailable; cleaning result unverified' %}
+    {% elif is_state(active, 'on') and is_state('input_boolean.x40_ultra_active_run_owned', 'on') %}
+      {% set ns.status = 'running' %}{% set ns.reason = 'Owned cleaning pass is active; success not yet confirmed' %}
+    {% elif current < began %}
+      {% set ns.status = 'scheduled' %}{% set ns.reason = 'Existing pre-arrival cleaning window has not started' %}
+    {% elif not has_value('vacuum.x40_ultra') %}{% set ns.reason = 'Main-floor robot unavailable; result not confirmed' %}
+    {% elif deadline > 0 and current >= deadline %}
+      {% set ns.reason = 'No confirmed pass by finish-by time; may have been skipped or interrupted' %}
+    {% elif is_state('input_boolean.x40_ultra_orchestrated_run_active', 'on') %}
+      {% set ns.status = 'scheduled' %}{% set ns.reason = 'Cleaning sequence active; this pass has no confirmed completion yet' %}
+    {% else %}{% set ns.reason = 'No confirmed pass for this return cycle; launch is not completion' %}{% endif %}
+  {% elif kind in ['vacuum_den', 'vacuum_upstairs'] %}
+    {% set upstairs = kind == 'vacuum_upstairs' %}
+    {% set ns.source = 'sensor.dashboard_upstairs_activity' if upstairs else 'vacuum.valetudo_den' %}
+    {% set activity = states(ns.source) %}
+    {% if guest == 'on' or visit == 'on' %}{% set ns.status = 'blocked' %}{% set ns.reason = 'Guest context; inspect existing cleaning policy' %}
+    {% elif activity in ['cleaning', 'returning', 'paused'] %}
+      {% set ns.status = 'running' %}{% set ns.reason = 'Robot reports ' ~ activity ~ '; full-cycle completion not verified' %}
+    {% elif activity == 'error' %}{% set ns.status = 'blocked' %}{% set ns.reason = 'Robot reports an error' %}
+    {% elif began > current %}{% set ns.status = 'scheduled' %}{% set ns.reason = 'Pre-arrival window has not started; result unverified' %}
+    {% else %}{% set ns.reason = 'Robot ' ~ activity ~ '; full-cycle success not exposed by this source' %}{% endif %}
+  {% elif kind == 'pet_care' %}
+    {% set ns.source = 'binary_sensor.main_level_cat_feeder_error,binary_sensor.upstairs_cat_feeder_error,select.main_level_cat_feeder_mode,select.upstairs_cat_feeder_mode' %}
+    {% set bad = namespace(error=false, missing=false) %}
+    {% for entity in ns.source.split(',') %}{% if not has_value(entity) %}{% set bad.missing = true %}{% endif %}{% endfor %}
+    {% if is_state('binary_sensor.main_level_cat_feeder_error', 'on') or is_state('binary_sensor.upstairs_cat_feeder_error', 'on') %}
+      {% set ns.status = 'blocked' %}{% set ns.reason = 'A feeder reports an error; inspect pet care' %}
+    {% elif bad.missing %}{% set ns.reason = 'Feeder reporting unavailable; feeding unverified' %}
+    {% else %}{% set ns.reason = 'Feeder schedules available; fresh feeding completion and connectivity not verified' %}{% endif %}
+  {% endif %}
+  {% if not ns.evidence and ns.source %}
+    {% set entity = ns.source.split(',')[0] %}
+    {% if has_value(entity) %}{% set ns.evidence = states[entity].last_updated.isoformat() %}{% endif %}
+  {% endif %}
+  {{ dict(status=ns.status, reason=ns.reason, source=ns.source, evidence_at=ns.evidence,
+    cycle_id=state_attr('sensor.dashboard_return_cycle', 'cycle_id') | default('', true)) | to_json }}
+{%- endmacro %}
+
+{% macro aggregate() -%}
+  {% set ids = ['security', 'climate', 'water', 'vacuum_main', 'mop_main', 'vacuum_den', 'vacuum_upstairs', 'pet_care'] %}
+  {% set ns = namespace(values=[]) %}
+  {% for key in ids %}{% set ns.values = ns.values + [states('sensor.dashboard_readiness_' ~ key)] %}{% endfor %}
+  {% if 'blocked' in ns.values %}blocked
+  {% elif 'running' in ns.values %}running
+  {% elif 'scheduled' in ns.values %}scheduled
+  {% elif 'skipped' in ns.values %}skipped
+  {% elif ns.values | reject('eq', 'complete') | list | count > 0 %}unknown
+  {% else %}complete{% endif %}
+{%- endmacro %}

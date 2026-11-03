@@ -1,0 +1,144 @@
+# Reporting only. Trigger restoration and evidence attributes require YAML templates.
+# These observers never call services or change device-control policy.
+template:
+- triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.trip
+    - sensor.next_flight_home_arrival
+    - sensor.pre_arrival_clean_start
+    - sensor.pre_arrival_clean_finish_by
+    - input_number.pre_arrival_clean_lead_minutes
+    - input_number.pre_arrival_clean_buffer_minutes
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: dashboard_status_refresh
+  sensor:
+  - name: Dashboard Return Cycle
+    unique_id: dashboard_return_cycle
+    default_entity_id: sensor.dashboard_return_cycle
+    state: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).cycle_id }}'
+    attributes:
+      cycle_id: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).cycle_id
+        }}'
+      landing_at: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).landing_at
+        }}'
+      window_start: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).window_start
+        }}'
+      finish_by: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).finish_by
+        }}'
+      trip_started_at: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).trip_started_at
+        }}'
+      closed_at: '{% from ''dashboard_status.jinja'' import cycle %}{{ (cycle(this.attributes, trigger) | from_json).closed_at
+        }}'
+- triggers:
+  - trigger: mqtt
+    topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+  sensor:
+  - name: Dashboard Upstairs Activity
+    unique_id: dashboard_upstairs_activity
+    default_entity_id: sensor.dashboard_upstairs_activity
+    state: '{{ trigger.payload if trigger.payload in [''error'', ''docked'', ''idle'', ''returning'', ''cleaning'', ''paused'',
+      ''manual_control'', ''moving''] else ''unknown'' }}'
+    attributes:
+      source: valetudo/upstairs-vacuum/StatusStateAttribute/status
+      observed_at: '{{ this.attributes.get(''observed_at'', '''') if this.state == trigger.payload else now().isoformat()
+        }}'
+      reason: Activity only; retained messages and docking do not prove completion.
+- sensor:
+  - name: Dashboard Context
+    unique_id: dashboard_context
+    default_entity_id: sensor.dashboard_context
+    state: '{% from ''dashboard_status.jinja'' import context %}{{ context() }}'
+  - name: Dashboard Readiness Security
+    unique_id: dashboard_readiness_security
+    default_entity_id: sensor.dashboard_readiness_security
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''security'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''security'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''security'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''security'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''security'') | from_json).cycle_id }}'
+  - name: Dashboard Readiness Climate
+    unique_id: dashboard_readiness_climate
+    default_entity_id: sensor.dashboard_readiness_climate
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''climate'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''climate'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''climate'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''climate'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''climate'') | from_json).cycle_id }}'
+  - name: Dashboard Readiness Water
+    unique_id: dashboard_readiness_water
+    default_entity_id: sensor.dashboard_readiness_water
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''water'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''water'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''water'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''water'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''water'') | from_json).cycle_id }}'
+  - name: Dashboard Readiness Vacuum Main
+    unique_id: dashboard_readiness_vacuum_main
+    default_entity_id: sensor.dashboard_readiness_vacuum_main
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_main'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_main'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_main'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_main'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_main'') | from_json).cycle_id
+        }}'
+  - name: Dashboard Readiness Mop Main
+    unique_id: dashboard_readiness_mop_main
+    default_entity_id: sensor.dashboard_readiness_mop_main
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''mop_main'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''mop_main'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''mop_main'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''mop_main'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''mop_main'') | from_json).cycle_id }}'
+  - name: Dashboard Readiness Vacuum Den
+    unique_id: dashboard_readiness_vacuum_den
+    default_entity_id: sensor.dashboard_readiness_vacuum_den
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_den'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_den'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_den'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_den'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_den'') | from_json).cycle_id
+        }}'
+  - name: Dashboard Readiness Vacuum Upstairs
+    unique_id: dashboard_readiness_vacuum_upstairs
+    default_entity_id: sensor.dashboard_readiness_vacuum_upstairs
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_upstairs'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_upstairs'') | from_json).reason
+        }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_upstairs'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_upstairs'') | from_json).source
+        }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''vacuum_upstairs'') | from_json).cycle_id
+        }}'
+  - name: Dashboard Readiness Pet Care
+    unique_id: dashboard_readiness_pet_care
+    default_entity_id: sensor.dashboard_readiness_pet_care
+    state: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''pet_care'') | from_json).status }}'
+    attributes:
+      reason: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''pet_care'') | from_json).reason }}'
+      evidence_at: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''pet_care'') | from_json).evidence_at
+        }}'
+      source: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''pet_care'') | from_json).source }}'
+      cycle_id: '{% from ''dashboard_status.jinja'' import readiness %}{{ (readiness(''pet_care'') | from_json).cycle_id }}'
+  - name: Dashboard Return Readiness
+    unique_id: dashboard_return_readiness
+    default_entity_id: sensor.dashboard_return_readiness
+    state: '{% from ''dashboard_status.jinja'' import aggregate %}{{ aggregate() }}'
+    attributes:
+      reason: All required results must be complete; unknown is not ready.
