@@ -672,26 +672,26 @@ automation:
             Current NWS Weather Alerts:
 
             {% if states('sensor.nws_dakota_county_alerts_alerts_are_active') == "No" %}
-            No alerts at this time for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}.
+            No alerts at this time for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}.
             {% endif %}
             {% if states.sensor.nws_dakota_county_alerts_alert_1.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_1.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            {{ states.sensor.nws_dakota_county_alerts_alert_1.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
 
             {% endif %}
             {% if states.sensor.nws_dakota_county_alerts_alert_2.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_2.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            {{ states.sensor.nws_dakota_county_alerts_alert_2.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
 
             {% endif %}
             {% if states.sensor.nws_dakota_county_alerts_alert_3.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_3.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            {{ states.sensor.nws_dakota_county_alerts_alert_3.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
 
             {% endif %}
             {% if states.sensor.nws_dakota_county_alerts_alert_4.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_4.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            {{ states.sensor.nws_dakota_county_alerts_alert_4.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
 
             {% endif %}
             {% if states.sensor.nws_dakota_county_alerts_alert_5.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_5.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            {{ states.sensor.nws_dakota_county_alerts_alert_5.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             {% endif %}
       - action: input_text.set_value
         data:
@@ -1359,7 +1359,7 @@ template:
             {% if states.sensor.nws_dakota_county_alerts.attributes.alerts[0].instruction != None %}
             {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].instruction | regex_replace('\n\n','<p>') | regex_replace('\n',' ') | regex_replace('\*','\n*') | regex_replace('<p>','\n\n') }}<br>
             {% endif %}
-            <br>Where : {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            <br>Where : {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             <br>Effective: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].effective }}
             {%- if states.sensor.nws_dakota_county_alerts.attributes.alerts[0].ends != None %}
               <br>Ends: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].ends }}
@@ -1370,7 +1370,7 @@ template:
           {% endif %}
         spoken_title: >
           {% if not is_state('sensor.nws_dakota_county_alerts', 'unavailable') and not is_state('sensor.nws_dakota_county_alerts', 'unknown') and ((state_attr('sensor.nws_dakota_county_alerts', 'alerts') | default([], true) | count) > 0) %}
-            Attention!!! Weather alert for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
+            Attention!!! Weather alert for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[0].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
           {% else %}
             None
           {% endif %}
@@ -1660,7 +1660,7 @@ template:
             {% if states.sensor.nws_dakota_county_alerts.attributes.alerts[1].instruction != None %}
             {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].instruction | regex_replace('\n\n','<p>') | regex_replace('\n',' ') | regex_replace('\*','\n*') | regex_replace('<p>','\n\n') }}<br>
             {% endif %}
-            <br>Where : {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            <br>Where : {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             <br>Effective: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].effective }}
             {%- if states.sensor.nws_dakota_county_alerts.attributes.alerts[1].ends != None %}
               <br>Ends: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].ends }}
@@ -1671,7 +1671,7 @@ template:
           {% endif %}
         spoken_title: >
           {% if not is_state('sensor.nws_dakota_county_alerts', 'unavailable') and not is_state('sensor.nws_dakota_county_alerts', 'unknown') and ((state_attr('sensor.nws_dakota_county_alerts', 'alerts') | default([], true) | count) > 1) %}
-            Attention!!! Weather alert for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
+            Attention!!! Weather alert for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[1].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
           {% else %}
             None
           {% endif %}
@@ -1961,7 +1961,7 @@ template:
             {% if states.sensor.nws_dakota_county_alerts.attributes.alerts[2].instruction != None %}
             {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].instruction | regex_replace('\n\n','<p>') | regex_replace('\n',' ') | regex_replace('\*','\n*') | regex_replace('<p>','\n\n') }}<br>
             {% endif %}
-            <br>Where : {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            <br>Where : {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             <br>Effective: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].effective }}
             {%- if states.sensor.nws_dakota_county_alerts.attributes.alerts[2].ends != None %}
               <br>Ends: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].ends }}
@@ -1972,7 +1972,7 @@ template:
           {% endif %}
         spoken_title: >
           {% if not is_state('sensor.nws_dakota_county_alerts', 'unavailable') and not is_state('sensor.nws_dakota_county_alerts', 'unknown') and ((state_attr('sensor.nws_dakota_county_alerts', 'alerts') | default([], true) | count) > 2) %}
-            Attention!!! Weather alert for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
+            Attention!!! Weather alert for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[2].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
           {% else %}
             None
           {% endif %}
@@ -2262,7 +2262,7 @@ template:
             {% if states.sensor.nws_dakota_county_alerts.attributes.alerts[3].instruction != None %}
             {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].instruction | regex_replace('\n\n','<p>') | regex_replace('\n',' ') | regex_replace('\*','\n*') | regex_replace('<p>','\n\n') }}<br>
             {% endif %}
-            <br>Where : {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            <br>Where : {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             <br>Effective: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].effective }}
             {%- if states.sensor.nws_dakota_county_alerts.attributes.alerts[3].ends != None %}
               <br>Ends: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].ends }}
@@ -2273,7 +2273,7 @@ template:
           {% endif %}
         spoken_title: >
           {% if not is_state('sensor.nws_dakota_county_alerts', 'unavailable') and not is_state('sensor.nws_dakota_county_alerts', 'unknown') and ((state_attr('sensor.nws_dakota_county_alerts', 'alerts') | default([], true) | count) > 3) %}
-            Attention!!! Weather alert for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
+            Attention!!! Weather alert for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[3].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
           {% else %}
             None
           {% endif %}
@@ -2563,7 +2563,7 @@ template:
             {% if states.sensor.nws_dakota_county_alerts.attributes.alerts[4].instruction != None %}
             {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].instruction | regex_replace('\n\n','<p>') | regex_replace('\n',' ') | regex_replace('\*','\n*') | regex_replace('<p>','\n\n') }}<br>
             {% endif %}
-            <br>Where : {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
+            <br>Where : {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
             <br>Effective: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].effective }}
             {%- if states.sensor.nws_dakota_county_alerts.attributes.alerts[4].ends != None %}
               <br>Ends: {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].ends }}
@@ -2574,7 +2574,7 @@ template:
           {% endif %}
         spoken_title: >
           {% if not is_state('sensor.nws_dakota_county_alerts', 'unavailable') and not is_state('sensor.nws_dakota_county_alerts', 'unknown') and ((state_attr('sensor.nws_dakota_county_alerts', 'alerts') | default([], true) | count) > 4) %}
-            Attention!!! Weather alert for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
+            Attention!!! Weather alert for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}. A {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].title }}. {{ states.sensor.nws_dakota_county_alerts.attributes.alerts[4].NWSheadline | regex_replace('\[\'','') | regex_replace('\'\]','') | capitalize }}.
           {% else %}
             None
           {% endif %}

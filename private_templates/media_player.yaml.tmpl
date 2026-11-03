@@ -658,7 +658,7 @@ automation:
             data:
               title: "Sonos needs attention"
               message: >-
-                {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }}
+                {{ ((device_name(trigger.entity_id) ~ ' ') if device_name(trigger.entity_id) else '') ~ (entity_name(trigger.entity_id) | default(trigger.entity_id, true)) }}
                 has been unavailable for 30+ minutes and a config-entry reload did not
                 recover it. Check the speaker for a red status LED — it likely needs a
                 physical power-cycle (unplug ~10s, plug back in).
