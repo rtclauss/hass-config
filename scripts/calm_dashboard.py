@@ -269,12 +269,13 @@ def build_dashboard(existing: dict, root: str, states: dict[str, dict] | None = 
         card = tile(entity, label)
         card["visibility"] = [{"condition": "state", "entity": entity, "state": "on"}]
         exceptions.append(card)
-    for entity in ["fan.owner_suite", "light.owner_suite_lamps", "cover.owner_suite_blinds_ha", "media_player.ma_bedroom"]:
-        card = tile(entity)
+    for entity, label in [("fan.owner_suite", "Owner-suite ceiling fan"), ("light.owner_suite_lamps", "Owner-suite lamps"),
+                          ("cover.owner_suite_blinds_ha", "Owner-suite blinds"), ("media_player.ma_bedroom", "Bedroom audio")]:
+        card = tile(entity, label)
         card["visibility"] = [{"condition": "state", "entity": entity, "state": ["unavailable", "unknown"]}]
         exceptions.append(card)
     for index, old in enumerate(exceptions):
-        card = summary_card(old["entity"], old.get("name", "Device unavailable"), "mdi:information-outline",
+        card = summary_card(old["entity"], old.get("name", "{{ state_attr(entity, 'friendly_name') or entity }}"), "mdi:information-outline",
                             "{{ state_attr(entity, 'reason') or (states(entity) | title) }}", "attention")
         card["visibility"] = old["visibility"]
         card["color"] = "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}"

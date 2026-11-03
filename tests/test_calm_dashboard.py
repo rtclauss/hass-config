@@ -338,6 +338,16 @@ def test_missing_critical_monitoring_is_visible_independent_of_context(original)
         assert card["visibility"][0] in exceptions["visibility"][0]["conditions"]
 
 
+def test_unavailable_device_alerts_identify_each_affected_device(original):
+    home = build_dashboard(original, "/example-dashboard")["views"][0]
+    exceptions = next(s for s in home["sections"] if s["cards"][0].get("heading") == "Needs attention")
+    names = {c["entity"]: c["primary"] for c in exceptions["cards"] if "entity" in c}
+    assert names["fan.owner_suite"] == "Owner-suite ceiling fan"
+    assert names["light.owner_suite_lamps"] == "Owner-suite lamps"
+    assert names["cover.owner_suite_blinds_ha"] == "Owner-suite blinds"
+    assert names["media_player.ma_bedroom"] == "Bedroom audio"
+
+
 def test_home_matches_rooms_first_render_hierarchy(original):
     home = build_dashboard(original, "/example-dashboard")["views"][0]
     assert home["max_columns"] == 2
