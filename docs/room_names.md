@@ -59,3 +59,25 @@ Stairway (Hall namespace):
 | `Hall/Stairway Bulb 6` | Hue filament ST23 (bottom of stairs) | `0x001788010f83f38a` |
 
 The bulb numbering follows the Z2M list order until each bulb is physically confirmed with Identify. The switch binds endpoint 2 to the group and joins it on endpoint 1; `reset_inovelli_switches` replays both.
+
+Keep `select.hall_stairway_smartbulbmode` set to `Smart Bulb Mode` so the six Hue bulbs retain continuous power. Control their light output through Zigbee rather than cutting or dimming their mains supply. The reset script must preserve this setting; the switch's output mode remains `Dimmer`.
+
+## Hallway and Stairway Adaptive Lighting
+
+Adaptive Lighting owns individual bulbs, with each bulb assigned to exactly one profile:
+
+| Profile | Light entities |
+| --- | --- |
+| Hallway | `light.hall_laundry`, `light.hall_main_foyer_1`, `light.hall_main_foyer_2`, `light.hall_upstairs_1`, `light.hall_upstairs_2`, `light.hall_transition` |
+| Stairway | `light.hall_stairway_bulb_1` through `light.hall_stairway_bulb_6` |
+
+Keep relay/switch entities and Zigbee2MQTT groups out of both profiles, and preserve the lack of overlap. A group's aggregate on state must not cause Adaptive Lighting to issue a group command that wakes its off members. These target lists are stored in the Adaptive Lighting integration's persisted UI options; update those options when changing ownership.
+
+Turning on one bulb directly should adapt only that bulb and leave the other off bulbs off. Keep the Zigbee2MQTT groups and paddle bindings available for deliberate group commands. An explicit group, scene, or script command can still turn on every light it targets.
+
+After changing profile options, verify:
+
+- A direct single-bulb turn-on adapts that bulb while other off bulbs stay off.
+- An explicit group or bound paddle command still controls its intended members.
+- Lights stay off through at least two adaptation intervals and a scheduled controller reset.
+- The profile light lists persist after the next normal Home Assistant restart.
