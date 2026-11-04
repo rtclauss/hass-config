@@ -145,3 +145,11 @@ def test_holiday_lighting_notification_only_sends_on_holiday_days() -> None:
     assert "states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', '']" in text
     assert "state_attr('sensor.active_outdoor_holiday', 'notification_message')" in text
     assert f"action: notify.all" in text
+
+
+def test_retired_garbage_integration_has_no_remaining_holiday_actions() -> None:
+    text = (Path(__file__).resolve().parents[1] / "packages/holidays.yaml").read_text()
+    assert "garbage_collection_loaded" not in text
+    assert "garbage_collection.offset_date" not in text
+    assert "garbage_collection.update_state" not in text
+    assert "garbage_holiday_update" not in text
