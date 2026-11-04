@@ -75,11 +75,10 @@ def test_hall_transition_double_taps_control_adaptive_path_lighting() -> None:
     assert 'to: "down_double"' in block
     assert 'to: "up_single"' not in block
     assert 'to: "down_single"' not in block
-    assert "action: script.adaptive_light_turn_on" in on_branch
-    assert "adaptive_switch: switch.adaptive_lighting_hallway" in on_branch
-    assert "- light.hall_all" in on_branch
+    assert "action: script.hallway_lights_turn_on" in on_branch
     assert "action: light.turn_off" in off_branch
-    assert "entity_id: light.hall_all" in off_branch
+    assert "- light.hall_all" in off_branch
+    assert "- light.hall_stairway_bulbs" in off_branch
 
 
 def test_scene_map_documents_each_switch_and_safety_contract() -> None:

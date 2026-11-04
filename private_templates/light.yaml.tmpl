@@ -852,11 +852,8 @@ automation:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - action: script.adaptive_light_turn_on
+              - action: script.hallway_lights_turn_on
                 data:
-                  adaptive_switch: switch.adaptive_lighting_hallway
-                  lights:
-                    - light.hall_all
                   transition: 1
               # - action: light.turn_on
               #   data:
@@ -895,6 +892,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_all
+                    - light.hall_stairway_bulbs
                     - light.garage_overhead_switch
                   transition: 5
           - conditions:
@@ -925,6 +923,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_all
+                    - light.hall_stairway_bulbs
                     - light.garage_overhead_switch
                   transition: 5
           - conditions:
@@ -934,17 +933,14 @@ automation:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - action: script.adaptive_light_turn_on
+              - action: script.hallway_lights_turn_on
                 data:
-                  adaptive_switch: switch.adaptive_lighting_hallway
-                  lights:
-                    - light.hall_all
                   transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
               #       - light.hall_upstairs_switch
-              #       - light.hall_stairway
+              #       - light.hall_stairway_bulbs
               #     transition: 2.5
               # Should do this automatically
               # kelvin: "{{ states('sensor.circadian_temperature') | int }}"
@@ -977,6 +973,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_all
+                    - light.hall_stairway_bulbs
                   transition: 5
           - conditions:
               - condition: trigger
@@ -1006,6 +1003,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_all
+                    - light.hall_stairway_bulbs
                   transition: 5
 
   - id: in_bed_turn_off_other_lights
@@ -1504,6 +1502,7 @@ automation:
             - light.kitchen_sink_overhead_switch
             - light.kitchen_sink_overhead
             - light.hall_all
+            - light.hall_stairway_bulbs
             # - light.hall_all_downlights
             # - light.dining_room_lamps
             - light.den_flood_switch
@@ -1536,6 +1535,7 @@ automation:
           entity_id:
             - light.kitchen_sink_overhead
             - light.hall_all
+            - light.hall_stairway_bulbs
             - light.den_all
         data:
           # Hour-long transition before sunset.
@@ -1610,11 +1610,8 @@ automation:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - action: script.adaptive_light_turn_on
+              - action: script.hallway_lights_turn_on
                 data:
-                  adaptive_switch: switch.adaptive_lighting_hallway
-                  lights:
-                    - light.hall_all
                   transition: 1
               # - action: light.turn_on
               #   data:
@@ -1645,6 +1642,7 @@ automation:
                   entity_id:
                     - light.hall_foyer_switch
                     - light.hall_transition_switch
+                    - light.hall_stairway_bulbs
                   transition: 5
           - conditions:
               - condition: trigger
@@ -1653,19 +1651,14 @@ automation:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - action: script.adaptive_light_turn_on
+              - action: script.hallway_lights_turn_on
                 data:
-                  adaptive_switch: switch.adaptive_lighting_hallway
-                  lights:
-                    - light.hall_upstairs_switch
-                    - light.hall_stairway
-                    - light.hall_all
                   transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
               #       - light.hall_upstairs_switch
-              #       - light.hall_stairway
+              #       - light.hall_stairway_bulbs
               #     transition: 2.5
               # Should do this automatically
               # kelvin: "{{ states('sensor.circadian_temperature') | int }}"
@@ -1691,7 +1684,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_upstairs_switch
-                    - light.hall_stairway
+                    - light.hall_stairway_bulbs
                   transition: 5
 
   # - alias: turn_off_hallway_on_motion_day
@@ -2140,9 +2133,9 @@ automation:
           entity_id: input_boolean.basement_auto_on
           state: "on"
     action:
-      - action: switch.turn_off
-        data:
-          entity_id: light.hall_stairway
+      - action: light.turn_off
+        target:
+          entity_id: light.hall_stairway_bulbs
       - action: input_boolean.turn_off
         data:
           entity_id: input_boolean.basement_auto_on
@@ -2395,7 +2388,7 @@ scene:
         brightness: 255
       light.den_all:
         state: "on"
-      light.hall_stairway:
+      light.hall_stairway_bulbs:
         state: "on"
 
   - id: outside_ambiance
@@ -2434,6 +2427,9 @@ scene:
         state: "on"
         brightness: 64
       light.hall_all:
+        state: "on"
+        brightness: 255
+      light.hall_stairway_bulbs:
         state: "on"
         brightness: 255
 
