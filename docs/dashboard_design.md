@@ -153,6 +153,14 @@ Version-specific observations must be rechecked before carrying a workaround
 forward. The installed versions and current soak record belong in
 [calm_dashboard.md](calm_dashboard.md#deployment-and-soak-record).
 
+Observed during 2026.11 repair cleanup: a retained specialist view still showed
+the owner-retired cat cleaning policy and its missing supervised-clean action.
+Repair that section against the existing guarded manual-cleaning scripts and
+the current [cleaning contract](vacuum_cleaning.md); a dashboard control must not
+revive an obsolete policy. Removing an orphan-only tab visibility allowlist must
+keep the tab hidden, rather than making it visible to everyone. These are
+maintenance constraints, not new owner preferences.
+
 ## Instructions for each future change
 
 1. Read this guide, [room intent](room_intent.yaml), the relevant behavioral

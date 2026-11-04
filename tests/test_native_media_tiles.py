@@ -62,7 +62,7 @@ def test_mini_media_player_stays_loaded_for_sonos_group_controls() -> None:
     configuration = CONFIGURATION.read_text(encoding="utf-8")
     grouped_tiles = [OWNER_SUITE_TILE, OFFICE_TILE, BATHROOM_TILE]
 
-    assert "/hacsfiles/mini-media-player/mini-media-player-bundle.js" in configuration
+    assert "/local/community/mini-media-player/mini-media-player-bundle.js" in configuration
     for tile_path in grouped_tiles:
         tile = tile_path.read_text(encoding="utf-8")
         assert "type: custom:mini-media-player" in tile

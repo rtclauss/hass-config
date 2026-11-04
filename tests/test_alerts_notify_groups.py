@@ -101,14 +101,22 @@ def test_shared_notifications_mirror_defaults_optional_payload_fields() -> None:
     assert "notify_data: \"{{ notify_payload.data | default({}, true) }}\"" in mirror
 
 
-def test_laundry_leak_dry_trigger_uses_on_to_off_transition() -> None:
+def test_water_leak_triggers_follow_replacement_sensors_in_monitored_areas() -> None:
+    # Native moisture triggers reject unknown/unavailable transitions and retain
+    # wet/dry IDs for the existing notification branches.
     text = ALERTS_PATH.read_text(encoding="utf-8")
-    laundry_triggers = text.split(
-        "entity_id: binary_sensor.laundry_room_leak_water_leak", maxsplit=1
-    )[1]
-
-    assert 'from: "off"\n        to: "on"\n        id: wet' in laundry_triggers
-    assert 'from: "on"\n        to: "off"\n        id: dry' in laundry_triggers
+    block = text.split("  - id: water_leak_detected\n", 1)[1].split("\n  - id:", 1)[0]
+    config = yaml.safe_load(block)
+    wet, dry = config["trigger"]
+    assert wet["trigger"] == "moisture.detected"
+    assert dry["trigger"] == "moisture.cleared"
+    assert wet["id"] == "wet" and dry["id"] == "dry"
+    assert wet["target"] == dry["target"] == {
+        "area_id": ["unfinished_basement", "kitchen", "laundry_room"]
+    }
+    assert wet["options"] == dry["options"] == {"behavior": "each"}
+    assert "binary_sensor.kitchen_sink_leak_water_leak" not in block
+    assert "binary_sensor.laundry_room_leak_water_leak" not in block
 
 
 def test_flash_lights_keeps_distinct_on_and_off_hold_steps() -> None:
