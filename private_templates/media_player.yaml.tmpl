@@ -221,10 +221,25 @@ automation:
       #     command: "flip"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_to_side
-        not_to:
+        # Only a real side selection may start audio. MQTT reinitialization can
+        # publish unknown -> ""; neither recovery nor creation is a cube flip.
+        # Keep the empty/legacy None idle states so the next real flip works.
+        from:
+          - ""
           - "None"
-          - "unknown"
-          - "unavailable"
+          - "0"
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+        to:
+          - "0"
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
     action:
       - action: notify.all
         data:
