@@ -49,12 +49,11 @@ def test_idle_resets_and_invalid_sides_never_select_a_playlist(selection: dict, 
     assert not (old in trigger["from"] and new in trigger["to"])
 
 
-@pytest.mark.parametrize("old", ["", "None", *SIDES])
-@pytest.mark.parametrize("side", SIDES)
+@pytest.mark.parametrize(
+    ("old", "side"),
+    [(old, side) for old in ["", "None", *SIDES] for side in SIDES if old != side],
+)
 def test_real_flips_preserve_notifications_and_script_mapping(selection: dict, old: str, side: str) -> None:
-    if old == side:
-        # HA ignores attribute-only changes when `from` / `to` are specified.
-        return
     trigger, = selection["trigger"]
     assert old in trigger["from"] and side in trigger["to"]
     notify, play = selection["action"]
