@@ -10,8 +10,8 @@ automation; scene actions must not make ordinary operation surprising.
 | `sensor.laundry_wall_switch_action` | Up double | Acknowledge a completed washer or dryer load. The washer reminder boolean is cleared so `washer_cleared` returns it to `IDLE`; the dryer state is set directly to `IDLE`. | Runs only while the washer reminder is active in `CLEAN`, `REMINDED`, or `MUSTY`, or the dryer is `CLEAN` or `REMINDED`; it does nothing while both machines are idle or running. |
 | `sensor.garage_overhead_switch_action` | Up double | Open `cover.garage_door`. | Runs only while the door is fully closed; transitional and unavailable states do nothing. |
 | `sensor.garage_overhead_switch_action` | Down double | Close `cover.garage_door`. | Runs only while the door is fully open; transitional and unavailable states do nothing. |
-| `sensor.hall_transition_switch_action` | Up double | Apply the current Hallway Adaptive Lighting target to `light.hall_all`. | Uses the shared adaptive-light helper and leaves single-tap local load control unchanged. |
-| `sensor.hall_transition_switch_action` | Down double | Turn off `light.hall_all` with a short transition. | A deliberate path-wide off action; it does not alter occupancy policy or single-tap behavior. |
+| `sensor.hall_transition_switch_action` | Up double | Turn on `light.hall_all` and `light.hall_stairway_bulbs` through their respective Hallway and Stairway Adaptive Lighting profiles. | Uses `script.hallway_lights_turn_on` and leaves single-tap local load control unchanged. |
+| `sensor.hall_transition_switch_action` | Down double | Turn off `light.hall_all` and `light.hall_stairway_bulbs` with a short transition. | A deliberate path-wide off action; it does not alter occupancy policy or single-tap behavior. |
 
 ## Adding another mapping
 

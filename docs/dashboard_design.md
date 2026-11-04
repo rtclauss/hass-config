@@ -145,6 +145,10 @@ in [PR #1167](https://github.com/rtclauss/hass-config/pull/1167).
 | D12 | Use native controls even where the dashboard-designer skill defaults to button-card. The owner explicitly approved this hybrid plan, and live accessibility findings support it. Conceptual HTML mockups were inspiration, not proof of native HA rendering. | Owner direction or verified component constraints change. |
 
 These are concise decision records, not universal rules about every HA dashboard.
+Observed 2026-11-04 (issue #1176): the stairway switch's reported state can differ
+from its six smart bulbs in Smart Bulb Mode. Direct stairway controls use
+`light.hall_stairway_bulbs` so their state and toggle address the actual lights.
+See [the stairway command contract](room_names.md#stairway-command-targets).
 Version-specific observations must be rechecked before carrying a workaround
 forward. The installed versions and current soak record belong in
 [calm_dashboard.md](calm_dashboard.md#deployment-and-soak-record).

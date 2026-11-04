@@ -62,6 +62,28 @@ The bulb numbering follows the Z2M list order until each bulb is physically conf
 
 Keep `select.hall_stairway_smartbulbmode` set to `Smart Bulb Mode` so the six Hue bulbs retain continuous power. Control their light output through Zigbee rather than cutting or dimming their mains supply. The reset script must preserve this setting; the switch's output mode remains `Dimmer`.
 
+### Stairway command targets
+
+Use `light.hall_stairway_bulbs` for deliberate stairway on/off commands and
+scene entries. `light.hall_stairway` is the switch's receiving endpoint; its
+outgoing endpoint-2 paddle binding does not forward commands sent to that
+receiving endpoint. The switch can report off while the bulbs remain lit.
+`light.hall_all` contains the switch, but does not contain the six stairway
+bulbs. Whole-hall commands therefore explicitly target both groups; keep the
+existing Zigbee groups and paddle binding intact.
+
+`script.hallway_lights_turn_on` applies the Hallway and Stairway profiles
+separately through `script.adaptive_light_turn_on`, preserving each profile's
+enabled/disabled state and fallback. Day/night motion and hallway double-taps
+share that entrypoint. Vacancy, sunset lighting, full-path arrival scenes,
+goodnight, departure, and direct stairway controls address the bulb group.
+Targeted front-door and garage-entry paths keep their narrower light lists and
+sleep/privacy guards. Whole-house `lights_off_except` already discovers each
+on bulb independently, even when the switch reports off.
+
+Regression coverage lives in `tests/test_stairway_lighting_targets.py`, alongside
+the existing occupancy, entry-path, group replay, and bedtime tests (issue #1176).
+
 ## Hallway and Stairway Adaptive Lighting
 
 Adaptive Lighting owns individual bulbs, with each bulb assigned to exactly one profile:

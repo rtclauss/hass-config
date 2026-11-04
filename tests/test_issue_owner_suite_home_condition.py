@@ -103,7 +103,7 @@ def test_owner_suite_light_auto_off_combines_latch_and_morning_paths() -> None:
     assert "action: input_boolean.turn_off" in block
 
 
-def test_upstairs_hallway_motion_uses_hallway_adaptive_lighting_switch() -> None:
+def test_upstairs_hallway_motion_uses_shared_profile_aware_lighting() -> None:
     block = _automation_block("toggle_hallway_day")
 
     upstairs_branch = block.split("condition: trigger\n                id: upstairs-motion-sensed", maxsplit=1)[1].split(
@@ -111,7 +111,5 @@ def test_upstairs_hallway_motion_uses_hallway_adaptive_lighting_switch() -> None
         maxsplit=1,
     )[0]
 
-    assert "light.hall_upstairs_switch" in upstairs_branch
-    assert "light.hall_stairway" in upstairs_branch
-    assert "adaptive_switch: switch.adaptive_lighting_hallway" in upstairs_branch
+    assert "action: script.hallway_lights_turn_on" in upstairs_branch
     assert "entity_id: switch.adaptive_lighting_owner_suite" not in upstairs_branch
