@@ -859,7 +859,7 @@ group:
       - sensor.my_ecobee_temperature
       - sensor.my_ecobee_humidity
       - climate.tiki_room
-      - sensor.basement_temperature
+      - sensor.basement_temperature_2
 
 ########################
 # Input Booleans
@@ -990,14 +990,18 @@ sensor:
     name: average_house_temp
     type: mean
     # device_class: "temperature"
+    # Ecobee room sensors come from the HomeKit Controller (`_2`) entities.
+    # The ecobee-cloud room entities (sensor.office_temperature, etc.) stop
+    # updating while the system is off and read 1.5-2.5 deg F high, and the
+    # cloud integration exposes no den/basement room temperature at all.
     entity_ids:
-      - sensor.basement_temperature
-      - sensor.bedroom_temperature
-      - sensor.den_temperature
-      - sensor.guest_room_temperature
+      - sensor.basement_temperature_2
+      - sensor.bedroom_temperature_2
+      - sensor.den_temperature_2
+      - sensor.guest_room_temperature_2
       - sensor.guest_room_tph_temperature
       - sensor.my_ecobee_current_temperature
-      - sensor.office_temperature
+      - sensor.office_temperature_2
       - sensor.office_tph_temperature
       - sensor.owner_suite_bathroom_tph_temperature
       - sensor.owner_suite_tph_temperature
@@ -1192,6 +1196,9 @@ template:
         unit_of_measurement: °F
         default_entity_id: sensor.ecobee_active_target_temperature
         unique_id: ecobee_active_target_temperature
+        # Recorded as long-term statistics so setpoints can be compared with
+        # room temperatures beyond the ~10-day state history.
+        state_class: measurement
         availability: "{{ states('climate.my_ecobee') not in ['unknown', 'unavailable'] }}"
         state: >-
           {% set action = states('sensor.hvac_activity') %}
@@ -1211,6 +1218,42 @@ template:
             {{ state_attr('climate.my_ecobee', 'temperature') }}
           {% endif %}
         name: ecobee_active_target_temperature
+      # Heat and cool setpoints recorded separately: in heat_cool (Auto) mode
+      # the thermostat has two targets and no single `temperature`, and in a
+      # single mode only that mode's setpoint applies. Unknown when it does
+      # not apply (or the system is off), so statistics skip those periods.
+      - device_class: temperature
+        unit_of_measurement: °F
+        state_class: measurement
+        default_entity_id: sensor.ecobee_heat_setpoint
+        unique_id: ecobee_heat_setpoint
+        availability: "{{ states('climate.my_ecobee') not in ['unknown', 'unavailable'] }}"
+        state: >-
+          {% set mode = states('climate.my_ecobee') %}
+          {% if mode == 'heat_cool' %}
+            {{ state_attr('climate.my_ecobee', 'target_temp_low') }}
+          {% elif mode == 'heat' %}
+            {{ state_attr('climate.my_ecobee', 'temperature') }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        name: ecobee_heat_setpoint
+      - device_class: temperature
+        unit_of_measurement: °F
+        state_class: measurement
+        default_entity_id: sensor.ecobee_cool_setpoint
+        unique_id: ecobee_cool_setpoint
+        availability: "{{ states('climate.my_ecobee') not in ['unknown', 'unavailable'] }}"
+        state: >-
+          {% set mode = states('climate.my_ecobee') %}
+          {% if mode == 'heat_cool' %}
+            {{ state_attr('climate.my_ecobee', 'target_temp_high') }}
+          {% elif mode == 'cool' %}
+            {{ state_attr('climate.my_ecobee', 'temperature') }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        name: ecobee_cool_setpoint
       - unit_of_measurement: °F/min
         default_entity_id: sensor.ecobee_modeled_rate_deg_per_min
         unique_id: ecobee_modeled_rate_deg_per_min
