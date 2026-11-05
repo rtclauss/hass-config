@@ -17,6 +17,28 @@ values. CI validates the committed manifest and
 must contain only synthetic values. The media package is the first manifest
 target.
 
+### Repair migration (2026.11)
+
+Set `basement_ambient_humidity_entity` in the private values mapping to the
+available basement ambient humidity source before rendering the climate package.
+The former basement TPH entity was deleted; the live dehumidifier in the
+unfinished basement supplies this reading. Both operands remain availability
+guarded, so a missing source cannot turn ventilation off with a fabricated delta.
+The synthetic example uses `sensor.basement_dehumidifier_humidity`.
+
+Leak alerts use native moisture transitions in the unfinished basement, kitchen,
+and laundry areas. Replacement sensors must belong to the correct area. An empty
+area has no leak coverage: repair missing hardware separately rather than
+claiming the alert configuration establishes monitoring.
+
+The dishwasher running entity remains unavailable until a real monitoring
+source is configured. Its placeholder deliberately contains no deleted entity
+reference and does not report an idle dishwasher.
+
+Dashboard resources now use `/local/community/` paths for Marketplace. Keep URL
+query versions and resource types unchanged during migration, verify that every
+new URL serves JavaScript, then reload resources and check the repair list.
+
 ## Private media package
 
 `packages/media_player.yaml` is generated locally from

@@ -93,38 +93,22 @@ automation:
     alias: water_leak_detected
     trace:
       stored_traces: 10
+    # Area targets follow replacement leak sensors without stale entity IDs.
     trigger:
-      - trigger: state
-        entity_id: binary_sensor.basement_unfinished_leak_water_leak
-        from: "on"
-        to: "off"
-        id: dry
-      - trigger: state
-        entity_id: binary_sensor.basement_unfinished_leak_water_leak
-        from: "off"
-        to: "on"
+      - trigger: moisture.detected
+        target:
+          area_id: &leak_areas
+            - unfinished_basement
+            - kitchen
+            - laundry_room
+        options:
+          behavior: each
         id: wet
-
-      - trigger: state
-        entity_id: binary_sensor.kitchen_sink_leak_water_leak
-        from: "off"
-        to: "on"
-        id: wet
-      - trigger: state
-        entity_id: binary_sensor.kitchen_sink_leak_water_leak
-        from: "on"
-        to: "off"
-        id: dry
-
-      - trigger: state
-        entity_id: binary_sensor.laundry_room_leak_water_leak
-        from: "off"
-        to: "on"
-        id: wet
-      - trigger: state
-        entity_id: binary_sensor.laundry_room_leak_water_leak
-        from: "on"
-        to: "off"
+      - trigger: moisture.cleared
+        target:
+          area_id: *leak_areas
+        options:
+          behavior: each
         id: dry
 
     action:

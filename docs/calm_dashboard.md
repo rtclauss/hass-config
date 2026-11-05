@@ -84,6 +84,14 @@ against an old export. Export the current dashboard, review the diff, then use
 the dashboard API's configuration-hash precondition. Read the saved result back.
 Never edit `.storage` or replace a dashboard from a scoped single-view response.
 
+For the 2026.11 repair cleanup, `scripts/repair_dashboard_references.py` produces
+narrow JSON patches from a fresh export. Supply removed user IDs from the live
+repair report privately. An orphan-only tab allowlist becomes `visible: false`
+to preserve its hidden-tab behavior. The retired cat-policy section becomes
+guarded manual cleaning and docking controls; it invokes
+`script.vacuum_manual_start`, never a native vacuum start. Apply with the current
+dashboard hash and read back the result. This does not alter cleaning policy.
+
 Back up each changed YAML/theme/macro file before deployment. Check HA config,
 reload custom templates, reload template entities and themes, and reload Lovelace
 resources. Fire `dashboard_status_refresh` once after installation to initialize
