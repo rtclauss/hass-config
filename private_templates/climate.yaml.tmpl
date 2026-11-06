@@ -986,22 +986,63 @@ sensor:
     start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
     end: "{{ now() }}"
 
+  # Outlier-filtered ecobee room sensors. When the HomeKit Controller link to
+  # the ecobee drops (~1.5x/month), every remote room sensor briefly reports
+  # 212 deg F (100 deg C, the HomeKit maximum) right before going unavailable.
+  # Normal readings move in 0.18 deg F steps (never more than 0.36 deg F per
+  # reading), so anything more than 5 deg F from the median of the last five
+  # readings is replaced with that median. The filter keeps raw values in its
+  # window, so a genuine large change is accepted after a few readings.
+  - platform: filter
+    name: Basement Temperature Filtered
+    unique_id: basement_temperature_filtered
+    entity_id: sensor.basement_temperature_2
+    filters: &ecobee_room_outlier_filter
+      - filter: outlier
+        window_size: 5
+        radius: 5.0
+
+  - platform: filter
+    name: Bedroom Temperature Filtered
+    unique_id: bedroom_temperature_filtered
+    entity_id: sensor.bedroom_temperature_2
+    filters: *ecobee_room_outlier_filter
+
+  - platform: filter
+    name: Den Temperature Filtered
+    unique_id: den_temperature_filtered
+    entity_id: sensor.den_temperature_2
+    filters: *ecobee_room_outlier_filter
+
+  - platform: filter
+    name: Guest Room Temperature Filtered
+    unique_id: guest_room_temperature_filtered
+    entity_id: sensor.guest_room_temperature_2
+    filters: *ecobee_room_outlier_filter
+
+  - platform: filter
+    name: Office Temperature Filtered
+    unique_id: office_temperature_filtered
+    entity_id: sensor.office_temperature_2
+    filters: *ecobee_room_outlier_filter
+
   - platform: min_max
     name: average_house_temp
     type: mean
     # device_class: "temperature"
-    # Ecobee room sensors come from the HomeKit Controller (`_2`) entities.
-    # The ecobee-cloud room entities (sensor.office_temperature, etc.) stop
-    # updating while the system is off and read 1.5-2.5 deg F high, and the
-    # cloud integration exposes no den/basement room temperature at all.
+    # Ecobee room sensors come from the HomeKit Controller (`_2`) entities via
+    # the outlier filters above. The ecobee-cloud room entities
+    # (sensor.office_temperature, etc.) stop updating while the system is off
+    # and read 1.5-2.5 deg F high, and the cloud integration exposes no
+    # den/basement room temperature at all.
     entity_ids:
-      - sensor.basement_temperature_2
-      - sensor.bedroom_temperature_2
-      - sensor.den_temperature_2
-      - sensor.guest_room_temperature_2
+      - sensor.basement_temperature_filtered
+      - sensor.bedroom_temperature_filtered
+      - sensor.den_temperature_filtered
+      - sensor.guest_room_temperature_filtered
       - sensor.guest_room_tph_temperature
       - sensor.my_ecobee_current_temperature
-      - sensor.office_temperature_2
+      - sensor.office_temperature_filtered
       - sensor.office_tph_temperature
       - sensor.owner_suite_bathroom_tph_temperature
       - sensor.owner_suite_tph_temperature
