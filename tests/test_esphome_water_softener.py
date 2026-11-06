@@ -137,3 +137,13 @@ def test_salt_level_filter_has_no_permanently_stuck_outlier_rejection() -> None:
 
     esphome_text = ACTIVE_CONFIG.read_text(encoding="utf-8")
     assert "median:" in esphome_text
+
+
+def test_water_softener_is_a_passive_bluetooth_proxy() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+
+    assert "esp32_ble_tracker:" in text
+    assert "bluetooth_proxy:" in text
+    # Passive only: no active scanning or GATT connections on this node.
+    assert text.count("active: false") == 2
+    assert "active: true" not in text

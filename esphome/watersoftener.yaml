@@ -45,6 +45,18 @@ time:
   - platform: homeassistant
     id: homeassistant_time
 
+# Passive Bluetooth proxy: the unfinished-basement catnip plant sensor
+# (xiaomi_ble) sits in this room but was only reaching HA at about -90 dBm
+# through proxies on other floors and dropped out. Passive scanning is all a
+# Xiaomi plant sensor's advertisements need and keeps radio/CPU load low next
+# to the timing-sensitive VL53L1X polling.
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+
+bluetooth_proxy:
+  active: false
+
 i2c:
   # Wiring confirmed from the ESP-WROOM-32 board pinout and assembled device:
   # IO21 -> SDA, IO22 -> SCL, 3.3V -> VIN, and GND -> GND. The Adafruit
