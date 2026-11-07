@@ -6,7 +6,7 @@
           "title": "Home",
           "path": "home",
           "type": "sections",
-          "max_columns": 4,
+          "max_columns": 2,
           "sections": [
             {
               "type": "grid",
@@ -26,27 +26,151 @@
                         "input_select.house_mode",
                         "input_boolean.trip"
                       ],
-                      "content": "{% set c = states('sensor.dashboard_context') %}\n# {{ {'home': 'Your home, at a glance', 'morning': 'A clear start to the day', 'evening': 'A quiet evening', 'sleep': 'Keeping things quiet', 'departure': 'Ready to leave?', 'away': 'A clear view of home', 'return': 'Home is getting ready'}.get(c, 'Home status needs a look') }}\n{{ {'return': 'Check actual arrival-readiness results below.', 'away': 'Security, pet care, temperature, and water.', 'departure': 'Review the house before your trip.', 'sleep': 'Your controls stay available when you need them.'}.get(c, 'Room groups first. Details when you need them.') }}"
+                      "card_mod": {
+                        "class": "calm-hero",
+                        "style": {
+                          "ha-markdown$": "\nh1 { font-size: var(--calm-title-font-size, 29px) !important; font-weight: var(--calm-title-font-weight, 500) !important; letter-spacing: -.7px; margin: 8px 0 !important; line-height: 1.2 !important; }\nh2, h3 { font-weight: var(--calm-title-font-weight, 500) !important; }\nh3 { font-size: 14px !important; margin: 10px 12px !important; }\np { color: var(--secondary-text-color); font-size: 13px; line-height: 1.5; }\nsmall { color: var(--secondary-text-color); font-size: 11px; letter-spacing: .06em; }\n"
+                        }
+                      },
+                      "content": "{% set c = states('sensor.dashboard_context') %}<small>{{ now().strftime('%A') }} · {{ c | replace('_', ' ') | title }}</small>\n# {{ 'A quiet evening.' if c == 'home' and now().hour >= 17 else {'home': 'At home.', 'morning': 'A clear start to the day.', 'evening': 'A quiet evening.', 'sleep': 'Keeping things quiet.', 'departure': 'Ready to leave?', 'away': 'A clear view of home.', 'return': 'Home is getting ready.'}.get(c, 'Home status needs a look.') }}\nYour rooms. The details when you need them.\n\n<small>Home weather · {% set w = 'weather.tomorrow_io_the_brewery_daily' %}{% if has_value(w) %}{{ state_attr(w, 'temperature') if state_attr(w, 'temperature') is not none else '—' }}{{ state_attr(w, 'temperature_unit') or '' }} · {{ states(w) | replace('-', ' ') | title }}{% else %}Unavailable{% endif %}</small>"
                     },
                     {
-                      "type": "shortcut",
-                      "label": "Travel and readiness",
-                      "icon": "mdi:airplane-check",
+                      "type": "custom:mushroom-chips-card",
+                      "alignment": "start",
+                      "chips": [
+                        {
+                          "type": "template",
+                          "entity": "sensor.dashboard_readiness_security",
+                          "icon": "mdi:shield-outline",
+                          "content": "{{ 'Security needs attention' if is_state(entity, 'blocked') else 'Security unverified' if not has_value(entity) or is_state(entity, 'unknown') else 'Door ' ~ states('lock.front_door_lock') }}",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        },
+                        {
+                          "type": "template",
+                          "entity": "climate.my_ecobee",
+                          "icon": "mdi:thermometer",
+                          "content": "{% set t = state_attr(entity, 'current_temperature') | float(none) %}{{ (t | round(0) | int) ~ '° indoors' if t is not none else 'Temperature unavailable' }}",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        },
+                        {
+                          "type": "template",
+                          "entity": "input_select.house_mode",
+                          "icon": "mdi:home-outline",
+                          "content": "{{ states(entity) | replace('_', ' ') | title }} mode",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        }
+                      ],
+                      "grid_options": {
+                        "columns": "full"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_context",
+                      "primary": "{% if is_state('input_boolean.weekday_alarm_on', 'on') and has_value('input_datetime.weekday_alarm') %}Weekday alarm · {{ states('input_datetime.weekday_alarm')[:5] }}{% elif is_state('input_boolean.weekend_alarm_on', 'on') and has_value('input_datetime.weekend_alarm') %}Weekend alarm · {{ states('input_datetime.weekend_alarm')[:5] }}{% else %}Alarm settings{% endif %}",
+                      "secondary": "Weekday {{ states('input_boolean.weekday_alarm_on') }} · Weekend {{ states('input_boolean.weekend_alarm_on') }} · Meeting {{ states('input_boolean.special_meeting') }}",
+                      "icon": "mdi:alarm",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
                       "tap_action": {
                         "action": "navigate",
-                        "navigation_path": "/example-dashboard/travel"
+                        "navigation_path": "/example-dashboard/owner-suite"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-context"
                       },
                       "grid_options": {
-                        "columns": 6
+                        "columns": "full",
+                        "rows": "auto"
                       },
                       "visibility": [
                         {
                           "condition": "state",
                           "entity": "sensor.dashboard_context",
                           "state": [
-                            "return",
+                            "home",
+                            "morning",
+                            "evening",
+                            "sleep"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_context",
+                      "primary": "Travel and readiness",
+                      "secondary": "{{ 'Review departure preparation' if is_state(entity, 'departure') else 'Return readiness: ' ~ states('sensor.dashboard_return_readiness') ~ ' · Open the evidence checklist' }}",
+                      "icon": "mdi:airplane-check",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/travel"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-context"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      },
+                      "visibility": [
+                        {
+                          "condition": "state",
+                          "entity": "sensor.dashboard_context",
+                          "state": [
                             "away",
+                            "return",
                             "departure"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_context",
+                      "primary": "Home context is unavailable",
+                      "secondary": "Open household status; all destinations remain available.",
+                      "icon": "mdi:help-circle-outline",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/house"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-context"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      },
+                      "visibility": [
+                        {
+                          "condition": "state",
+                          "entity": "sensor.dashboard_context",
+                          "state": [
+                            "unknown",
+                            "unavailable"
                           ]
                         }
                       ]
@@ -61,189 +185,273 @@
               "cards": [
                 {
                   "type": "heading",
-                  "heading": "Often used",
+                  "heading": "Your rooms",
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "light.owner_suite_lamps",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Lamps",
-                  "features": [
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
                     {
-                      "type": "light-brightness"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "fan.owner_suite",
-                  "grid_options": {
-                    "columns": 12
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Ceiling fan",
-                  "features": [
-                    {
-                      "type": "fan-speed"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "cover.owner_suite_blinds_ha",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Blinds",
-                  "features": [
-                    {
-                      "type": "cover-position"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.owner_suite_bathroom_lights_2",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Bathroom lights",
-                  "features": [
-                    {
-                      "type": "light-brightness"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "media_player.ma_bedroom",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Bedroom audio",
-                  "features": [
-                    {
-                      "type": "media-player-playback"
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.owner_suite_lamps",
+                      "primary": "Owner suite",
+                      "secondary": "{% set s = states(entity) %}{% set b = state_attr(entity, 'brightness') | float(none) %}{{ 'Lamps ' ~ ((b / 255 * 100) | round(0) | int) ~ '%' if s == 'on' and b is not none else 'Lamps on' if s == 'on' else 'Lamps off' if s == 'off' else 'Lamps unavailable' }} · Blinds {{ states('cover.owner_suite_blinds_ha') }}{% set t = states('sensor.bedroom_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:bed-king-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/owner-suite"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
                     },
                     {
-                      "type": "media-player-volume-slider"
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.office_all",
+                      "primary": "Office",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}{% set t = states('sensor.office_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:desk",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/office-v2"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.kitchen_all",
+                      "primary": "Kitchen",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:countertop-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.den_all",
+                      "primary": "Den",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}{% set t = states('sensor.den_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:sofa-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
                     }
-                  ]
-                },
-                {
-                  "type": "shortcut",
-                  "label": "Alarms",
-                  "icon": "mdi:alarm",
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/owner-suite"
-                  },
+                  ],
                   "grid_options": {
-                    "columns": 6
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
             },
             {
               "type": "grid",
-              "column_span": 2,
+              "column_span": 1,
               "cards": [
                 {
-                  "type": "heading",
-                  "heading": "Your rooms",
-                  "heading_style": "title"
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.owner_suite_lamps",
-                  "name": "Owner suite",
-                  "icon": "mdi:bed-king-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/owner-suite"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/owner-suite"
+                  "type": "grid",
+                  "columns": 1,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "media_player.ma_bedroom",
+                      "primary": "Bedroom audio",
+                      "secondary": "{{ states(entity) | title }}{% if state_attr(entity, 'media_title') %} · {{ state_attr(entity, 'media_title') }}{% endif %}",
+                      "icon": "mdi:music-note-outline",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-player"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      },
+                      "features": [
+                        {
+                          "type": "media-player-playback",
+                          "controls": [
+                            "media_play_pause"
+                          ]
+                        }
+                      ],
+                      "features_position": "inline"
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "media_player.ma_bedroom",
+                      "primary": "{% set v = state_attr(entity, 'volume_level') | float(none) %}Volume {{ ((v * 100) | round(0) | int) ~ '%' if v is not none else 'unavailable' }}",
+                      "secondary": "",
+                      "icon": "",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-volume"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      },
+                      "features": [
+                        {
+                          "type": "media-player-volume-slider"
+                        }
+                      ],
+                      "features_position": "inline"
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Media controls",
+                      "icon": "mdi:arrow-right",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/media-players"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    }
+                  ],
+                  "card_mod": {
+                    "class": "calm-panel"
                   },
                   "grid_options": {
-                    "columns": 6,
-                    "rows": 2
+                    "columns": "full",
+                    "rows": "auto"
                   }
-                },
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 1,
+              "cards": [
                 {
-                  "type": "tile",
-                  "entity": "light.office_all",
-                  "name": "Office",
-                  "icon": "mdi:desk",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/office-v2"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/office-v2"
+                  "type": "grid",
+                  "columns": 1,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "text_only": true,
+                      "content": "### Whole house",
+                      "card_mod": {
+                        "style": {
+                          "ha-markdown$": "\nh1 { font-size: var(--calm-title-font-size, 29px) !important; font-weight: var(--calm-title-font-weight, 500) !important; letter-spacing: -.7px; margin: 8px 0 !important; line-height: 1.2 !important; }\nh2, h3 { font-weight: var(--calm-title-font-weight, 500) !important; }\nh3 { font-size: 14px !important; margin: 10px 12px !important; }\np { color: var(--secondary-text-color); font-size: 13px; line-height: 1.5; }\nsmall { color: var(--secondary-text-color); font-size: 11px; letter-spacing: .06em; }\n"
+                        }
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Lights",
+                      "icon": "mdi:lightbulb-outline",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/house"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Climate",
+                      "icon": "mdi:thermometer",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/climate"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Media",
+                      "icon": "mdi:music-note-outline",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/media-players"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    }
+                  ],
+                  "card_mod": {
+                    "class": "calm-panel"
                   },
                   "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.kitchen_all",
-                  "name": "Kitchen",
-                  "icon": "mdi:countertop-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.den_all",
-                  "name": "Den",
-                  "icon": "mdi:sofa-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -258,15 +466,27 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_security",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Security",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Security",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -279,15 +499,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_climate",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Temperature",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Temperature",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -297,15 +529,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_water",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Water supply",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Water supply",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -318,15 +562,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_vacuum_main",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Main floor vacuum",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Main floor vacuum",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -336,15 +592,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_mop_main",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Main floor mop",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Main floor mop",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -354,15 +622,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_vacuum_den",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Den vacuum",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Den vacuum",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -372,15 +652,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_vacuum_upstairs",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Upstairs vacuum",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Upstairs vacuum",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -390,15 +682,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "sensor.dashboard_readiness_pet_care",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Pet care",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Pet care",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -408,15 +712,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "binary_sensor.washing_machine_running",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Washer running",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Washer running",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -426,15 +742,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "binary_sensor.dryer_running",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Dryer running",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Dryer running",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -444,15 +772,27 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "input_boolean.mail_delivered",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Delivery waiting",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Delivery waiting",
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  },
                   "visibility": [
                     {
                       "condition": "state",
@@ -462,13 +802,26 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "fan.owner_suite",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Owner-suite ceiling fan",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
+                  },
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
                   },
                   "visibility": [
                     {
@@ -482,13 +835,26 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "light.owner_suite_lamps",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Owner-suite lamps",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
+                  },
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
                   },
                   "visibility": [
                     {
@@ -502,13 +868,26 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "cover.owner_suite_blinds_ha",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Owner-suite blinds",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
+                  },
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
                   },
                   "visibility": [
                     {
@@ -522,13 +901,26 @@
                   ]
                 },
                 {
-                  "type": "tile",
+                  "type": "custom:mushroom-template-card",
                   "entity": "media_player.ma_bedroom",
-                  "grid_options": {
-                    "columns": 6
-                  },
+                  "primary": "Bedroom audio",
+                  "secondary": "{{ state_attr(entity, 'reason') or (states(entity) | title) }}",
+                  "icon": "mdi:information-outline",
+                  "color": "{{ 'red' if is_state(entity, 'blocked') else 'secondary-text' }}",
+                  "vertical": false,
+                  "multiline_secondary": true,
                   "tap_action": {
                     "action": "more-info"
+                  },
+                  "icon_tap_action": {
+                    "action": "none"
+                  },
+                  "card_mod": {
+                    "class": "calm-attention"
+                  },
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
                   },
                   "visibility": [
                     {
@@ -649,52 +1041,87 @@
               "cards": [
                 {
                   "type": "heading",
-                  "heading": "House status",
+                  "heading": "Quick controls",
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "input_select.house_mode",
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "tile",
+                      "entity": "light.owner_suite_lamps",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Lamps"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "fan.owner_suite",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Ceiling fan"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "cover.owner_suite_blinds_ha",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Blinds"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "light.owner_suite_bathroom_lights_2",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Bathroom lights"
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Alarms",
+                      "icon": "mdi:alarm",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/owner-suite"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    },
+                    {
+                      "type": "shortcut",
+                      "label": "Media groups",
+                      "icon": "mdi:speaker-multiple",
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/media-players"
+                      },
+                      "grid_options": {
+                        "columns": 6
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "House mode"
-                },
-                {
-                  "type": "tile",
-                  "entity": "input_boolean.guest_mode",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Guest mode"
-                },
-                {
-                  "type": "tile",
-                  "entity": "climate.my_ecobee",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Temperature"
-                },
-                {
-                  "type": "tile",
-                  "entity": "weather.tomorrow_io_the_brewery_daily",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Weather"
+                    "columns": "full",
+                    "rows": "auto"
+                  }
                 }
               ]
             }
@@ -741,9 +1168,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -830,9 +1259,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -904,9 +1335,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -975,9 +1408,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -1033,9 +1468,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -1108,9 +1545,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -1149,7 +1588,7 @@
           "title": "Rooms",
           "path": "rooms",
           "type": "sections",
-          "max_columns": 4,
+          "max_columns": 2,
           "sections": [
             {
               "type": "grid",
@@ -1169,7 +1608,12 @@
                     {
                       "type": "markdown",
                       "text_only": true,
-                      "content": "Control a room together. Open its details for individual devices."
+                      "content": "Room groups first. Individual details when you need them.",
+                      "card_mod": {
+                        "style": {
+                          "ha-markdown$": "\nh1 { font-size: var(--calm-title-font-size, 29px) !important; font-weight: var(--calm-title-font-weight, 500) !important; letter-spacing: -.7px; margin: 8px 0 !important; line-height: 1.2 !important; }\nh2, h3 { font-weight: var(--calm-title-font-weight, 500) !important; }\nh3 { font-size: 14px !important; margin: 10px 12px !important; }\np { color: var(--secondary-text-color); font-size: 13px; line-height: 1.5; }\nsmall { color: var(--secondary-text-color); font-size: 11px; letter-spacing: .06em; }\n"
+                        }
+                      }
                     }
                   ]
                 }
@@ -1185,60 +1629,86 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "light.owner_suite_lamps",
-                  "name": "Owner suite",
-                  "icon": "mdi:bed-king-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/owner-suite"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/owner-suite"
-                  },
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.owner_suite_lamps",
+                      "primary": "Owner suite",
+                      "secondary": "{% set s = states(entity) %}{% set b = state_attr(entity, 'brightness') | float(none) %}{{ 'Lamps ' ~ ((b / 255 * 100) | round(0) | int) ~ '%' if s == 'on' and b is not none else 'Lamps on' if s == 'on' else 'Lamps off' if s == 'off' else 'Lamps unavailable' }} · Blinds {{ states('cover.owner_suite_blinds_ha') }}{% set t = states('sensor.bedroom_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:bed-king-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/owner-suite"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.office_all",
+                      "primary": "Office",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}{% set t = states('sensor.office_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:desk",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/office-v2"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.guest_room_ceiling",
+                      "primary": "Guest room",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:bed-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/upstairs"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.office_all",
-                  "name": "Office",
-                  "icon": "mdi:desk",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/office-v2"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/office-v2"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.guest_room_ceiling",
-                  "name": "Guest room",
-                  "icon": "mdi:bed-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/upstairs"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/upstairs"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -1253,79 +1723,110 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "light.kitchen_all",
-                  "name": "Kitchen",
-                  "icon": "mdi:countertop-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.kitchen_all",
+                      "primary": "Kitchen",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:countertop-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.den_all",
+                      "primary": "Den",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}{% set t = states('sensor.den_temperature_2') | float(none) %}{% if t is not none %} · {{ t | round(0) | int }}°{% endif %}",
+                      "icon": "mdi:sofa-outline",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.dining_room_all",
+                      "primary": "Dining room",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:table-furniture",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.hall_all",
+                      "primary": "Hallway",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:door-open",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/main-floor"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.den_all",
-                  "name": "Den",
-                  "icon": "mdi:sofa-outline",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.dining_room_all",
-                  "name": "Dining room",
-                  "icon": "mdi:table-furniture",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.hall_all",
-                  "name": "Hallway",
-                  "icon": "mdi:door-open",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/main-floor"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -1340,41 +1841,62 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "light.all_basement_lights",
-                  "name": "Basement",
-                  "icon": "mdi:television",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/basement-v2"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/basement-v2"
-                  },
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.all_basement_lights",
+                      "primary": "Basement",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:television",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/basement-v2"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "light.deck_all",
+                      "primary": "Deck",
+                      "secondary": "{% set s = states(entity) %}{{ 'Lighting on' if s == 'on' else 'Lights off' if s == 'off' else 'Lighting unavailable' }}",
+                      "icon": "mdi:outdoor-lamp",
+                      "color": "{{ 'primary' if is_state(entity, 'on') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "navigate",
+                        "navigation_path": "/example-dashboard/outside"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-room"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.deck_all",
-                  "name": "Deck",
-                  "icon": "mdi:outdoor-lamp",
-                  "vertical": true,
-                  "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/outside"
-                  },
-                  "icon_tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/example-dashboard/outside"
-                  },
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -1422,9 +1944,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -1712,6 +2236,39 @@
                   "entity": "todo.shopping_list"
                 }
               ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "House modes",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_select.house_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "House mode"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.guest_mode",
+                  "grid_options": {
+                    "columns": 6
+                  },
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "name": "Guest mode"
+                }
+              ]
             }
           ],
           "theme": "Calm Home",
@@ -1756,9 +2313,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -1769,7 +2328,7 @@
           "title": "Travel",
           "path": "travel",
           "type": "sections",
-          "max_columns": 4,
+          "max_columns": 2,
           "sections": [
             {
               "type": "grid",
@@ -1782,42 +2341,190 @@
                   },
                   "cards": [
                     {
-                      "type": "heading",
-                      "heading": "Travel",
-                      "heading_style": "title"
-                    },
-                    {
-                      "type": "tile",
-                      "entity": "input_boolean.trip",
-                      "grid_options": {
-                        "columns": 6
-                      },
-                      "tap_action": {
-                        "action": "more-info"
-                      },
-                      "name": "Trip mode"
-                    },
-                    {
-                      "type": "tile",
-                      "entity": "input_boolean.trip_guest_visit_active",
-                      "grid_options": {
-                        "columns": 6
-                      },
-                      "tap_action": {
-                        "action": "more-info"
-                      },
-                      "name": "Guest visit"
-                    },
-                    {
                       "type": "markdown",
                       "text_only": true,
-                      "entity_id": [
-                        "sensor.dashboard_return_cycle",
-                        "sensor.dashboard_context"
+                      "card_mod": {
+                        "class": "calm-hero",
+                        "style": {
+                          "ha-markdown$": "\nh1 { font-size: var(--calm-title-font-size, 29px) !important; font-weight: var(--calm-title-font-weight, 500) !important; letter-spacing: -.7px; margin: 8px 0 !important; line-height: 1.2 !important; }\nh2, h3 { font-weight: var(--calm-title-font-weight, 500) !important; }\nh3 { font-size: 14px !important; margin: 10px 12px !important; }\np { color: var(--secondary-text-color); font-size: 13px; line-height: 1.5; }\nsmall { color: var(--secondary-text-color); font-size: 11px; letter-spacing: .06em; }\n"
+                        }
+                      },
+                      "content": "<small>Travel · {{ 'Away' if is_state('input_boolean.trip', 'on') else 'Home overview' }}</small>\n# {{ 'Home is getting ready.' if is_state('sensor.dashboard_context', 'return') else 'A clear view of home.' }}\nSecurity, comfort, and the little things."
+                    },
+                    {
+                      "type": "custom:mushroom-chips-card",
+                      "alignment": "start",
+                      "chips": [
+                        {
+                          "type": "template",
+                          "entity": "sensor.dashboard_readiness_security",
+                          "icon": "mdi:shield-outline",
+                          "content": "{{ 'Security needs attention' if is_state(entity, 'blocked') else 'Security unverified' if not has_value(entity) or is_state(entity, 'unknown') else 'Door ' ~ states('lock.front_door_lock') }}",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        },
+                        {
+                          "type": "template",
+                          "entity": "climate.my_ecobee",
+                          "icon": "mdi:thermometer",
+                          "content": "{% set t = state_attr(entity, 'current_temperature') | float(none) %}{{ (t | round(0) | int) ~ '° indoors' if t is not none else 'Temperature unavailable' }}",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        },
+                        {
+                          "type": "template",
+                          "entity": "switch.basement_water_shutoff",
+                          "icon": "mdi:water-outline",
+                          "content": "Water reported {{ states(entity) }}",
+                          "tap_action": {
+                            "action": "none"
+                          }
+                        }
                       ],
-                      "content": "{% set landing = state_attr('sensor.dashboard_return_cycle', 'landing_at') %}\n{{ 'Flight landing: ' ~ (as_datetime(landing) | as_local).strftime('%a %-I:%M %p %Z') if landing else 'No current return flight is associated.' }}\n\nWater restoration follows the existing trip-end flow. Completion below requires evidence; docking and launch attempts are not proof."
+                      "grid_options": {
+                        "columns": "full"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_return_cycle",
+                      "primary": "Flight landing",
+                      "secondary": "{% set dt = as_datetime(state_attr(entity, 'landing_at'), none) %}{{ (dt | as_local).strftime('%a, %b %-d · %-I:%M %p %Z') if dt is not none else 'No return flight is associated' }}\nWater restoration follows the existing trip-end flow.",
+                      "icon": "mdi:airplane-landing",
+                      "color": "primary",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-context"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
                     }
                   ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Home overview",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_security",
+                      "primary": "Security",
+                      "secondary": "{{ states(entity) | title }}\n{{ state_attr(entity, 'reason') or 'Evidence unavailable' }}",
+                      "icon": "mdi:shield-outline",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-overview"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_pet_care",
+                      "primary": "Pet care",
+                      "secondary": "{{ states(entity) | title }}\n{{ state_attr(entity, 'reason') or 'Evidence unavailable' }}",
+                      "icon": "mdi:cat",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-overview"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_climate",
+                      "primary": "Temperature",
+                      "secondary": "{{ states(entity) | title }}\n{{ state_attr(entity, 'reason') or 'Evidence unavailable' }}",
+                      "icon": "mdi:thermometer",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-overview"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_water",
+                      "primary": "Water",
+                      "secondary": "{{ states(entity) | title }}\n{{ state_attr(entity, 'reason') or 'Evidence unavailable' }}",
+                      "icon": "mdi:water-outline",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-overview"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": "auto"
+                  }
                 }
               ]
             },
@@ -1831,65 +2538,76 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "alarm_control_panel.home_alarm",
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "tile",
+                      "entity": "alarm_control_panel.home_alarm",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Alarm"
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "lock.front_door_lock",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Front door",
+                      "icon_tap_action": {
+                        "action": "more-info"
+                      },
+                      "hold_action": {
+                        "action": "more-info"
+                      }
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "cover.garage_door",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Garage",
+                      "icon_tap_action": {
+                        "action": "more-info"
+                      },
+                      "hold_action": {
+                        "action": "more-info"
+                      }
+                    },
+                    {
+                      "type": "tile",
+                      "entity": "switch.basement_water_shutoff",
+                      "grid_options": {
+                        "columns": 6
+                      },
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "name": "Water supply",
+                      "icon_tap_action": {
+                        "action": "more-info"
+                      },
+                      "hold_action": {
+                        "action": "more-info"
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Alarm"
-                },
-                {
-                  "type": "tile",
-                  "entity": "lock.front_door_lock",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Front door",
-                  "icon_tap_action": {
-                    "action": "more-info"
-                  },
-                  "hold_action": {
-                    "action": "more-info"
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "cover.garage_door",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Garage",
-                  "icon_tap_action": {
-                    "action": "more-info"
-                  },
-                  "hold_action": {
-                    "action": "more-info"
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "switch.basement_water_shutoff",
-                  "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Water supply",
-                  "icon_tap_action": {
-                    "action": "more-info"
-                  },
-                  "hold_action": {
-                    "action": "more-info"
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -1904,75 +2622,201 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_security",
-                  "name": "Security",
+                  "type": "grid",
+                  "columns": 1,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_security",
+                      "primary": "Security",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_climate",
+                      "primary": "Temperature",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_water",
+                      "primary": "Water supply",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_vacuum_main",
+                      "primary": "Main floor vacuum",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_mop_main",
+                      "primary": "Main floor mop",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_vacuum_den",
+                      "primary": "Den vacuum",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_vacuum_upstairs",
+                      "primary": "Upstairs vacuum",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "sensor.dashboard_readiness_pet_care",
+                      "primary": "Pet care",
+                      "secondary": "{{ states(entity) | title }} · {{ state_attr(entity, 'reason') or 'Evidence unavailable' }}{% set stamp = as_datetime(state_attr(entity, 'evidence_at'), none) %}{% if stamp is not none %}\nEvidence: {{ (stamp | as_local).strftime('%b %-d, %-I:%M %p %Z') }}{% endif %}",
+                      "icon": "{{ {'complete': 'mdi:check-circle-outline', 'blocked': 'mdi:alert-circle-outline', 'running': 'mdi:progress-clock', 'scheduled': 'mdi:clock-outline', 'skipped': 'mdi:minus-circle-outline'}.get(states(entity), 'mdi:help-circle-outline') }}",
+                      "color": "{{ 'red' if is_state(entity, 'blocked') else 'primary' if is_state(entity, 'complete') else 'secondary-text' }}",
+                      "vertical": false,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-check"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
+                  "card_mod": {
+                    "class": "calm-panel"
+                  },
                   "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_climate",
-                  "name": "Temperature",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_water",
-                  "name": "Water supply",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_vacuum_main",
-                  "name": "Main floor vacuum",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_mop_main",
-                  "name": "Main floor mop",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_vacuum_den",
-                  "name": "Den vacuum",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_vacuum_upstairs",
-                  "name": "Upstairs vacuum",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "custom:button-card",
-                  "template": "calm_readiness",
-                  "entity": "sensor.dashboard_readiness_pet_care",
-                  "name": "Pet care",
-                  "grid_options": {
-                    "columns": "full"
+                    "columns": "full",
+                    "rows": "auto"
                   }
                 }
               ]
@@ -2042,37 +2886,117 @@
                   "heading_style": "title"
                 },
                 {
-                  "type": "tile",
-                  "entity": "camera.front_door",
+                  "type": "grid",
+                  "columns": 2,
+                  "square": false,
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "camera.front_door",
+                      "primary": "Front entrance",
+                      "secondary": "Open on demand",
+                      "icon": "mdi:video-outline",
+                      "color": "primary",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-camera"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "camera.livingroomcamera",
+                      "primary": "Dining room",
+                      "secondary": "Open on demand",
+                      "icon": "mdi:video-outline",
+                      "color": "primary",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-camera"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    },
+                    {
+                      "type": "custom:mushroom-template-card",
+                      "entity": "camera.tikiroomcamera",
+                      "primary": "Tiki room",
+                      "secondary": "Open on demand",
+                      "icon": "mdi:video-outline",
+                      "color": "primary",
+                      "vertical": true,
+                      "multiline_secondary": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "icon_tap_action": {
+                        "action": "none"
+                      },
+                      "card_mod": {
+                        "class": "calm-camera"
+                      },
+                      "grid_options": {
+                        "columns": "full",
+                        "rows": "auto"
+                      }
+                    }
+                  ],
                   "grid_options": {
-                    "columns": 6
-                  },
-                  "tap_action": {
-                    "action": "more-info"
-                  },
-                  "name": "Front entrance"
+                    "columns": "full",
+                    "rows": "auto"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Travel modes",
+                  "heading_style": "title"
                 },
                 {
                   "type": "tile",
-                  "entity": "camera.livingroomcamera",
+                  "entity": "input_boolean.trip",
                   "grid_options": {
                     "columns": 6
                   },
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Dining room"
+                  "name": "Trip mode"
                 },
                 {
                   "type": "tile",
-                  "entity": "camera.tikiroomcamera",
+                  "entity": "input_boolean.trip_guest_visit_active",
                   "grid_options": {
                     "columns": 6
                   },
                   "tap_action": {
                     "action": "more-info"
                   },
-                  "name": "Tiki room"
+                  "name": "Guest visit"
                 }
               ]
             }
@@ -2119,9 +3043,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -2247,6 +3173,53 @@
                   }
                 }
               ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Administration",
+                  "heading_style": "title"
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Settings",
+                  "icon": "mdi:cog-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/config"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "Profile and appearance",
+                  "icon": "mdi:account-circle-outline",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/profile"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "shortcut",
+                  "label": "History",
+                  "icon": "mdi:history",
+                  "tap_action": {
+                    "action": "navigate",
+                    "navigation_path": "/history"
+                  },
+                  "grid_options": {
+                    "columns": 6
+                  }
+                }
+              ]
             }
           ],
           "theme": "Calm Home",
@@ -2291,9 +3264,11 @@
                 "show_labels": true,
                 "safe_area": true
               },
+              "styles": "\n              .navbar.desktop.left { top: 72px; transform: none; }\n              .navbar-card.desktop { background: transparent; border: 0; box-shadow: none; }\n              .desktop .route { width: 140px; height: 48px; flex-direction: row; gap: 10px; }\n              .desktop .route .button { flex: 0 0 44px; width: 44px; height: 44px; }\n              .desktop .route .label { text-align: left; flex: 1; font-size: 13px; }\n              .desktop .route.active { background: var(--secondary-background-color); border-radius: 12px; }\n              .desktop .button.active { background: transparent; }\n            ",
               "layout": {
                 "auto_padding": {
-                  "enabled": true
+                  "enabled": true,
+                  "desktop_px": 184
                 },
                 "reflect_child_state": true
               }
@@ -2301,96 +3276,7 @@
           }
         }
       ],
-      "button_card_templates": {
-        "calm_readiness": {
-          "show_name": true,
-          "show_state": true,
-          "show_label": true,
-          "size": "22px",
-          "icon": "mdi:progress-check",
-          "label": "[[[ const a = entity?.attributes || {}; const d = new Date(a.evidence_at); const when = a.evidence_at && !isNaN(d) ? new Intl.DateTimeFormat(undefined, {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:hass.config.time_zone,timeZoneName:'short'}).format(d) : ''; return (a.reason || 'Evidence unavailable') + (when ? ' · Evidence: ' + when : ''); ]]]",
-          "tap_action": {
-            "action": "more-info"
-          },
-          "styles": {
-            "card": [
-              {
-                "border-radius": "16px"
-              },
-              {
-                "padding": "16px"
-              },
-              {
-                "min-height": "110px"
-              },
-              {
-                "box-shadow": "none"
-              }
-            ],
-            "grid": [
-              {
-                "grid-template-areas": "\"i n s\" \". l l\""
-              },
-              {
-                "grid-template-columns": "30px 1fr auto"
-              }
-            ],
-            "name": [
-              {
-                "justify-self": "start"
-              },
-              {
-                "font-size": "14px"
-              },
-              {
-                "font-weight": "500"
-              }
-            ],
-            "state": [
-              {
-                "font-size": "12px"
-              }
-            ],
-            "label": [
-              {
-                "white-space": "normal"
-              },
-              {
-                "text-align": "left"
-              },
-              {
-                "font-size": "13px"
-              },
-              {
-                "line-height": "1.5"
-              },
-              {
-                "padding-top": "8px"
-              },
-              {
-                "color": "var(--secondary-text-color)"
-              }
-            ]
-          },
-          "state": [
-            {
-              "value": "blocked",
-              "icon": "mdi:alert-circle-outline",
-              "color": "var(--error-color)"
-            },
-            {
-              "value": "unknown",
-              "icon": "mdi:help-circle-outline",
-              "color": "var(--secondary-text-color)"
-            },
-            {
-              "value": "complete",
-              "icon": "mdi:check-circle-outline",
-              "color": "var(--primary-color)"
-            }
-          ]
-        }
-      },
+      "button_card_templates": {},
       "background": "var(--primary-background-color)"
     }
   }

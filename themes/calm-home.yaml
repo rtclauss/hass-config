@@ -1,12 +1,6 @@
-# Dashboard-scoped; client Auto mode follows the device appearance.
+# Shared native-card vocabulary; native and legacy grouped class placements are both supported.
 Calm Home:
   card-mod-theme: Calm Home
-  # One shared accessibility adjustment for native tile controls.
-  card-mod-card: |
-    ha-tile-icon { --tile-icon-size: 44px !important; }
-    hui-card-features { --feature-height: 44px !important; }
-  # Navbar's touch routes lack keyboard semantics. Preserve native HA tabs,
-  # revealing them when focused rather than duplicating visible navigation.
   card-mod-root: |
     ha-tab-group {
       position: absolute;
@@ -22,16 +16,26 @@ Calm Home:
       overflow: visible;
       clip-path: none;
     }
+
+    /* Keep native dashboard actions at the far edge while the tabs are clipped. */
+    .toolbar > ha-tab-group + * { margin-inline-start: auto; }
   background-image: none
   lovelace-background: var(--primary-background-color)
   app-header-background-color: var(--primary-background-color)
   app-header-text-color: var(--primary-text-color)
   primary-font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif
   ha-card-border-radius: 16px
-  ha-card-border-width: 1px
+  ha-card-border-width: 0px
   ha-card-box-shadow: none
   ha-view-sections-column-gap: 16px
   ha-view-sections-row-gap: 16px
+  grid-card-gap: 12px
+  mush-chip-height: 44px
+  mush-chip-border-radius: 10px
+  mush-chip-background: var(--secondary-background-color)
+  mush-chip-border-width: 0px
+  mush-chip-font-size: 12px
+  mush-control-height: 44px
   modes:
     light:
       primary-background-color: '#f4f5f5'
@@ -53,3 +57,53 @@ Calm Home:
       divider-color: '#384145'
       primary-color: '#a4d6c4'
       accent-color: '#a4d6c4'
+  card-mod-card: |
+    ha-tile-icon { --tile-icon-size: 44px !important; }
+    hui-card-features { --feature-height: 44px !important; }
+    :host(.calm-room) ha-card, ha-card.calm-room { min-height: 144px; }
+    :host(.calm-overview) ha-card, ha-card.calm-overview { min-height: 176px; }
+    :host(.calm-camera) ha-card, ha-card.calm-camera { min-height: 120px; }
+    :host(.calm-room) ha-card .content.vertical, ha-card.calm-room .content.vertical,
+    :host(.calm-overview) ha-card .content.vertical, ha-card.calm-overview .content.vertical,
+    :host(.calm-camera) ha-card .content.vertical, ha-card.calm-camera .content.vertical {
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 18px;
+      gap: 18px;
+    }
+    :host(.calm-room) ha-card ha-tile-info, ha-card.calm-room ha-tile-info,
+    :host(.calm-overview) ha-card ha-tile-info, ha-card.calm-overview ha-tile-info,
+    :host(.calm-camera) ha-card ha-tile-info, ha-card.calm-camera ha-tile-info { width: 100%; text-align: left; }
+    :host(.calm-context) ha-card .content, ha-card.calm-context .content { min-height: 84px; padding: 16px 18px; }
+    :host(.calm-player) ha-card .content, ha-card.calm-player .content { min-height: 80px; padding: 16px; }
+    :host(.calm-check) ha-card, ha-card.calm-check { border-bottom: 1px solid var(--divider-color); border-radius: 0; }
+    :host(.calm-check) ha-card .content, ha-card.calm-check .content { padding: 14px 16px; min-height: 88px; }
+    :host(.calm-check) ha-card [slot="secondary"], ha-card.calm-check [slot="secondary"] { font-size: 12px; line-height: 1.5; }
+    :host(.calm-attention) ha-card .content, ha-card.calm-attention .content { padding: 14px 16px; min-height: 72px; }
+    :host(.calm-panel) ha-card, ha-card.calm-panel { padding: 6px; }
+
+    ha-card:has(.background:focus-visible) { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+    :host(.calm-room) ha-tile-icon, ha-card.calm-room ha-tile-icon,
+    :host(.calm-overview) ha-tile-icon, ha-card.calm-overview ha-tile-icon,
+    :host(.calm-context) ha-tile-icon, ha-card.calm-context ha-tile-icon {
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--tile-color, var(--primary-color)) 12%, var(--ha-card-background));
+    }
+    @media (max-width: 440px) {
+      ha-markdown { --calm-title-font-size: var(--calm-mobile-title-font-size, 26px); }
+    }
+
+    :host(.calm-player) .container.horizontal > hui-card-features, ha-card.calm-player .container.horizontal > hui-card-features {
+      flex: 0 0 56px;
+      width: 56px;
+      margin-inline-end: 18px;
+      --feature-border-radius: 50% !important;
+    }
+
+    :host(.calm-panel) { background: var(--ha-card-background); border-radius: 16px; padding: 6px; box-sizing: border-box; --grid-card-gap: 0px; }
+  calm-title-font-size: 29px
+  calm-title-font-weight: '500'
+  mush-chip-font-weight: '400'
+  ha-view-sections-narrow-column-gap: 16px
+  calm-mobile-title-font-size: 26px
