@@ -1109,12 +1109,12 @@ template:
         unit_of_measurement: "%"
         state_class: measurement
         availability: >-
-          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.basement_tph_humidity') }}
+          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('@@PRIVATE:basement_ambient_humidity_entity@@') }}
         state: >-
           {{
             (
               states('sensor.basement_bathroom_tph_humidity') | float(default=0)
-              - states('sensor.basement_tph_humidity') | float(default=0)
+              - states('@@PRIVATE:basement_ambient_humidity_entity@@') | float(default=0)
             )
           }}
 

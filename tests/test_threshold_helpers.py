@@ -71,7 +71,7 @@ def test_bathroom_humidity_delta_sensors_have_availability_guards() -> None:
         ),
         "basement_bathroom_humidity_delta": (
             "sensor.basement_bathroom_tph_humidity",
-            "sensor.basement_tph_humidity",
+            "sensor.basement_dehumidifier_humidity",
         ),
         "guest_bathroom_humidity_delta": (
             "sensor.guest_bathroom_tph_humidity",
