@@ -149,11 +149,12 @@ area), moved to **Hallway**, alongside the front door contact sensor
 template `lock.front_door_lock`, targets it by entity ID. The audit now reports
 zero dangling references, zero area drift, and no unmatched areas.
 
-A **Main Foyer** area (`main_foyer`, Main Floor, no labels) was created during
-this batch to match the registry, but it is currently empty: the foyer's
-devices (front door contact, foyer motion, foyer lights) remain in Hallway.
-Either populate it in a reviewed batch (moving them changes Hallway area views
-and Assist commands) or delete it with owner confirmation.
+A Main Foyer area was briefly created and then deleted, with owner
+confirmation, once it was left empty. The registry's `main_foyer` entry still
+names a `Main Foyer` HA area that does not exist live; the foyer's devices
+(front door contact, foyer motion, foyer lights) remain in Hallway. Creating
+that area and moving them into it would change Hallway area views and Assist
+commands, so it needs its own reviewed batch.
 
 Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
 contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
