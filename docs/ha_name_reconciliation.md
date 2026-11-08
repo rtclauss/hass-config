@@ -143,10 +143,17 @@ no longer errors when the front-door motion sensor triggers. The Unfinished
 Basement leak trigger still matches only its moisture sensor; none of the moved
 devices has a moisture binary sensor.
 
-Remaining: `input_boolean.front_door_lock` still references the deleted
-`front_door` area. The registry's Main Foyer has no live HA area, so it needs a
-decision between Hallway, no area, or creating a Main Foyer area. Also
-remaining: 40 `custom_entity_name_needs_context_review` overrides (window
+The last reference, `input_boolean.front_door_lock` (deleted `front_door`
+area), moved to a new **Main Foyer** area (`main_foyer`, Main Floor, no labels)
+at the owner's request. The registry already defined Main Foyer, but HA had no
+such area. Its only consumer, the template `lock.front_door_lock`, targets it
+by entity ID. The audit now reports zero dangling references, zero area drift,
+and no unmatched areas.
+
+The foyer's devices (front door contact, foyer motion, foyer lights) remain in
+Hallway; moving them would change Hallway area targets and needs its own review.
+
+Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
 contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
 switches).
 
