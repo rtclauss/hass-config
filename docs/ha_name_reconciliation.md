@@ -117,10 +117,38 @@ Verified: configuration check valid; names, areas, and all 35 Inovelli LED
 topics rendered as expected; no new log errors. Rollback map and before/after
 exports are stored privately under `.private-runtime-backup/`.
 
-Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
+### Batch 2 (2026-11-08): dangling area references
+
+33 of the 34 dangling references were re-mapped with owner confirmation. Only
+area assignments changed; the before/after diff showed no other field changes
+and no added or removed entity IDs.
+
+The old IDs were identified from a 2022 automation that listed its target
+areas alphabetically by name. Each ID's position between known areas, plus its
+devices' names, identified the deleted area:
+
+| Deleted area | Re-mapped to |
+| --- | --- |
+| Office | Office: `light.office_all`, `light.office_lava_lamp` |
+| Kitchen | Kitchen: North/South Kitchen panels, Rubber Plant sensor |
+| Living Room | Dining Room: the `living room` device, N/S Nepenthes sensors |
+| `owner_suite_bathroom` (old ID) | Owner Suite Bathroom (`bathroom`): Elkhorn Fern, Sansevieria sensors |
+| Basement | Basement Great Room: LG TV, `script.watch_*`, `light.all_basement_lights` |
+| Basement | Unfinished Basement: OctoPrint (2), watermeter, sump-pump level, USW Pro 24 PoE |
+| Outdoor area | Outside: Rachio (2), front-door smart motion sensor |
+| Outdoor area / unknown | No area: Tomorrow.io weather service, Monstera sensor |
+
+Effects: `area_name()` works for every moved entry, and `sensor.last_motion_area`
+no longer errors when the front-door motion sensor triggers. The Unfinished
+Basement leak trigger still matches only its moisture sensor; none of the moved
+devices has a moisture binary sensor.
+
+Remaining: `input_boolean.front_door_lock` still references the deleted
+`front_door` area. The registry's Main Foyer has no live HA area, so it needs a
+decision between Hallway, no area, or creating a Main Foyer area. Also
+remaining: 40 `custom_entity_name_needs_context_review` overrides (window
 contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
-switches) and 34 dangling area references (19 devices and 15 device-less
-entities) whose former room must be confirmed before re-mapping.
+switches).
 
 The audit deliberately proposes no automatic rename. Before changing any live
 name, inventory all sibling entities and consumers, preserve entity IDs and MQTT
