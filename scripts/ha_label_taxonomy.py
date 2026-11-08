@@ -389,6 +389,7 @@ class HomeAssistantWebSocket:
         self.token = token
         self.timeout = timeout
         self.sock: socket.socket | ssl.SSLSocket | None = None
+        self.receive_buffer = b""
         self.next_id = 1
 
     def __enter__(self) -> "HomeAssistantWebSocket":
@@ -401,6 +402,7 @@ class HomeAssistantWebSocket:
             self.sock = None
 
     def connect(self) -> None:
+        self.receive_buffer = b""
         raw_sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
         if self.secure:
             context = ssl.create_default_context()
@@ -448,8 +450,10 @@ class HomeAssistantWebSocket:
         response = b""
         while b"\r\n\r\n" not in response:
             response += self._recv_raw(4096)
-        if b" 101 " not in response.split(b"\r\n", 1)[0]:
+        headers, remainder = response.split(b"\r\n\r\n", 1)
+        if b" 101 " not in headers.split(b"\r\n", 1)[0]:
             raise RuntimeError(f"WebSocket handshake failed: {response[:200]!r}")
+        self.receive_buffer = remainder
 
     def send_json(self, payload: dict[str, object]) -> None:
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -509,6 +513,10 @@ class HomeAssistantWebSocket:
     def _recv_raw(self, length: int) -> bytes:
         if self.sock is None:
             raise RuntimeError("WebSocket is not connected")
+        if self.receive_buffer:
+            chunk = self.receive_buffer[:length]
+            self.receive_buffer = self.receive_buffer[length:]
+            return chunk
         chunk = self.sock.recv(length)
         if not chunk:
             raise RuntimeError("WebSocket connection closed")

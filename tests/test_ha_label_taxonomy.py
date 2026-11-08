@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 from scripts.ha_label_taxonomy import (  # noqa: E402
     ALLOWED_LIFECYCLES,
     ALLOWED_SCOPES,
+    HomeAssistantWebSocket,
     LABEL_ID_PATTERN,
     audit_live,
     find_apply_conflicts,
@@ -169,3 +170,29 @@ def test_apply_label_plan_reports_live_name_id_conflicts_before_writes() -> None
             "reason": "live label name already exists with a different label_id",
         }
     ]
+
+
+class _CombinedHandshakeSocket:
+    def __init__(self, response: bytes) -> None:
+        self.response = response
+        self.sent = b""
+
+    def sendall(self, payload: bytes) -> None:
+        self.sent += payload
+
+    def recv(self, length: int) -> bytes:
+        chunk = self.response[:length]
+        self.response = self.response[length:]
+        return chunk
+
+
+def test_websocket_handshake_preserves_first_frame_from_same_packet() -> None:
+    payload = b'{"type":"auth_required"}'
+    frame = bytes([0x81, len(payload)]) + payload
+    response = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n\r\n" + frame
+    client = HomeAssistantWebSocket("http://home-assistant.example", "token")
+    client.sock = _CombinedHandshakeSocket(response)  # type: ignore[assignment]
+
+    client._handshake()
+
+    assert client.receive_json() == {"type": "auth_required"}
