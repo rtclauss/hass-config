@@ -22,7 +22,7 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
     RoomNameSpec(
         key="owner_suite_bedroom",
         preferred_label="Owner Suite Bedroom",
-        home_assistant_area="Bedroom",
+        home_assistant_area="Owner Suite Bedroom",
         intent_key="owner_suite_bedroom",
         zigbee2mqtt_namespaces=("Owner Suite",),
         legacy_labels=("Master Bedroom", "Bedroom"),
@@ -77,6 +77,17 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         zigbee2mqtt_namespaces=("Basement",),
         legacy_labels=("Basement",),
         notes="The live Zigbee2MQTT namespace is still the shorter Basement prefix.",
+    ),
+    RoomNameSpec(
+        key="basement_bathroom",
+        preferred_label="Basement Bathroom",
+        home_assistant_area="Basement Bathroom",
+        notes=(
+            "Naming-only entry for the live HA area. Its devices still use the "
+            "Basement/Bathroom/... Zigbee2MQTT prefix, which stays under the "
+            "basement_great_room namespace. Room purpose and guest privacy are "
+            "not yet defined in docs/room_intent.yaml; that needs an owner decision."
+        ),
     ),
     RoomNameSpec(
         key="kitchen",

@@ -59,6 +59,68 @@ entities, child devices, missing context, overrides, and review groups.
 - `entity_override_repeats_device_name` is redundant under the 2026.11 model.
 - `custom_entity_name_needs_context_review` may be intentional, but must be
   checked in room-local and whole-home surfaces before changing it.
+- `dangling_area_references` lists devices and entities whose `area_id` points
+  at a deleted area. Home Assistant raises an error in `area_id()` and
+  `area_name()` for them, and area targets and Assist area commands skip them.
+  Re-map each one only after confirming which room it belongs to.
+
+## Rename-safe consumers
+
+Display names are not identifiers. Config that needs a stable value must read
+one that a Home Assistant rename cannot change:
+
+- Zigbee2MQTT topics use `device_attr(entity_id, 'name')`, the
+  integration-supplied device name, which equals the Zigbee2MQTT
+  `friendly_name`. A UI device rename writes `name_by_user` instead. Never build
+  a topic from `friendly_name` or `device_name()`.
+- Bermuda area/floor sensors report the area *name* as their state. Room logic
+  compares their `area_id` / `floor_id` attributes instead.
+- `friendly_name` is kept only for compatibility in 2026.11 and is planned for
+  deprecation. Use `entity_name()`, `device_name()` and `area_name()` for
+  display text; `tests/test_ha_2026_11_entity_names.py` rejects new reads.
+
+## 2026.11 registry behavior
+
+- An entity whose custom name equals its device name now composes a doubled
+  `friendly_name` (for example `Dining Room Dining Room`). That doubled name
+  also reaches Assist and the logbook. Clear the override so the entity
+  inherits the device name.
+- An entity without a name of its own cannot keep an area of its own. Clear
+  the entity area in the same update (the device area then applies), and when
+  rolling back, restore the name before the area.
+
+## Batch log
+
+### Batch 1 (2026-11-08, Core 2026.11.0)
+
+Display metadata only. Entity IDs, unique IDs, Zigbee2MQTT names, aliases,
+labels, and voice exposure were unchanged; the before/after registry diff
+contained exactly the changes below.
+
+- Areas aligned to `scripts/room_name_registry.py`: `dining_room`,
+  `guest_bathroom`, `guest_room`, `upstairs_hallway` (case only).
+- Registry aligned to live HA: `owner_suite_bedroom` uses the existing
+  `Owner Suite Bedroom` area (`bedroom`); `basement_bathroom` added as a
+  naming-only entry pending a room-intent decision.
+- Redundant overrides cleared (doubled names fixed): `light.dining_room_all`,
+  `light.dining_room_lamps`, `light.office_floor_lamp`,
+  `light.office_floor_lamp_1`, `light.office_floor_lamp_2`,
+  `media_player.living_room_3`, `media_player.dining_room_dining_room`,
+  `remote.dining_room_dining_room`. Their entity areas matched the device area
+  or pointed at a deleted area; they now inherit the device area.
+- `light.office_ceiling`: dangling entity area cleared; custom name kept.
+- Room confidence now scores by Bermuda area/floor IDs. This also fixes the
+  owner-suite bedroom phone/watch signal, which never matched after the area
+  was renamed to `Owner Suite Bedroom`.
+
+Verified: configuration check valid; names, areas, and all 35 Inovelli LED
+topics rendered as expected; no new log errors. Rollback map and before/after
+exports are stored privately under `.private-runtime-backup/`.
+
+Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
+contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
+switches) and 34 dangling area references (19 devices and 15 device-less
+entities) whose former room must be confirmed before re-mapping.
 
 The audit deliberately proposes no automatic rename. Before changing any live
 name, inventory all sibling entities and consumers, preserve entity IDs and MQTT

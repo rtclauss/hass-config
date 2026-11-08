@@ -44,7 +44,7 @@ def test_dining_room_confidence_uses_bermuda_area_without_local_motion_weight() 
 
     assert "sensor.iphone_17_pro_area" in block
     assert "sensor.apple_watch_ultra_2_area" in block
-    assert "dining_area_names = ['dining room']" in block
+    assert "dining_area_ids = ['dining_room']" in block
     assert "score.value = score.value + 45" in block
     assert "score.value = score.value + 10" in block
     assert "score.value = score.value + 5" in block
@@ -71,3 +71,36 @@ def test_dining_room_confidence_recomputes_when_proxy_status_changes() -> None:
     trigger_block = text.split("    sensor:", 1)[0]
 
     assert "binary_sensor.dining_room_bt_proxy_dining_room_bluetooth_proxy_status" in trigger_block
+
+
+def test_room_confidence_matches_bermuda_area_and_floor_ids_not_display_names() -> None:
+    # Bermuda reports the area/floor display name as its state. Area renames
+    # (issue #1175) must not change scoring, so compare the stable IDs.
+    text = _room_confidence_text()
+    template_text = text.split("\ntemplate:", 1)[1]
+    expected_ids = {
+        "bedroom_room_confidence": "'bedroom'",
+        "office_room_confidence": "'office'",
+        "den_room_confidence": "'den'",
+        "dining_room_room_confidence": "['dining_room']",
+        "basement_room_confidence": "'unfinished_basement'",
+    }
+
+    for sensor_name, area_ref in expected_ids.items():
+        block = _sensor_block(template_text, sensor_name)
+        assert (
+            "state_attr('sensor.iphone_17_pro_area', 'area_id') "
+            "or (states('sensor.iphone_17_pro_area') | lower)"
+        ) in block
+        assert (
+            "state_attr('sensor.apple_watch_ultra_2_area', 'area_id') "
+            "or (states('sensor.apple_watch_ultra_2_area') | lower)"
+        ) in block
+        assert area_ref in block
+        assert "states('sensor.iphone_17_pro_area') | lower %}" not in block
+        assert "'unfinished basement'" not in block
+        assert "'dining room'" not in block
+
+    basement = _sensor_block(template_text, "basement_room_confidence")
+    assert "state_attr('sensor.iphone_17_pro_floor', 'floor_id')" in basement
+    assert "state_attr('sensor.apple_watch_ultra_2_floor', 'floor_id')" in basement
