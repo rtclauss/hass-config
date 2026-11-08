@@ -144,14 +144,16 @@ Basement leak trigger still matches only its moisture sensor; none of the moved
 devices has a moisture binary sensor.
 
 The last reference, `input_boolean.front_door_lock` (deleted `front_door`
-area), moved to a new **Main Foyer** area (`main_foyer`, Main Floor, no labels)
-at the owner's request. The registry already defined Main Foyer, but HA had no
-such area. Its only consumer, the template `lock.front_door_lock`, targets it
-by entity ID. The audit now reports zero dangling references, zero area drift,
-and no unmatched areas.
+area), moved to **Hallway**, alongside the front door contact sensor
+(`Main Foyer/Front Door` device) at the owner's request. Its only consumer, the
+template `lock.front_door_lock`, targets it by entity ID. The audit now reports
+zero dangling references, zero area drift, and no unmatched areas.
 
-The foyer's devices (front door contact, foyer motion, foyer lights) remain in
-Hallway; moving them would change Hallway area targets and needs its own review.
+A **Main Foyer** area (`main_foyer`, Main Floor, no labels) was created during
+this batch to match the registry, but it is currently empty: the foyer's
+devices (front door contact, foyer motion, foyer lights) remain in Hallway.
+Either populate it in a reviewed batch (moving them changes Hallway area views
+and Assist commands) or delete it with owner confirmation.
 
 Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
 contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
