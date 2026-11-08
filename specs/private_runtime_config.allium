@@ -1,0 +1,155 @@
+-- allium: 3
+-- Scope: Public/private configuration boundaries, private rendering, and safe
+-- migration of existing Home Assistant, ESPHome, and AppDaemon configuration.
+-- Publication and migration guarantees are maintainer obligations; they do not
+-- imply an automatic privacy scanner or deployment service.
+-- Excludes: guest-room privacy, credential rotation, and Git history rewriting.
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+-- Contributor permissions are managed by the repository and runtime host.
+external entity ConfigurationContributor {
+    may_manage_configuration: Boolean
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract PrivateConfigurationRendering {
+    -- Operations act on the selected manifest and private value mapping.
+    -- Successful operations return the number of manifest targets examined;
+    -- invalid inputs and stale checks report failure instead of success.
+    @invariant ValidateBeforeWriting
+        -- Every manifest target and required value is validated before any
+        -- output is written. Missing values, invalid paths, duplicate resolved
+        -- output paths, missing templates, or unresolved markers fail the
+        -- operation without changing existing outputs or creating new ones.
+
+    @invariant PrivateOutputBoundary
+        -- Template and output paths resolve within the repository. Every
+        -- output must be both untracked and Git-ignored, even when validation
+        -- or check mode is selected. Ignoring an already tracked file is
+        -- insufficient. Templates cannot also be their own output.
+
+    @invariant NoPrivateValueDisclosure
+        -- Success messages and failure diagnostics never print private values.
+        -- Diagnostics may identify missing mapping keys and affected paths.
+
+    @invariant ScalarContentPreserved
+        -- Embedded markers resolve from the selected private mapping. A marker
+        -- representing an entire YAML string scalar is quoted and escaped so
+        -- its resolved string content is preserved.
+
+    @invariant OwnerOnlyAtomicReplacement
+        -- Each rendered file becomes visible through an atomic replacement
+        -- with owner-only read/write access. This is a per-file guarantee,
+        -- not a transaction across the complete set of output files.
+
+    @invariant ValidationDoesNotWrite
+        -- validate checks all inputs without creating, replacing, or updating
+        -- runtime output files; existing outputs need not match or exist.
+
+    @invariant CheckDoesNotWrite
+        -- check succeeds only when every output exists and matches the render
+        -- for the selected inputs. Missing or stale outputs report failure
+        -- without creating, replacing, or updating any output.
+}
+
+------------------------------------------------------------
+-- Actor Declarations
+------------------------------------------------------------
+
+actor ConfigurationMaintainer {
+    identified_by: ConfigurationContributor where may_manage_configuration = true
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface PublicConfigurationRepository {
+    facing maintainer: ConfigurationMaintainer
+
+    @guarantee PrivateInformationStaysPrivate
+        -- Public configuration, templates, comments, docs, fixtures, and
+        -- examples contain no live credentials or private identifying values.
+        -- Private information includes person and place names, coordinates,
+        -- calendar and presence identities, personal notification destinations,
+        -- account/media/device identifiers, private endpoints, vehicle identity,
+        -- and local market identifiers. Full runtime exports, private backups,
+        -- personal mappings, and exact travel histories remain outside public Git.
+
+    @guarantee SecretScalars
+        -- Private scalar values supported by native secret references resolve
+        -- from ignored Home Assistant or ESPHome secret files.
+
+    @guarantee EmbeddedPrivateInformation
+        -- Private values embedded in Jinja, YAML keys, annotations, or other
+        -- positions that cannot use a native secret reference resolve from an
+        -- ignored private mapping through public templates. Identifying
+        -- secret-key names also belong in that mapping. Generated runtime
+        -- files remain untracked and ignored.
+
+    @guarantee SyntheticPublicExamples
+        -- Committed example values, secret fixtures, and CI renders use only
+        -- synthetic values. Synthetic renders and example configurations must
+        -- never replace configuration on a live installation.
+
+    @guidance
+        -- Native references are !secret. Embedded markers are @@PRIVATE:key@@;
+        -- use @@PRIVATE:key|json@@ for a complete YAML string scalar.
+        -- docs/private_config_manifest.json maps public templates to ignored
+        -- runtime outputs. Real mapping values live in the ignored
+        -- .private-runtime-config/values.json file.
+}
+
+surface PrivateConfigurationRenderer {
+    facing maintainer: ConfigurationMaintainer
+
+    contracts:
+        fulfils PrivateConfigurationRendering
+
+    @guidance
+        -- scripts/render_private_config.py implements render, --validate, and
+        -- --check. CI selects examples/private_values.example.json explicitly.
+        -- These operations do not themselves reload Home Assistant.
+}
+
+surface PrivateConfigurationMigration {
+    facing maintainer: ConfigurationMaintainer
+
+    @guarantee PreserveBeforeCheckoutUpdate
+        -- Before an update removes formerly tracked live files, preserve those
+        -- files and affected secret/mapping files in private backups on that
+        -- host and verify each backup matches its source byte for byte.
+
+    @guarantee RestoreBeforeReload
+        -- Restore preserved host-owned files and render every manifest target
+        -- using real private values before any affected restart or reload.
+        -- Check the complete render before reloading. Related packages sharing
+        -- private identities are deployed together so references stay consistent.
+
+    @guarantee PreserveResolvedBehavior
+        -- Moving existing values into secrets or templates preserves resolved
+        -- configuration and live entity identities. Compare byte-identical
+        -- renders where possible, or structural equivalence after resolving
+        -- secrets. Reconcile shared secret and mapping consumers together.
+
+    @guarantee RespectRuntimeOwnership
+        -- Preserve UI-owned automation and dashboard files during the one-time
+        -- checkout migration. Subsequent dashboard changes use the Home
+        -- Assistant API or UI rather than direct storage-file edits.
+
+    @guarantee IndirectionIsNotRotation
+        -- Moving credentials into ignored files does not rotate credentials or
+        -- remove prior disclosure from Git history.
+
+    @guidance
+        -- docs/private_runtime_config.md owns deployment and rollback details;
+        -- docs/esphome.md describes credential migration and rotation limits.
+        -- Guest-space behavior remains governed by docs/room_intent.yaml and
+        -- the relevant behavioral specs.
+}

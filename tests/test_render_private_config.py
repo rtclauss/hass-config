@@ -47,6 +47,39 @@ def test_render_writes_ignored_yaml_atomically_and_checks_drift(tmp_path: Path) 
     output.write_text("stale")
     with pytest.raises(RenderError, match="stale"):
         render_all(tmp_path, manifest, values, check=True)
+    assert output.read_text() == "stale"
+
+
+@pytest.mark.parametrize("existing_output", [None, "existing private content\n"])
+def test_validate_mode_never_creates_or_replaces_outputs(
+    tmp_path: Path, existing_output: str | None,
+) -> None:
+    (tmp_path / "input.tmpl").write_text("name: @@PRIVATE:owner_name|json@@\n")
+    manifest, values = _fixture(
+        tmp_path, [("input.tmpl", "output.yaml")], {"owner_name": "Synthetic Owner"},
+    )
+    output = tmp_path / "output.yaml"
+    if existing_output is not None:
+        output.write_text(existing_output)
+
+    assert render_all(tmp_path, manifest, values, validate=True) == 1
+
+    if existing_output is None:
+        assert not output.exists()
+    else:
+        assert output.read_text() == existing_output
+
+
+def test_check_mode_does_not_create_missing_output(tmp_path: Path) -> None:
+    (tmp_path / "input.tmpl").write_text("name: @@PRIVATE:owner_name|json@@\n")
+    manifest, values = _fixture(
+        tmp_path, [("input.tmpl", "output.yaml")], {"owner_name": "Synthetic Owner"},
+    )
+
+    with pytest.raises(RenderError, match="stale"):
+        render_all(tmp_path, manifest, values, check=True)
+
+    assert not (tmp_path / "output.yaml").exists()
 
 
 def test_json_scalar_filter_quotes_private_text(tmp_path: Path) -> None:
@@ -61,7 +94,10 @@ def test_json_scalar_filter_quotes_private_text(tmp_path: Path) -> None:
     assert (tmp_path / "output.yaml").read_text() == 'name: "Example \\"Owner\\""\n'
 
 
-def test_missing_key_blocks_all_outputs_without_exposing_values(tmp_path: Path) -> None:
+@pytest.mark.parametrize("existing_output", [None, "existing private content\n"])
+def test_missing_key_blocks_all_outputs_without_exposing_values(
+    tmp_path: Path, existing_output: str | None,
+) -> None:
     (tmp_path / "first.tmpl").write_text("value: @@PRIVATE:present@@\n")
     (tmp_path / "second.tmpl").write_text("value: @@PRIVATE:missing@@\n")
     manifest, values = _fixture(
@@ -69,11 +105,17 @@ def test_missing_key_blocks_all_outputs_without_exposing_values(tmp_path: Path) 
         [("first.tmpl", "first.yaml"), ("second.tmpl", "second.yaml")],
         {"present": "sensitive-but-synthetic"},
     )
+    first = tmp_path / "first.yaml"
+    if existing_output is not None:
+        first.write_text(existing_output)
 
     with pytest.raises(RenderError) as failure:
         render_all(tmp_path, manifest, values)
     assert "sensitive-but-synthetic" not in str(failure.value)
-    assert not (tmp_path / "first.yaml").exists()
+    if existing_output is None:
+        assert not first.exists()
+    else:
+        assert first.read_text() == existing_output
     assert not (tmp_path / "second.yaml").exists()
 
 

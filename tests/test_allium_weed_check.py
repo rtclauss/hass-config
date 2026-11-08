@@ -557,6 +557,7 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         "specs/arrival_lighting.allium",
         "specs/diffusers.allium",
         "specs/night_routines.allium",
+        "specs/private_runtime_config.allium",
         "specs/tv_watching.allium",
         "specs/z2m_lifecycle.allium",
     }
@@ -658,6 +659,31 @@ def test_config_json_is_valid() -> None:
     data = json.loads(weed.DEFAULT_CONFIG.read_text(encoding="utf-8"))
 
     assert isinstance(data["protected_scopes"], list)
+
+
+@pytest.mark.parametrize("changed_path", [
+    "scripts/render_private_config.py",
+    "docs/private_config_manifest.json",
+    "private_templates/new_package.yaml.tmpl",
+    "examples/private_values.example.json",
+    "travis_secrets.example.yaml",
+    "examples/esphome_secrets.example.yaml",
+    ".gitignore",
+])
+def test_privacy_changes_require_contract_review(changed_path: str) -> None:
+    scopes, gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    spec_path = "specs/private_runtime_config.allium"
+    assert (ROOT / spec_path).is_file()
+
+    findings = weed.detect_drift_risks([changed_path], scopes, gaps)
+    privacy_findings = [finding for finding in findings if finding.scope.spec == spec_path]
+    assert len(privacy_findings) == 1
+    assert privacy_findings[0].is_failure
+
+    reviewed = weed.detect_drift_risks([changed_path, spec_path], scopes, gaps)
+    privacy_reviewed = [finding for finding in reviewed if finding.scope.spec == spec_path]
+    assert len(privacy_reviewed) == 1
+    assert not privacy_reviewed[0].is_failure
 
 
 def test_sync_github_issues_creates_issue_for_failing_spec(

@@ -33,6 +33,7 @@
 - Use `docs/calm_dashboard.md` for implementation, deployment, rollback, and soak details. Preserve room intent and the relevant behavioral specs when applying the design guide.
 
 ## Behavioral Specs
+- Use `specs/private_runtime_config.allium` as the source of truth for private information, secrets, public templates, synthetic fixtures, private rendering, and configuration privacy migrations. Read `docs/private_runtime_config.md` for deployment and rollback details.
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
 - Use `specs/diffusers.allium` as the source of truth for scent/oil diffuser sleep/wake participation and oil-replacement reminders (owner-approved in PR #925).
