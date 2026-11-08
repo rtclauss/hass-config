@@ -646,6 +646,19 @@
       ],
       "classification": "privacy-preserving room-matching change",
       "reason": "Issue #1175 (https://github.com/rtclauss/hass-config/issues/1175): room confidence compares the Bermuda area_id/floor_id attributes instead of the area display name in the sensor state, so area renames cannot change scoring. No @@PRIVATE markers, private values, manifest entries, or rendered-output handling change; the template still renders through scripts/render_private_config.py with synthetic values in tests (tests/test_room_confidence.py). specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/climate.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*{% from 'display_name.jinja' import contextual_name %}",
+        "-*{% set open_windows.names = open_windows.names + [sensor.name] %}",
+        "+*{% set open_windows.names = open_windows.names + [contextual_name(entity_id)] %}"
+      ],
+      "classification": "privacy-preserving display-name change",
+      "reason": "Issue #1175 (https://github.com/rtclauss/hass-config/issues/1175): the open-window list in binary_sensor.any_window_open uses the public contextual_name macro (custom_templates/display_name.jinja) instead of the friendly_name-backed state name. No @@PRIVATE markers, private values, manifest entries, or rendered-output handling change; covered by tests/test_zigbee_zwave_window_reconciliation.py and tests/test_display_name_macro.py. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }

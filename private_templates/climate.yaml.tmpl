@@ -1198,6 +1198,7 @@ template:
         attributes:
           open_windows: >-
             {% set excluded = states('input_text.any_window_open_exclude_entities').replace('\n', ',').split(',') | map('trim') | reject('equalto', '') | list %}
+            {% from 'display_name.jinja' import contextual_name %}
             {% set open_windows = namespace(names=[]) %}
             {% for sensor in states.binary_sensor %}
               {% set entity_id = sensor.entity_id %}
@@ -1211,7 +1212,7 @@ template:
                   {% set model = device_attr(did, 'model') | default('', true) | lower %}
                 {% endif %}
                 {% if sensor.state == 'on' and is_state(availability_entity_id, 'on') and device_class in ['opening', 'window'] and 'parasoll' in model and entity_id not in excluded %}
-                  {% set open_windows.names = open_windows.names + [sensor.name] %}
+                  {% set open_windows.names = open_windows.names + [contextual_name(entity_id)] %}
                 {% endif %}
               {% endif %}
             {% endfor %}
