@@ -1,5 +1,12 @@
 # Private runtime configuration
 
+The behavioral contract is [specs/private_runtime_config.allium](../specs/private_runtime_config.allium).
+Read it before changing private-value handling, secrets, public templates,
+synthetic fixtures, or privacy migrations. This guide supplies the operational
+steps; the spec captures the existing publication, rendering, and migration
+guarantees. Its publication and migration guarantees are maintainer obligations,
+not claims that the renderer automatically detects every kind of private data.
+
 ## Rendered private YAML
 
 For values embedded in Jinja, YAML keys, or other positions that cannot use
@@ -16,6 +23,25 @@ values. CI validates the committed manifest and
 `examples/private_values.example.json` without writing outputs; that example
 must contain only synthetic values. The media package is the first manifest
 target.
+
+### Contract validation
+
+Run `python3 scripts/allium_weed_check.py --require-allium` for language checks.
+The protected scope in `specs/allium_weed_config.json` requires renderer,
+manifest, template, example-value, and ignore-rule changes to be compared with
+the privacy contract. Changes that preserve the contract need a classified gap;
+spec changes still require owner approval.
+
+Run the renderer and publication regression cases with:
+
+```sh
+uv run --with pytest pytest tests/test_render_private_config.py tests/test_public_privacy_baseline.py tests/test_esphome_secret_privacy.py tests/test_core_config_privacy.py tests/test_notification_privacy.py tests/test_ui_storage_privacy.py tests/test_appdaemon_reboot_privacy.py tests/test_mqtt_secret_cleanup.py tests/test_allium_weed_check.py
+```
+
+These tests cover preflight failures, ignored/untracked outputs, owner-only
+permissions, scalar escaping, diagnostics, read-only validation/check modes,
+public identity boundaries, and the privacy drift gate. They do not attest to
+live backups, deployment equivalence, or a complete scan of Git history.
 
 ### Repair migration (2026.11)
 
