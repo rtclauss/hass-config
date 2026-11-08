@@ -156,9 +156,67 @@ names a `Main Foyer` HA area that does not exist live; the foyer's devices
 that area and moving them into it would change Hallway area views and Assist
 commands, so it needs its own reviewed batch.
 
-Remaining: 40 `custom_entity_name_needs_context_review` overrides (window
-contacts, Bond fans/lights, Music Assistant room players, Adaptive Lighting
-switches).
+### Batch 4 (2026-11-08): Bond ceiling fans and lights
+
+Goal: voice assistants never hear the same name for the fan and the light of
+one fixture. Before this batch, `light.den_ceiling` and `fan.den_ceiling` were
+both "Den Ceiling Fan", both Guest Room entities carried the alias "Guest Room
+Ceiling", and `fan.owner_suite` was named and aliased "Owner Suite", which is
+also an area alias.
+
+| Device (was) | Device (now) | Fan entity | Light entity |
+| --- | --- | --- | --- |
+| Den Fan | Den Ceiling | Fan → Den Ceiling Fan | Light → Den Ceiling Light |
+| Office Fan | Office Ceiling | Fan → Office Ceiling Fan | Light → Office Ceiling Light |
+| Guest Room Fan | Guest Room Ceiling | Fan → Guest Room Ceiling Fan | Light → Guest Room Ceiling Light |
+| Owner Suite Fan | Owner Suite Ceiling | Fan → Owner Suite Ceiling Fan | Light → Owner Suite Ceiling Light |
+
+- The device name keeps the room on purpose: Alexa receives only the friendly
+  name, with no area context, so four "Ceiling Light" entities would collide.
+  This is a justified exception to "do not repeat the area in device names".
+- Every entity has its own-name alias on, plus an explicit full-name alias.
+  Colliding aliases were dropped; unique legacy aliases were kept ("Ceiling
+  Light", "Guest Ceiling Light", "Owner Suite Ceiling").
+- The `light.guest_room_ceiling` customize `friendly_name` ("Guest Ceiling
+  Light") is removed in the repository; until that deploys, its friendly name
+  stays "Guest Ceiling Light", which is unique and says Light.
+- `tests/test_bond_fan_light_names.py` pins unique Fan/Light spoken names and
+  rejects customize names on these entities.
+- The sibling Bond buttons (for example "Guest Room Ceiling Ceiling fan 3 Start
+  Dimmer") keep the integration's doubled names; they are not exposed to voice.
+
+**Siri** reads the HomeKit Bridge accessory names, which HomeKit caches at
+pairing. HA renames do not reach them. `homekit.reset_accessory` would pick up
+the new names, but Apple Home then treats the accessory as new and its room,
+scenes, and automations must be restored. Renaming in the Home app keeps them.
+`light.den_ceiling` is not included in the HomeKit Bridge.
+
+### Batch 5 (prepared): window contacts
+
+Code (this PR): `custom_templates/display_name.jinja` composes whole-home names
+(area + device + entity, without repeating context). The egress list and the
+open-window list use it, and the 19 window-contact customize `friendly_name`
+overrides are removed. The egress change also fixes the blank names that doors
+already produce in 2026.11, because door contacts are main entities and
+`entity_name()` returns an empty string for them.
+
+Live rename, to apply **after** this code deploys (otherwise the deployed
+egress list would show blank window names): for each contact, set the device
+name to the fixture without the room (`Kitchen/North Window` → `North Window`;
+the area supplies `Kitchen`), make the contact the device's main entity, and add
+its old full name as an alias. Zigbee2MQTT friendly names and MQTT topics are
+untouched; window contacts are not in the HomeKit Bridge.
+
+### 2026.11 naming rule learned here
+
+Names written after the 2026.11 upgrade are stored as the entity's own part
+and are composed after the device name ("Den Fan" + "Den Ceiling Light" became
+"Den Fan Den Ceiling Light"). Names carried over from before the upgrade are
+shown as written. Design new names as `<device>` + `<entity>` pairs, and expect
+a rollback that restores a legacy full name to be composed too.
+
+Remaining: Music Assistant room players (deliberate, contract-tested),
+Adaptive Lighting Dining Room switches, and the one-off overrides.
 
 The audit deliberately proposes no automatic rename. Before changing any live
 name, inventory all sibling entities and consumers, preserve entity IDs and MQTT
