@@ -165,6 +165,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.8.3
 - [Available Device Inventory](inventory.md)
 - [House Transition Framework](docs/house_transition_framework.md)
 - [Home Assistant Label Model](docs/ha_labels.md)
+- [Home Assistant Name Reconciliation](docs/ha_name_reconciliation.md)
 - [Inovelli Scene Action Map](docs/inovelli_scene_actions.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
