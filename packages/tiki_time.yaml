@@ -303,12 +303,16 @@ script:
     description: >-
       Start the Tiki Time party mode: flash the lights, start SomaFM Tiki Time
       on the Sonos group, move the basement display into Photos, and start the
-      tropical light rotation.
+      tropical light rotation. Only start when guest mode is explicitly off.
     icon: mdi:palm-tree
     mode: restart
     trace:
       stored_traces: 10
     sequence:
+      - alias: "Protect guest privacy: Tiki Time requires guest mode off"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
       - action: logbook.log
         data:
           name: Tiki Time

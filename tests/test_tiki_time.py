@@ -3,8 +3,29 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+import yaml
+
 
 TIKI_TIME_PATH = Path(__file__).resolve().parents[1] / "packages" / "tiki_time.yaml"
+
+
+@pytest.mark.parametrize("guest_state", ["on", "unknown", "unavailable", None, "off"])
+def test_tiki_time_guest_guard_precedes_every_side_effect(guest_state: str | None) -> None:
+    package = yaml.safe_load(TIKI_TIME_PATH.read_text(encoding="utf-8"))
+    sequence = package["script"]["tiki_time"]["sequence"]
+    guard = sequence[0]
+
+    # HA's native state condition halts the sequence unless the helper is off.
+    assert guard["condition"] == "state"
+    assert guard["entity_id"] == "input_boolean.guest_mode"
+    assert guard["state"] == "off"
+    assert "guest privacy" in guard["alias"]
+    assert "action" not in guard
+    reached_actions = sequence[1:] if guest_state == guard["state"] else []
+    assert bool(reached_actions) is (guest_state == "off")
+    if reached_actions:
+        assert reached_actions[0]["action"] == "logbook.log"
 
 
 def _script_block(script_id: str) -> str:
