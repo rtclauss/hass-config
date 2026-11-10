@@ -614,6 +614,53 @@
       ],
       "classification": "arrival-lighting implementation detail",
       "reason": "The new Stairway Adaptive Lighting switch mirrors the Hallway instance and is added to the arrival common-area switch list (plus the nightly-cycle list and the Adaptive Control group). Arrival still skips disabled switches, excludes the owner suite when the bed is occupied, and preserves manual_control lights; the stairway is part of the hallway area named in arrival_lighting.allium. The spec is intentionally not edited without owner approval."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/media_player.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-          bedtime_playback_entity: >-",
+        "-            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')",
+        "-               else 'media_player.ma_group_everywhere' }}",
+        "+          bedtime_playback_entity: media_player.ma_group_guest",
+        "-            - media_player.ma_office",
+        "-            - media_player.ma_den",
+        "-          # change. Office, bathroom, and den all ramp down to 1%. Office and",
+        "-          # den are guest_capable_rooms per docs/room_intent.yaml",
+        "-          # (\"override_when_guest_present: treat as guest-private room at any",
+        "-          # time\", priority high) \u2014 the same rooms the wake-up scripts'",
+        "-          # group_members already exclude in guest mode. guest_mode is",
+        "-          # re-checked live every iteration (not snapshotted once up front),",
+        "-          # so a room stops being touched within one interval of guest mode",
+        "-          # turning on mid-rampdown, not just at script start. This script",
+        "-          # has callers with no guest-mode guard of their own (e.g.",
+        "-          # bed_without_prep), so the exclusion lives here rather than",
+        "-          # relying on every caller to remember it.",
+        "+          # change. Bathroom ramps down to 1%. Only owner-suite rooms",
+        "+          # participate, regardless of guest mode or the calling script.",
+        "-            - entity_id: media_player.ma_office",
+        "-              floor_volume: 0.01",
+        "-              guest_capable: true",
+        "-            - entity_id: media_player.ma_den",
+        "-              floor_volume: 0.01",
+        "-              guest_capable: true",
+        "-      # A live-relative step is also the only pause-safe option: guest mode",
+        "-      # skips office/den mid-rampdown (re-checked live each iteration), so an",
+        "-      # absolute step \u00d7 global-iteration curve would resume a paused room many",
+        "-      # steps below where it was left, slamming it to floor in one jump. A room",
+        "-      # unavailable at script start and later recovered is likewise handled for",
+        "-      # free \u2014 it simply eases one step down from wherever it re-appears. HA",
+        "-      # templates can't carry a per-target active-iteration counter across",
+        "-      # outer iterations, so an absolute curve can't be made pause-aware here",
+        "-      # (Codex review, PR #957).",
+        "+      # Live-relative steps also handle unavailable rooms that recover mid-ramp:",
+        "+      # they ease down from their current volume instead of jumping to a global",
+        "+      # iteration's volume. Preserve manual reductions below the floor."
+      ],
+      "classification": "bedtime owner-suite scope correction",
+      "reason": "Issue #871 / PR #1191 changes bedroom-suite playback/volume scope only. Private markers, mappings, renderer guarantees and runtime ownership remain unchanged. https://github.com/rtclauss/hass-config/pull/1191"
     }
   ]
 }
