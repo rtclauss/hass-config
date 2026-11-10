@@ -39,92 +39,74 @@ homeassistant:
     binary_sensor.basement_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Basement Window"
 
     binary_sensor.dining_room_north_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Dining Room North Window"
 
     binary_sensor.dining_room_south_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Dining Room South Window"
 
     binary_sensor.guest_bathroom_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Guest Bathroom Window"
 
     binary_sensor.guest_room_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Guest Room Window"
 
     binary_sensor.kitchen_bay_middle_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Kitchen Bay Middle Window"
 
     binary_sensor.kitchen_bay_north_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Kitchen Bay North Window"
 
     binary_sensor.kitchen_bay_south_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Kitchen Bay South Window"
 
     binary_sensor.kitchen_north_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Kitchen North Window"
 
     binary_sensor.kitchen_south_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Kitchen South Window"
 
     binary_sensor.office_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Office Window"
 
     binary_sensor.owner_suite_bathroom_bay_north_middle_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite Bathroom Bay North Middle Window"
 
     binary_sensor.owner_suite_bathroom_bay_north_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite Bathroom Bay North Window"
 
     binary_sensor.owner_suite_bathroom_bay_south_middle_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite Bathroom Bay South Middle Window"
 
     binary_sensor.owner_suite_bathroom_bay_south_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite Bathroom Bay South Window"
 
     binary_sensor.owner_suite_north_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite North Window"
 
     binary_sensor.owner_suite_south_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Owner Suite South Window"
 
     binary_sensor.powder_room_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Powder Room Window"
 
     binary_sensor.main_foyer_front_door_contact:
       <<: *customize
@@ -145,7 +127,6 @@ homeassistant:
     binary_sensor.unfinished_basement_window_contact:
       <<: *customize
       device_class: window
-      friendly_name: "Unfinished Basement Window"
 
     ################################################
     ## Device Trackers
@@ -3077,11 +3058,14 @@ template:
           entity_ids: >-
             {% from 'egress.jinja' import open_egress_entity_ids %}
             {{ open_egress_entity_ids() | from_json | join(', ') }}
+          # Area-aware names: main entities (doors, renamed windows) have an
+          # empty entity_name(), and room-free device names need the area.
           friendly_names: >-
             {% from 'egress.jinja' import open_egress_entity_ids %}
+            {% from 'display_name.jinja' import contextual_name %}
             {% set ns = namespace(names=[]) %}
             {% for entity_id in open_egress_entity_ids() | from_json %}
-              {% set ns.names = ns.names + [entity_name(entity_id)] %}
+              {% set ns.names = ns.names + [contextual_name(entity_id)] %}
             {% endfor %}
             {{ ns.names | sort | join(', ') }}
 

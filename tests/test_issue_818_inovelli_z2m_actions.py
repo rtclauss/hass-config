@@ -43,7 +43,7 @@ def test_inovelli_publisher_targets_only_active_z2m_devices() -> None:
         "rejectattr('state', 'in', ['unknown', 'unavailable'])",
         "rejectattr('attributes.restored', 'eq', true)",
         "action: mqtt.publish",
-        "zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set",
+        "zigbee2mqtt/{{ device_attr(repeat.item, 'name') }}/set",
         "payload: \"{{ effect_payload }}\"",
     ):
         assert token in block
