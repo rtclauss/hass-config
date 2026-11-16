@@ -130,7 +130,9 @@ def test_network_endpoints_are_loaded_from_private_secrets() -> None:
         assert not re.search(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", source)
         assert not re.search(r"\b[a-zA-Z0-9-]+\.local\b", source)
         keys.update(re.findall(r"!secret (private_[a-z_]+(?:_url|_resource|_origin|_referer|_payload))", source))
-    assert len(keys) == 13
+    assert len(keys) == 11
+    assert "private_adsb_origin" not in examples
+    assert "private_adsb_referer" not in examples
     for key in keys:
         assert re.search(rf"(?m)^{re.escape(key)}:", examples)
 
