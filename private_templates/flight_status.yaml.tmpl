@@ -232,6 +232,8 @@ template:
             {% set airline_codes = ['AA', 'AC', 'AF', 'AS', 'BA', 'B6', 'DL', 'F9', 'KL', 'NK', 'SY', 'UA', 'WN'] %}
             {% set events = (personal_events | default('[]', true) | string | trim | from_json) + (work_trip_events | default('[]', true) | string | trim | from_json) %}
             {% set ns = namespace(match=None) %}
+            {% from 'flight.jinja' import flight_signals %}
+            {% set flight_classify = flight_signals | as_function %}
             {% for event in events %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
@@ -239,9 +241,8 @@ template:
               {% set summary_lower = summary | lower %}
               {% set text = [summary, description, location] | join(' ') %}
               {% set text_lower = text | lower %}
-              {% set route_summary = '→' in summary %}
-              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-              {% set itinerary_marker = 'synced by flighty' in text_lower or 'created from an email you received in gmail' in text_lower or 'booking code:' in text_lower or 'flight time ' in text_lower %}
+              {% set flight_sig = flight_classify(summary, description, location) %}
+              {% set route_summary = flight_sig.route_summary %}
               {% set is_friend_itinerary = 'friend' in text_lower %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
@@ -267,7 +268,7 @@ template:
                   {% endfor %}
                 {% endif %}
               {% endfor %}
-              {% set looks_like_flight = route_summary or named_flight or itinerary_marker or ident_ns.value != '' %}
+              {% set looks_like_flight = flight_sig.looks_like_flight or ident_ns.value != '' %}
               {% set origin_code = '' %}
               {% set destination_code = '' %}
               {% set destination_name = '' %}

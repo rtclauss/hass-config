@@ -2,23 +2,41 @@
   Shared flight-recognition macros.
 
   These centralize the "does this calendar event look like a flight?" logic so
-  the Tesla charge planner (packages/car.yaml) can reuse the exact same rules
-  that travel/trip detection relies on. The boolean matches the inline flight
-  detection in packages/trips.yaml (route arrows, "flight to ...", "flight: ...
-  to ...", and itinerary markers such as Flighty/Gmail sync, booking codes, and
-  flight-time lines).
+  every consumer reuses one copy of the rules: the Tesla charge planner
+  (packages/car.yaml), travel/trip detection (packages/trips.yaml), and flight
+  status tracking (packages/flight_status.yaml). The rules are route arrows,
+  "flight to ...", "flight: ... to ...", and itinerary markers such as
+  Flighty/Gmail sync, booking codes, and flight-time lines.
 
-  Use with Home Assistant's `as_function` filter so callers receive real
-  booleans instead of string output.
+  flight_signals is the single source of those rules and returns the component
+  booleans (route_summary, named_flight, itinerary_marker) alongside the
+  combined looks_like_flight, because travel detection needs route_summary and
+  named_flight on their own (destination parsing and outbound-priority). All
+  macros take a trailing `returns` callback and are called through Home
+  Assistant's `as_function` filter so callers receive real values instead of
+  rendered strings.
 -#}
-{%- macro looks_like_flight(summary, description='', location='', returns=none) -%}
+{%- macro flight_signals(summary, description='', location='', returns=none) -%}
   {%- set summary_text = summary | default('', true) | string -%}
   {%- set summary_lower = summary_text | lower -%}
   {%- set trip_text = [summary_text, description | default('', true) | string, location | default('', true) | string] | join(' ') | lower -%}
   {%- set route_summary = '→' in summary_text -%}
   {%- set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) -%}
   {%- set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text -%}
-  {%- do returns(route_summary or named_flight or itinerary_marker) -%}
+  {%- do returns({
+    'route_summary': route_summary,
+    'named_flight': named_flight,
+    'itinerary_marker': itinerary_marker,
+    'looks_like_flight': route_summary or named_flight or itinerary_marker,
+  }) -%}
+{%- endmacro -%}
+{#-
+  looks_like_flight: just the combined boolean, delegating to flight_signals so
+  the rules live in exactly one place.
+-#}
+{%- macro looks_like_flight(summary, description='', location='', returns=none) -%}
+  {%- set classify = flight_signals | as_function -%}
+  {%- do returns(classify(summary, description, location).looks_like_flight) -%}
 {%- endmacro -%}
 {#-
   skip_charging_event: True when the Tesla charge planner should ignore a
