@@ -899,6 +899,14 @@
       ],
       "classification": "obsolete synthetic endpoint cleanup",
       "reason": "Issue #1192 (https://github.com/rtclauss/hass-config/issues/1192): adsb.im rejects browser-origin emulation and requires its routeset endpoint over HTTP with a contactable User-Agent. Removing the now-unreferenced synthetic Origin and Referer secrets reduces public fixture surface without exposing or changing any private value, renderer target, ignored output, or live credential. specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/car.yaml.tmpl"
+      ],
+      "classification": "non-privacy transport and fail-safe change",
+      "reason": "Issue #1198 (https://github.com/rtclauss/hass-config/issues/1198): Waze blocked the address-autocomplete endpoint pywaze used to resolve an address string into coordinates (eifinger/pywaze#119), so the Tesla departure planner's waze_travel_time.get_travel_times calls fail for any address input. This moves those lookups onto coordinates (origin from zone.home's own latitude/longitude, destination geocoded through a new rest_command.geocode_address and cached on the sensor) and makes a located candidate that cannot be scored fail safe instead of degrading to 0 mi. Public config only: no @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change, and the added Nominatim User-Agent is a public contact string following the same convention as PR #1194. specs/private_runtime_config.allium is intentionally not edited; covered by tests/test_issue_tesla_planner_waze_geocode.py and tests/test_issue_tesla_planner_flight_exclusion.py."
     }
   ]
 }
