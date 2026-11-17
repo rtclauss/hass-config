@@ -204,7 +204,7 @@ The charge tier is sized off the **furthest** qualifying event. On a day with se
 - the summary and notification add a line such as *"Day total 175 mi across 2 trips (round trip each)"*
 - if that total exceeds what the selected tier provides, one advisory sentence is appended naming the shortfall
 
-A worked example from 2026-11-17: a 70.9 mi dentist appointment in Rochester plus a 16.7 mi curling match in St Paul is **~175 mi of driving**, while the plan's `distance_mi` reads 70.9 — correctly, since that is the leg that sizes the charge.
+An illustrative shape: a 70 mi afternoon appointment plus a 17 mi evening event is **~174 mi of driving**, while the plan's `distance_mi` reads 70 — correctly, since that is the leg that sizes the charge. Without the day total, nothing in the plan hints at the other 104 mi.
 
 **The day total never changes the charge limit.** That is deliberate (issue #1202):
 

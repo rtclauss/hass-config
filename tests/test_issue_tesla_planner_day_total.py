@@ -2,16 +2,16 @@
 
 The charge tier is sized off the furthest qualifying event, so on a day with
 several qualifying trips the other legs were invisible: the summary reported
-only the furthest leg's one-way distance. On 2026-11-17 that read "Distance
-70 mi" for a day holding a 70.9 mi dentist round trip plus a 16.7 mi curling
-round trip — about 175 mi of driving.
+only the furthest leg's one-way distance. For a day holding a 70 mi afternoon
+appointment and a 17 mi evening event, that read "Distance 70 mi" against
+~174 mi of actual driving.
 
 This adds reporting ONLY. The charge tiers are deliberately untouched:
-Supercharging is available on these routes, so under-charging costs a short
-stop rather than a missed appointment, while the 2019 NCA pack makes routine
-100% charging the thing to avoid. Over-charging has a real cumulative cost and
-under-charging a small recoverable one, so the planner informs and leaves the
-decision to the owner.
+Supercharging is available, so under-charging costs a short stop rather than a
+missed appointment, while the 2019 NCA pack makes routine 100% charging the
+thing to avoid. Over-charging has a real cumulative cost and under-charging a
+small recoverable one, so the planner informs and leaves the decision to the
+owner.
 
 No surveyed project (EV Smart Charging, Teslemetry, Tesla Fleet) computes a
 required charge level from trip distance, handles round trips or multi-trip
@@ -121,3 +121,46 @@ def test_usable_range_helper_is_a_fixed_calibrated_value() -> None:
     assert "name: Tesla Usable Range At Full" in text
     assert "initial: 240" in text
     assert "states('input_number.tesla_usable_range_mi') | float(default=240)" in text
+
+
+def test_no_live_itinerary_details_in_public_planner_files() -> None:
+    # Codex P1 on PR #1203. specs/private_runtime_config.allium keeps exact
+    # travel histories out of public Git and requires synthetic values in
+    # documentation and fixtures. Worked examples must be invented and undated.
+    # This is the second privacy slip of this kind in the planner work (live
+    # coordinates were the first, on PR #1199), hence a standing guard.
+    #
+    # Deliberately matches CATEGORY shapes rather than the real destinations:
+    # listing those here would reproduce in a public file exactly what the
+    # guard exists to keep out.
+    #
+    # Generic appointment types ("Dentist", "Example Dental, Sample City, ST")
+    # are an established synthetic convention in this repo and are NOT flagged.
+    # What identifies a real trip is a date plus a real place, so those are the
+    # shapes guarded here.
+    import re
+
+    patterns = {
+        "dated itinerary": re.compile(r"\b20\d\d-\d\d-\d\d\b"),
+        "street address": re.compile(
+            r"\b\d+\s+\w+(\s+\w+)*\s+(Ave|Avenue|St|Street|Ln|Lane|Rd|Road|Blvd|Way|Dr|Drive)\b"
+        ),
+    }
+    for rel in (
+        "docs/tesla_departure_planner.md",
+        "packages/car.yaml",
+        "private_templates/car.yaml.tmpl",
+        "tests/test_issue_tesla_planner_day_total.py",
+        "tests/test_issue_tesla_planner_waze_geocode.py",
+        "tests/test_issue_tesla_scheduled_departure_params.py",
+    ):
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for label, pattern in patterns.items():
+            match = pattern.search(text)
+            assert match is None, (
+                f"{rel} carries {label} detail: {match.group(0)!r} - "
+                "use an invented, undated example instead"
+            )

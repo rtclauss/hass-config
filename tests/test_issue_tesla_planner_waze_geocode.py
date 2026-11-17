@@ -14,8 +14,8 @@ The planner passed addresses on both sides of the call:
 
 so every lookup failed. Because the Waze call is `continue_on_error: true`, a
 failed candidate used to degrade to `distance_mi: 0`, which is below
-`input_number.tesla_local_trip_threshold_mi` (default 10 mi). A real 69-mile
-drive to a dentist in Rochester was therefore silently reclassified as a local
+`input_number.tesla_local_trip_threshold_mi` (default 10 mi). A real 70-mile
+drive was therefore silently reclassified as a local
 errand, `binary_sensor.upcoming_trip_charging` stayed `off`, and the planner
 fell through to the alarm-only 85% tier with no preconditioning. The only
 visible symptom was a plausible-looking charge limit.
