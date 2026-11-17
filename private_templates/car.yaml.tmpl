@@ -1208,7 +1208,7 @@ template:
           # script variables and service data with native typing, and a bare
           # coordinate pair literal_evals into a TUPLE — confirmed on this
           # instance over the WebSocket render_template API, which returns
-          # `[44.761712, -93.203609]` for the bare form and keeps the string
+          # `[40.001, -80.001]` for the bare form and keeps the string
           # when the same value sits inside a rendered mapping. A `| string`
           # filter does not save it: the parse happens after rendering, so the
           # filtered form comes back as a tuple too. waze_travel_time's service
@@ -1221,8 +1221,13 @@ template:
             {% set lat = state_attr('zone.home', 'latitude') %}
             {% set lon = state_attr('zone.home', 'longitude') %}
             {{ {'pair': ((lat | string ~ ',' ~ lon | string) if (lat is not none and lon is not none) else '')} }}
+          # Mapping-held from this first evaluation, like the coordinates
+          # below: the helper's documented value is a numeric "lat,lon" pair,
+          # so a bare template here would already be converted to a tuple and
+          # wrapping it afterwards could not recover the string — the later
+          # normalization would yield a parenthesized "(40.001, -80.001)".
           destination_coords_override: >-
-            {{ states('input_text.tesla_destination_coords_override') | default('', true) | string | trim }}
+            {{ {'pair': (states('input_text.tesla_destination_coords_override') | default('', true) | string | trim)} }}
           # Carry last cycle's address -> "lat,lon" map forward. During this
           # action the sensor still holds its previous attributes, so repeat
           # recomputes of the same event reuse the cached coordinates.
@@ -1358,10 +1363,10 @@ template:
                 - variables:
                     candidate_scored: false
                     candidate_coords_from_override: >-
-                      {{ destination_coords_override != '' and repeat.item.start == override_target_start }}
+                      {{ destination_coords_override.pair != '' and repeat.item.start == override_target_start }}
                     candidate_coords: >-
-                      {% if destination_coords_override != '' and repeat.item.start == override_target_start %}
-                        {{ {'pair': destination_coords_override} }}
+                      {% if destination_coords_override.pair != '' and repeat.item.start == override_target_start %}
+                        {{ {'pair': destination_coords_override.pair} }}
                       {% else %}
                         {{ {'pair': geo_cache.get(candidate_location, '')} }}
                       {% endif %}

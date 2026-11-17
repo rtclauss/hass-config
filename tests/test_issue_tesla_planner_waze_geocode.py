@@ -83,7 +83,7 @@ def test_coordinates_never_reach_the_service_as_bare_scalars() -> None:
     # Codex P1 on PR #1199. A bare "lat,lon" template literal_evals into a
     # tuple under HA's native typing (verified on the live instance via the
     # WebSocket render_template API: the bare form returns
-    # [44.761712, -93.203609], the same value inside a rendered mapping stays
+    # [40.001, -80.001], the same value inside a rendered mapping stays
     # a string, and a `| string` filter does NOT help because the parse
     # happens after rendering). waze_travel_time's schema uses TextSelector,
     # which strictly validates `str`, and a config-validation error bypasses
@@ -171,8 +171,15 @@ def test_manual_coordinate_override_helper_exists_and_targets_soonest() -> None:
     # share the window, so it targets the soonest located candidate.
     assert "override_target_start:" in text
     assert (
-        "{% if destination_coords_override != ''"
+        "{% if destination_coords_override.pair != ''"
         " and repeat.item.start == override_target_start %}" in text
+    )
+    # The helper value is mapping-held from its first evaluation, so a numeric
+    # "lat,lon" entry is never converted to a tuple on the way through — the
+    # same trap as the other coordinate variables (Codex P2 on #1199).
+    assert (
+        "{{ {'pair': (states('input_text.tesla_destination_coords_override')"
+        " | default('', true) | string | trim)} }}" in text
     )
 
 
@@ -288,3 +295,24 @@ def test_trip_plan_json_still_carries_a_literal_eval_blocking_value() -> None:
 
     assert "'all_day': false," in text
     assert "(trip_plan_json | from_json)" in text
+
+
+def test_no_live_coordinates_in_public_files() -> None:
+    # Codex P1 on PR #1199: the native-typing explanation does not need the
+    # real home location, and specs/private_runtime_config.allium prohibits
+    # private coordinates in public templates, comments, docs and fixtures.
+    # Examples use the repo's synthetic 40.00x convention instead.
+    import re
+
+    private_lat_lon = re.compile(r"4[34]\.(?:76|04)\d{4}|-9[23]\.(?:20|46)\d{4}")
+    for rel in (
+        "private_templates/car.yaml.tmpl",
+        "packages/car.yaml",
+        "docs/tesla_departure_planner.md",
+        "tests/test_issue_tesla_planner_waze_geocode.py",
+    ):
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        hits = private_lat_lon.findall(path.read_text(encoding="utf-8"))
+        assert not hits, f"{rel} carries live-looking coordinates: {sorted(set(hits))}"
