@@ -1,0 +1,48 @@
+{#- Whole-home display names for notifications and summaries (issue #1175).
+
+    Home Assistant 2026.11 names each object once: an area ("Kitchen"), a
+    device ("North Window"), and an entity ("Battery", or nothing when it is
+    the device's main entity). Room-local surfaces add that context
+    themselves; whole-home text such as "North Window, North Window is open"
+    needs it composed explicitly.
+
+    contextual_name(entity_id) returns the area, device, and entity names in
+    that order, without repeating context a name already carries:
+      - main entity (entity_name() is empty): the device name;
+      - legacy full names ("Kitchen North Window" on device
+        "Kitchen/North Window"): the entity name as-is;
+      - Zigbee2MQTT-style "Room/Fixture" device names already carry the room,
+        so they render as "Room Fixture" with no area added;
+      - otherwise the area is prefixed unless the name already starts with it.
+    It never reads friendly_name, which 2026.11 keeps only for compatibility.
+
+    Import with:
+      {% from 'display_name.jinja' import contextual_name %}
+      {{ contextual_name('binary_sensor.kitchen_north_window_contact') }}
+-#}
+{%- macro contextual_name(entity_id) -%}
+  {%- set entity = entity_name(entity_id) | default('', true) | trim -%}
+  {%- set device = device_name(entity_id) | default('', true) | trim -%}
+  {%- set area = area_name(entity_id) | default('', true) | trim -%}
+  {%- set device_has_room = '/' in device -%}
+  {%- set room_prefix = device.split('/')[0] if device_has_room else '' -%}
+  {%- set device_label = device | replace('/', ' ') -%}
+  {%- set has_room = device_has_room -%}
+  {%- if not entity -%}
+    {%- set base = device_label -%}
+  {%- elif not device -%}
+    {%- set base = entity -%}
+  {%- elif (entity | lower).startswith(device | lower) -%}
+    {%- set base = device_label ~ entity[device | length:] -%}
+  {%- elif room_prefix and (entity | lower).startswith(room_prefix | lower) -%}
+    {%- set base = entity -%}
+  {%- else -%}
+    {%- set base = device_label ~ ' ' ~ entity -%}
+  {%- endif -%}
+  {%- set base = base | default(entity_id, true) -%}
+  {%- if not has_room and area and not (base | lower).startswith(area | lower) -%}
+    {{- area ~ ' ' ~ base -}}
+  {%- else -%}
+    {{- base -}}
+  {%- endif -%}
+{%- endmacro -%}

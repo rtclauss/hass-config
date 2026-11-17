@@ -75,10 +75,14 @@ script:
       - repeat:
           for_each: "{{ active_inovelli_z2m_entities }}"
           sequence:
+            # The integration-supplied device name is the Zigbee2MQTT
+            # friendly_name. HA display names, device overrides
+            # (name_by_user), and 2026.11 name composition must not change
+            # this MQTT topic.
             - action: mqtt.publish
               data:
                 topic: >-
-                  zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set
+                  zigbee2mqtt/{{ device_attr(repeat.item, 'name') }}/set
                 payload: "{{ effect_payload }}"
 
   # Aurora effect shown on all Inovelli switches after a configuration reset.

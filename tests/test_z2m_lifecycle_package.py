@@ -76,7 +76,7 @@ def test_z2m_lifecycle_package_exposes_decommission_controls_and_inventory_guida
     assert 'topic: zigbee2mqtt/bridge/request/device/remove' in text
     assert "force_remove: false" in text
     assert "force_remove: true" in text
-    assert '{"id":"{{ device_id }}","force":{{ \'true\' if force_remove_bool else \'false\' }},"block":false}' in text
+    assert '{"id":"{{ device_id }}","force":{{ force_remove_bool | bool | to_json }},"block":false}' in text
     assert "inventory.md" in text
     assert "Update inventory.md in the repo" in text
 

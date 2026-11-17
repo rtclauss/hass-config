@@ -99,7 +99,6 @@ homeassistant:
 
     light.guest_room_ceiling:
       <<: *customize
-      friendly_name: "Guest Ceiling Light"
       icon: mdi:home
 
     light.kitchen_sink_overhead:
@@ -835,10 +834,9 @@ automation:
           - condition: sun
             before: sunrise
             after_offset: "0:30:00"
-      - condition: state
-        entity_id:
-          - input_boolean.guest_mode
-        state: "off"
+      # Guest mode only suppresses motion turn-on (branch conditions below);
+      # vacancy turn-off still runs so lights a guest switched on do not stay
+      # on all day (docs/room_intent.yaml: hallway turns off promptly).
       - condition: state
         entity_id:
           - input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
@@ -850,6 +848,9 @@ automation:
                 id: main-motion-sensed
               - condition: state
                 entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.guest_mode
                 state: "off"
             sequence:
               - action: script.hallway_lights_turn_on
@@ -931,6 +932,9 @@ automation:
                 id: upstairs-motion-sensed
               - condition: state
                 entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.guest_mode
                 state: "off"
             sequence:
               - action: script.hallway_lights_turn_on
@@ -1593,10 +1597,9 @@ automation:
       - condition: sun
         after: sunrise
         before: sunset
-      - condition: state
-        entity_id:
-          - input_boolean.guest_mode
-        state: "off"
+      # Guest mode only suppresses motion turn-on (branch conditions below);
+      # vacancy turn-off still runs so lights a guest switched on do not stay
+      # on all day (docs/room_intent.yaml: hallway turns off promptly).
       - condition: state
         entity_id:
           - input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
@@ -1608,6 +1611,9 @@ automation:
                 id: main-motion-sensed
               - condition: state
                 entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.guest_mode
                 state: "off"
             sequence:
               - action: script.hallway_lights_turn_on
@@ -1649,6 +1655,9 @@ automation:
                 id: upstairs-motion-sensed
               - condition: state
                 entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.guest_mode
                 state: "off"
             sequence:
               - action: script.hallway_lights_turn_on

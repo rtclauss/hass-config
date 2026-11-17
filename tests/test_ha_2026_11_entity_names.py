@@ -29,12 +29,21 @@ def test_user_facing_templates_use_entity_name_helper() -> None:
                 if DEPRECATED_NAME_READ.search(line):
                     matches.append(f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}")
 
-    # This value is the Zigbee2MQTT device identifier used in an MQTT topic,
-    # not Home Assistant's user-facing entity display name.
-    assert matches == [
-        "packages/inovelli_led_notifications.yaml:81: "
-        "zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set"
-    ]
+    # friendly_name is retained only for compatibility in 2026.11 and is
+    # planned for deprecation, so no config may read it.
+    assert matches == []
+
+
+def test_zigbee2mqtt_topics_use_integration_device_name() -> None:
+    # The Zigbee2MQTT friendly_name is an MQTT contract. Home Assistant renames
+    # write name_by_user or entity overrides, so topics must come from the
+    # integration-supplied device name instead of any HA display name.
+    text = (ROOT / "packages/inovelli_led_notifications.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "zigbee2mqtt/{{ device_attr(repeat.item, 'name') }}/set" in text
+    assert "friendly_name" not in text.split("mqtt.publish", 1)[1].split("\n\n", 1)[0]
 
 
 def test_migrated_templates_keep_entity_id_fallbacks() -> None:
