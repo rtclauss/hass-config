@@ -2152,9 +2152,9 @@ template:
         unique_id: sensed_trip
         state: >-
           {% if is_state("input_boolean.trip", 'on') %}
-            True
+            {{ true }}
           {% else %}
-            False
+            {{ false }}
           {% endif %}
         name: sensed_trip
       - default_entity_id: binary_sensor.planned_vacation_calendar
@@ -2163,7 +2163,7 @@ template:
           {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
           {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
           {% if start in [none, '', 'unknown', 'unavailable'] or end in [none, '', 'unknown', 'unavailable'] %}
-            false
+            {{ false }}
           {% else %}
             {% set start_dt = as_datetime(start) %}
             {% set end_dt = as_datetime(end) %}
@@ -2179,9 +2179,9 @@ template:
         unique_id: planned_work_trip_calendar
         state: >-
           {% if is_state("binary_sensor.work_trip_today", 'on') %}
-            true
+            {{ true }}
           {% else %}
-            false
+            {{ false }}
           {% endif %}
         name: planned_work_trip_calendar
       - delay_off: "3:00:00"
@@ -2189,9 +2189,9 @@ template:
         unique_id: flying_home_today
         state: >-
           {% if is_state("binary_sensor.flight_to_@@PRIVATE:home_airport_primary_code_lower@@_today", 'on') or is_state("binary_sensor.flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_today",'on')  %}
-            true
+            {{ true }}
           {% else %}
-            false
+            {{ false }}
           {% endif %}
         name: flying_home_today
       # True on a day the pre-landing clean owns the X40: the landing or the clean's

@@ -789,9 +789,9 @@ automation:
     condition:
       - alias: "Time"
         condition: template
-        # only on odd days of the year.. if it's the 182nd day then run this automation
+        # Only on even days of the year (e.g. day 182 runs, day 183 does not).
         value_template: >-
-          {{ 'false' if now().strftime('%j') | int % 2 else 'true' }}
+          {{ now().strftime('%j') | int % 2 == 0 }}
       - alias: "Bed not occupied"
         condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy

@@ -632,19 +632,19 @@ template:
             {% set fr24_orig = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_iata') | default('') %}
             {% set fr24_dest = state_attr('sensor.closest_aircraft_fr24_enrichment', 'destination_iata') | default('') %}
             {% if fr24_orig and fr24_dest %}
-              true
+              {{ true }}
             {% else %}
               {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
               {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
-              {% if not cs %}false
+              {% if not cs %}{{ false }}
               {% else %}
                 {% set csu = cs | upper %}
                 {% if csu.startswith('N') or csu.startswith('C') or csu.startswith('G') or csu.startswith('D') %}
-                  false
+                  {{ false }}
                 {% elif r and r.flightroute is defined and r.flightroute.airline is defined and (r.flightroute.airline.name | default('') | trim) != '' %}
-                  true
+                  {{ true }}
                 {% else %}
-                  false
+                  {{ false }}
                 {% endif %}
               {% endif %}
             {% endif %}
