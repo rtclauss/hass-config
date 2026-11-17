@@ -169,6 +169,7 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         key="unfinished_basement",
         preferred_label="Unfinished Basement",
         home_assistant_area="Unfinished Basement",
+        intent_key="unfinished_basement",
         zigbee2mqtt_namespaces=("Unfinished Basement",),
     ),
 )

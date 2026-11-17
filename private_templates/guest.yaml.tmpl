@@ -113,6 +113,13 @@ alarm_control_panel: []
 automation:
   - id: turn_off_guest_mode_when_guest_wifi_inactive
     alias: turn_off_guest_mode_when_guest_wifi_inactive
+    description: >-
+      Turn guest mode off once it has been on for 16 hours with no guest on
+      the guest Wi-Fi for 16 hours. The guest_mode trigger covers guest mode
+      turned on by hand while the Wi-Fi sensor was already off (no Wi-Fi
+      transition would ever fire), and the hourly check re-evaluates after a
+      Home Assistant restart resets the `for:` timers.
+    mode: single
     trace:
       stored_traces: 10
     trigger:
@@ -121,24 +128,29 @@ automation:
         to: "off"
         for:
           hours: 16
-    # condition:
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+        to: "on"
+        for:
+          hours: 16
+      - trigger: time_pattern
+        hours: "/1"
+        minutes: 7
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "on"
+        for:
+          hours: 16
+      - condition: state
+        entity_id: binary_sensor.guest_on_wifi
+        state: "off"
+        for:
+          hours: 16
     action:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.guest_mode
-      - action: script.house_transition
-        data:
-          mode: >-
-            {% if is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'off') %}
-              away
-            {% else %}
-              {{ states('input_select.house_mode') }}
-            {% endif %}
-          reason: guest_mode_disabled
-          apply_lights: false
-          apply_security: false
-          apply_media: true
-          apply_trip_policy: false
       - action: notify.all
         data:
           message: Guest Mode Deactivated
@@ -154,7 +166,10 @@ automation:
         to: "on"
         for:
           minutes: 10
-    #condition:
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - action: @@PRIVATE:mobile_notify_service_02@@
         data:
@@ -186,6 +201,30 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.guest_mode
+
+  - id: apply_guest_mode_policy_on_change
+    alias: apply_guest_mode_policy_on_change
+    description: >-
+      Reapply guest-aware media grouping and climate whenever guest mode
+      changes, whether the Wi-Fi automations, the dashboard, or a manual
+      toggle changed it. Previously only the Wi-Fi automations regrouped the
+      Sonos players, so a hand-enabled guest mode left the house on the
+      Everywhere grouping.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+        from: "off"
+        to: "on"
+        id: enabled
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+        from: "on"
+        to: "off"
+        id: disabled
+    action:
       - action: script.house_transition
         data:
           mode: >-
@@ -194,9 +233,10 @@ automation:
             {% else %}
               {{ states('input_select.house_mode') }}
             {% endif %}
-          reason: guest_mode_enabled
+          reason: "guest_mode_{{ trigger.id }}"
           apply_lights: false
           apply_security: false
+          apply_climate: true
           apply_media: true
           apply_trip_policy: false
 
@@ -354,7 +394,7 @@ template:
       - default_entity_id: binary_sensor.guest_on_wifi
         unique_id: guest_on_wifi
         state: >-
-          {% set state = states('sensor.barley_guest') %}
+          {% set state = states('sensor.barley_guest_clients') %}
           {{ is_number(state) and state | float >= 1 }}
         name: guest_on_wifi
   - sensor:
