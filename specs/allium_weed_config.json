@@ -887,6 +887,18 @@
       ],
       "classification": "bedtime owner-suite scope correction",
       "reason": "Issue #871 / PR #1191 changes bedroom-suite playback/volume scope only. Private markers, mappings, renderer guarantees and runtime ownership remain unchanged. https://github.com/rtclauss/hass-config/pull/1191"
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "travis_secrets.example.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*private_adsb_origin: http://192.0.2.30:8080",
+        "-*private_adsb_referer: http://192.0.2.30:8080/"
+      ],
+      "classification": "obsolete synthetic endpoint cleanup",
+      "reason": "Issue #1192 (https://github.com/rtclauss/hass-config/issues/1192): adsb.im rejects browser-origin emulation and requires its routeset endpoint over HTTP with a contactable User-Agent. Removing the now-unreferenced synthetic Origin and Referer secrets reduces public fixture surface without exposing or changing any private value, renderer target, ignored output, or live credential. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }

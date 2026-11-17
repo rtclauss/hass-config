@@ -25,7 +25,14 @@ def test_garden_birds_sensor_handles_missing_common_name_without_template_errors
 def test_airplanes_package_uses_single_routeset_fetch_for_all_display_sensors() -> None:
     text = AIRPLANES_PATH.read_text(encoding="utf-8")
 
-    assert text.count("resource: https://adsb.im/api/0/routeset") == 1
+    assert text.count("resource: http://adsb.im/api/0/routeset") == 1
+    assert "resource: https://adsb.im/api/0/routeset" not in text
+    assert "scan_interval: 60" in text
+    assert "User-Agent: \"HomeAssistant rtclauss-hass-config; contact https://github.com/rtclauss\"" in text
+    assert "Mozilla/5.0" not in text
+    assert "Sec-Fetch-" not in text
+    assert "Origin:" not in text
+    assert "Referer:" not in text
     assert "state_attr('sensor.closest_aircraft_overhead','callsign')" in text
     assert "name: Closest Aircraft Routeset" in text
     assert "unique_id: closest_aircraft_routeset" in text
@@ -37,6 +44,16 @@ def test_airplanes_package_uses_single_routeset_fetch_for_all_display_sensors() 
     assert "unique_id: closest_aircraft_routeset_raw" not in text
     assert "states('sensor.closest_aircraft_routeset_raw')" not in text
     assert "{{ s[:250] }}" in text
+
+
+def test_airplanes_routeset_templates_guard_error_mappings_and_invalid_json() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+    routeset_block = text.split("resource: http://adsb.im/api/0/routeset", 1)[1].split(
+        "########################\n# Weather", 1
+    )[0]
+
+    assert routeset_block.count("from_json(default={})") == 3
+    assert routeset_block.count("j is sequence and j is not mapping") == 2
 
 
 def test_aircraft_refresh_automation_updates_a_single_routeset_sensor() -> None:

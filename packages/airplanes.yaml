@@ -773,18 +773,15 @@ template:
             {{ r.aircraft_photo_large | default('') if r and r is mapping else '' }}
 
 rest:
-  - resource: https://adsb.im/api/0/routeset
+  # adsb.im intentionally serves routeset over HTTP; HTTPS returns a 403
+  # problem response. Identify this installation with a contactable user agent.
+  - resource: http://adsb.im/api/0/routeset
     method: POST
     scan_interval: 60
     headers:
       Accept: application/json
       Content-Type: application/json; charset=utf-8
-      Origin: !secret private_adsb_origin
-      Referer: !secret private_adsb_referer
-      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
-      Sec-Fetch-Dest: empty
-      Sec-Fetch-Mode: cors
-      Sec-Fetch-Site: cross-site
+      User-Agent: "HomeAssistant rtclauss-hass-config; contact https://github.com/rtclauss"
     payload_template: >-
       {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
       {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
@@ -799,8 +796,8 @@ rest:
       - name: Closest Aircraft Routeset
         unique_id: closest_aircraft_routeset
         value_template: >-
-          {% set j = value | from_json %}
-          {% if j is sequence and j | length > 0 and j[0]._airport_codes_iata is defined %}
+          {% set j = value | from_json(default={}) %}
+          {% if j is sequence and j is not mapping and j | length > 0 and j[0]._airport_codes_iata is defined %}
             {{ j[0]._airport_codes_iata }}
           {% else %}
             {{ none }}
@@ -809,8 +806,8 @@ rest:
       - name: Closest Aircraft Routeset Names
         unique_id: closest_aircraft_routeset_names
         value_template: >-
-          {% set j = value | from_json %}
-          {% if j is sequence and j | length > 0 and j[0]._airports is defined %}
+          {% set j = value | from_json(default={}) %}
+          {% if j is sequence and j is not mapping and j | length > 0 and j[0]._airports is defined %}
             {% set s = (j[0]._airports | map(attribute='name') | list) | join(' → ') %}
             {{ s[:250] }}
           {% else %}
@@ -820,7 +817,7 @@ rest:
       - name: error_detail
         unique_id: closest_aircraft_error_detail
         value_template: >-
-          {% set j = value | from_json %}
+          {% set j = value | from_json(default={}) %}
           {% if j is mapping and j.detail is defined %}
             {% set detail = j.detail | tojson %}
             {{ detail[:250] }}
