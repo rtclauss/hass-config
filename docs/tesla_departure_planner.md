@@ -21,6 +21,7 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 - `binary_sensor.upcoming_trip_charging`
 - `input_number.tesla_local_trip_threshold_mi`
 - `input_number.tesla_degraded_travel_min`
+- `input_number.tesla_usable_range_mi` (reporting only; never changes the charge target)
 - `input_text.tesla_destination_coords_override`
 
 `binary_sensor.upcoming_trip_charging` is a **trigger-based** template sensor. On a schedule (HA start, every 15 minutes, and whenever `calendar.<private_owner_calendar>`, `calendar.curling`, or `binary_sensor.work_trip_today` changes) it:
@@ -163,6 +164,8 @@ When it is on, the planner pins the charge limit to `100%`.
 
 Decision summary (`distance_mi` below is always the **furthest** qualifying event in the next 24 hours, not necessarily the next one to depart):
 
+> **These thresholds are one-way figures acting as round-trip proxies.** The car's charger is at home, so every out-leg implies a return leg. Read the table as: `>= 90 mi` one-way is a **~180 mi round trip**, and the `>= threshold and < 90 mi` band covers round trips up to ~180 mi. A 70 mi one-way appointment is **~140 mi of driving**, not 70. Mistaking these for one-way-only numbers makes the tiers look far more conservative than they are.
+
 - inside the local trip threshold (`< input_number.tesla_local_trip_threshold_mi`, default 10 mi): not a trip at all — falls through to the alarm/no-plan tiers below
 - qualifying trip whose travel time could not be scored: `90%` (distance contributes 0, so it never reaches the `>= 90 mi` tier), with `scoring_degraded` set
 - long trip (`>= 90 mi`): `100%`
@@ -192,6 +195,30 @@ Behavior:
 - requests cancellation of a Home Assistant-managed departure immediately if either the resident or the vehicle leaves home
 - retries that away-state cancellation when Tesla publishes a delayed scheduled-departure timestamp, while retaining the live-schedule match guard that protects Tesla-app schedules
 - preserves Tesla-app charging schedules at protected locations during cleanup by only clearing Tesla when the live scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging
+
+### Day total, and why the charge target is never inflated for it
+
+The charge tier is sized off the **furthest** qualifying event. On a day with several qualifying trips the other legs would otherwise be invisible, so the plan also reports the whole day:
+
+- `binary_sensor.upcoming_trip_charging` carries `day_round_trip_mi` (every qualifying event counted as a **round trip**) and `trip_count`
+- the summary and notification add a line such as *"Day total 175 mi across 2 trips (round trip each)"*
+- if that total exceeds what the selected tier provides, one advisory sentence is appended naming the shortfall
+
+A worked example from 2026-11-17: a 70.9 mi dentist appointment in Rochester plus a 16.7 mi curling match in St Paul is **~175 mi of driving**, while the plan's `distance_mi` reads 70.9 — correctly, since that is the leg that sizes the charge.
+
+**The day total never changes the charge limit.** That is deliberate (issue #1202):
+
+- Supercharging is available on these routes, so under-charging costs a short stop and a worse rate, not a missed appointment
+- the pack is a 2019 Model 3 NCA, where routine 100% charging is the pattern to avoid and 90% is the daily ceiling
+- so over-charging carries a real cumulative cost and under-charging a small recoverable one — the planner informs and leaves the decision to the owner, who can Supercharge or flip `input_boolean.long_range_travel`
+
+The comparison uses `input_number.tesla_usable_range_mi` (rated miles at 100%, default 240). It is a **fixed, calibrated** figure, not a live reading — recalibrate it from an observed full charge if it drifts. It is only ever used to phrase the advisory.
+
+Two honesty details. When `scoring_degraded` is set, an unscored trip is counted in `trip_count` but contributes no miles, so the wording becomes *"Day total at least N mi"* rather than understating the driving. And the total sums **all** qualifying events rather than only those too close together to recharge between — pessimistic by design, since the car usually does charge at home between trips. That approximation is acceptable because the figure is reported, never acted on.
+
+A dependency worth knowing: whether the car recovers charge between trips depends on `Off peak charging enabled` on the vehicle. It is currently `False`, so the car charges on arrival instead of waiting for the 21:00 off-peak window — which is what makes a two-trip day like the example comfortable (home ~16:40, leave again ~20:10). If off-peak-only charging were ever enabled, that recovery window closes and **nothing in the planner would notice**.
+
+For context on how unusual this is: no surveyed project computes a required charge level from trip distance at all. EV Smart Charging optimises electricity price against a target SOC percentage; Teslemetry and Tesla Fleet hand a departure time to the car and let it plan. None of them models round trips, multi-trip days, or a cold-weather derate. See the research notes on issue #1202.
 
 ### Notifications
 

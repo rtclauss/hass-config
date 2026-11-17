@@ -234,6 +234,12 @@ automation:
             {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
             {% set trip_all_day = state_attr('binary_sensor.upcoming_trip_charging', 'all_day') in [true, 'true', 'True', 'on'] %}
             {% set scoring_degraded = state_attr('binary_sensor.upcoming_trip_charging', 'scoring_degraded') in [true, 'true', 'True', 'on'] %}
+            {#- Reporting inputs only. These never alter charge_limit or the
+                departure decision; they exist so the plan states how much
+                driving the day actually holds (#1202). -#}
+            {% set day_round_trip_mi = state_attr('binary_sensor.upcoming_trip_charging', 'day_round_trip_mi') | float(default=0) %}
+            {% set trip_count = state_attr('binary_sensor.upcoming_trip_charging', 'trip_count') | int(default=0) %}
+            {% set usable_range_mi = states('input_number.tesla_usable_range_mi') | float(default=240) %}
             {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
             {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and has_calendar_departure %}
             {% if states('select.daily_ev_charging') not in ['unknown', 'unavailable'] %}
@@ -358,6 +364,25 @@ automation:
             {% if precondition and low_tpms %}
               {% set summary = summary ~ ' Tire pressure is low: ' ~ low_tpms_summary ~ '. Get air before you leave.' %}
             {% endif %}
+            {#- Report the whole day, not just the leg that sized the charge.
+                A day can hold several qualifying trips; the furthest one drives
+                the charge tier, so the others are otherwise invisible. -#}
+            {#- An unscored trip is counted but contributes no miles, so on a
+                mixed day the figure is a floor, not a total. Say "at least"
+                rather than quietly understating the driving. -#}
+            {% set day_total_prefix = 'Day total at least ' if scoring_degraded else 'Day total ' %}
+            {% if trip_count > 1 %}
+              {% set summary = summary ~ ' ' ~ day_total_prefix ~ (day_round_trip_mi | round(0) | int) ~ ' mi across ' ~ trip_count ~ ' trips (round trip each).' %}
+            {% elif day_round_trip_mi > 0 %}
+              {% set summary = summary ~ ' ' ~ day_total_prefix ~ (day_round_trip_mi | round(0) | int) ~ ' mi round trip.' %}
+            {% endif %}
+            {#- Advise, never inflate: a charging stop is cheap and routine
+                100% charging is not, so the target is left alone and the
+                shortfall is simply stated (#1202). -#}
+            {% set tier_range_mi = usable_range_mi * (charge_limit / 100) %}
+            {% if day_round_trip_mi > 0 and day_round_trip_mi > tier_range_mi %}
+              {% set summary = summary ~ ' That exceeds the ~' ~ (tier_range_mi | round(0) | int) ~ ' mi this ' ~ charge_limit ~ '% target provides, so plan a charging stop or turn on the max-range override.' %}
+            {% endif %}
             {#- Never let a lost travel-time lookup pass as a normal plan: the
                 distance and departure time are assumptions, so say so. -#}
             {% if scoring_degraded %}
@@ -383,7 +408,10 @@ automation:
               'high_tariff': high_tariff,
               'has_calendar_departure': has_calendar_departure,
               'resident_home': resident_home,
-              'scoring_degraded': scoring_degraded
+              'scoring_degraded': scoring_degraded,
+              'day_round_trip_mi': day_round_trip_mi,
+              'trip_count': trip_count,
+              'tier_range_mi': tier_range_mi | round(0) | int
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
@@ -905,6 +933,19 @@ input_number:
   # time could not be scored (geocode or Waze lookup failed). Preconditioning
   # has to start from *some* departure estimate; erring long starts the cabin
   # early rather than after the real departure. Calibrate from observed drives.
+  # Rated miles at a 100% charge, used ONLY to tell you whether the day's
+  # planned driving fits inside the charge target the planner picked. It never
+  # changes that target (#1202). A fixed, calibrated figure rather than a live
+  # reading: recalibrate from an observed full charge if it drifts.
+  tesla_usable_range_mi:
+    name: Tesla Usable Range At Full
+    initial: 240
+    min: 100
+    max: 400
+    step: 5
+    mode: box
+    unit_of_measurement: mi
+    icon: mdi:map-marker-distance
   tesla_degraded_travel_min:
     name: Tesla Degraded Travel Fallback
     initial: 60
@@ -1506,7 +1547,7 @@ template:
                   {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min, scored=candidate_scored) ] }}
       - variables:
           trip_plan_json: >-
-            {% set ns2 = namespace(next=none, furthest=none, degraded=false) %}
+            {% set ns2 = namespace(next=none, furthest=none, degraded=false, day_round_trip_mi=0, trip_count=0) %}
             {% for c in scored_candidates %}
               {% set c_scored = c.scored in [true, 'true', 'True', 1, '1'] %}
               {% set c_located = (c.location | default('', true) | string | trim) != '' %}
@@ -1518,6 +1559,13 @@ template:
                 {% if not c_scored %}
                   {% set ns2.degraded = true %}
                 {% endif %}
+                {#- Reporting only: the day's driving is the sum of each
+                    qualifying event's ROUND trip, because the car's charger is
+                    at home, so every out-leg implies a return leg. This never
+                    feeds the charge-limit tiers — see #1202 for why inflating
+                    the target was deliberately rejected. -#}
+                {% set ns2.trip_count = ns2.trip_count + 1 %}
+                {% set ns2.day_round_trip_mi = ns2.day_round_trip_mi + (c.distance_mi * 2) %}
                 {% if ns2.next is none or (c.start | as_datetime) < (ns2.next.start | as_datetime) %}
                   {% set ns2.next = c %}
                 {% endif %}
@@ -1527,7 +1575,7 @@ template:
               {% endif %}
             {% endfor %}
             {% if ns2.next is none %}
-              {{ {'entry': '', 'start_time': '', 'all_day': false, 'location': '', 'distance_mi': 0, 'duration_min': 0, 'furthest_entry': '', 'scoring_degraded': false, 'active': false} | to_json }}
+              {{ {'entry': '', 'start_time': '', 'all_day': false, 'location': '', 'distance_mi': 0, 'duration_min': 0, 'furthest_entry': '', 'scoring_degraded': false, 'day_round_trip_mi': 0, 'trip_count': 0, 'active': false} | to_json }}
             {% else %}
               {% set next_scored = ns2.next.scored in [true, 'true', 'True', 1, '1'] %}
               {{ {
@@ -1539,6 +1587,8 @@ template:
                 'duration_min': ns2.next.duration_min if next_scored else degraded_travel_min,
                 'furthest_entry': ns2.furthest.source ~ ': ' ~ ns2.furthest.message,
                 'scoring_degraded': ns2.degraded,
+                'day_round_trip_mi': ns2.day_round_trip_mi | round(1),
+                'trip_count': ns2.trip_count,
                 'active': true
               } | to_json }}
             {% endif %}
@@ -1579,6 +1629,13 @@ template:
           # than live Waze values. Surfaced in the planner summary.
           scoring_degraded: >-
             {{ (trip_plan_json | from_json).scoring_degraded | default(false) }}
+          # Total planned driving across every qualifying event, counting each
+          # as a round trip. Reporting only — it never feeds the charge tiers
+          # (#1202). Exposed so the dashboard can read it without recomputing.
+          day_round_trip_mi: >-
+            {{ (trip_plan_json | from_json).day_round_trip_mi | default(0) }}
+          trip_count: >-
+            {{ (trip_plan_json | from_json).trip_count | default(0) }}
           geo_cache: >-
             {{ geo_cache_pruned if geo_cache_pruned is mapping else {} }}
   - binary_sensor:
