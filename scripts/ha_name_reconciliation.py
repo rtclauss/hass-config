@@ -184,6 +184,33 @@ def _area_findings(
     return case_drift, canonical_name_drift, unmatched
 
 
+def _dangling_area_references(live: dict[str, Any]) -> list[dict[str, str]]:
+    """Registry entries whose area_id no longer exists.
+
+    Home Assistant raises in area_id()/area_name() for these, and area targets
+    and Assist area commands silently skip them.
+    """
+    area_ids = {str(area.get("area_id")) for area in live["areas"]}
+    findings: list[dict[str, str]] = []
+    for device in live["devices"]:
+        area_id = device.get("area_id")
+        if area_id and str(area_id) not in area_ids:
+            findings.append(
+                {"kind": "device", "id": str(device.get("id")), "area_id": str(area_id)}
+            )
+    for entity in live["entities"]:
+        area_id = entity.get("area_id")
+        if area_id and str(area_id) not in area_ids:
+            findings.append(
+                {
+                    "kind": "entity",
+                    "id": str(entity.get("entity_id")),
+                    "area_id": str(area_id),
+                }
+            )
+    return findings
+
+
 def _entity_name_reviews(inventory: Iterable[dict[str, Any]]) -> list[dict[str, str]]:
     reviews: list[dict[str, str]] = []
     for row in inventory:
@@ -214,6 +241,7 @@ def audit_live(live: dict[str, Any]) -> dict[str, Any]:
     inventory = build_inventory(live)
     area_case_drift, area_name_drift, unmatched_areas = _area_findings(live)
     entity_name_reviews = _entity_name_reviews(inventory)
+    dangling_areas = _dangling_area_references(live)
     review_reason_counts: dict[str, int] = {}
     for review in entity_name_reviews:
         reason = review["reason"]
@@ -239,6 +267,7 @@ def audit_live(live: dict[str, Any]) -> dict[str, Any]:
         "area_case_drift_count": len(area_case_drift),
         "area_name_drift_count": len(area_name_drift),
         "unmatched_area_count": len(unmatched_areas),
+        "dangling_area_reference_count": len(dangling_areas),
         "entity_name_review_count": len(entity_name_reviews),
         "entity_name_review_reason_counts": review_reason_counts,
     }
@@ -248,6 +277,7 @@ def audit_live(live: dict[str, Any]) -> dict[str, Any]:
             "area_case_drift": area_case_drift,
             "area_name_drift": area_name_drift,
             "areas_without_room_registry_match": unmatched_areas,
+            "dangling_area_references": dangling_areas,
             "entity_name_reviews": entity_name_reviews,
         },
     }

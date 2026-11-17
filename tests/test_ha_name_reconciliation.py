@@ -31,7 +31,7 @@ def _live_export() -> dict[str, object]:
             ],
             "areas": [
                 {"area_id": "dining_room", "name": "Dining room", "floor_id": "main"},
-                {"area_id": "bedroom", "name": "Owner Suite Bedroom", "floor_id": "main"},
+                {"area_id": "bedroom", "name": "Master Bedroom", "floor_id": "main"},
                 {"area_id": "workshop", "name": "Workshop", "floor_id": "main"},
             ],
             "devices": [
@@ -137,8 +137,8 @@ def test_audit_reports_2026_11_review_groups_without_automatic_renames() -> None
     assert audit["findings"]["area_name_drift"] == [
         {
             "area_id": "bedroom",
-            "current_name": "Owner Suite Bedroom",
-            "expected_name": "Bedroom",
+            "current_name": "Master Bedroom",
+            "expected_name": "Owner Suite Bedroom",
             "room_key": "owner_suite_bedroom",
         }
     ]
@@ -222,3 +222,19 @@ def test_load_live_export_accepts_stdin(monkeypatch: pytest.MonkeyPatch) -> None
     live = load_live_export(Path("-"))
 
     assert len(live["entities"]) == 4
+
+
+def test_audit_reports_dangling_area_references() -> None:
+    live = _live_export()
+    live["devices"].append({"id": "device-gone", "name": "Old plug", "area_id": "deleted-area"})
+    live["entities"].append(
+        {"entity_id": "light.orphaned", "platform": "mqtt", "area_id": "deleted-area"}
+    )
+
+    audit = audit_live(live)
+
+    assert audit["findings"]["dangling_area_references"] == [
+        {"kind": "device", "id": "device-gone", "area_id": "deleted-area"},
+        {"kind": "entity", "id": "light.orphaned", "area_id": "deleted-area"},
+    ]
+    assert audit["summary"]["dangling_area_reference_count"] == 2

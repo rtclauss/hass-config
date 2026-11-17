@@ -15,7 +15,7 @@ Rules:
 
 | Key | Preferred UI Name | HA Area | Live Namespace / Allowed Legacy Labels |
 | --- | --- | --- | --- |
-| `owner_suite_bedroom` | `Owner Suite Bedroom` | `Bedroom` | `Owner Suite`, `Master Bedroom`, `Bedroom` |
+| `owner_suite_bedroom` | `Owner Suite Bedroom` | `Owner Suite Bedroom` (area ID `bedroom`) | `Owner Suite`, `Master Bedroom`, `Bedroom` |
 | `owner_suite_bathroom` | `Owner Suite Bathroom` | `Owner Suite Bathroom` | — |
 | `guest_room` | `Guest Room` | `Guest Room` | `Guest Bedroom` |
 | `guest_bathroom` | `Guest Bathroom` | `Guest Bathroom` | `Guest Bathroom` |
@@ -33,6 +33,7 @@ Rules:
 | `outside` | `Outside` | `Outside` | `Outside` |
 | `powder_room` | `Powder Room` | `Powder Room` | `Powder Room` |
 | `basement_great_room` | `Basement Great Room` | `Basement Great Room` | `Basement` |
+| `basement_bathroom` | `Basement Bathroom` | `Basement Bathroom` | — (devices use the `Basement/Bathroom/...` Zigbee2MQTT prefix; no room intent yet) |
 | `unfinished_basement` | `Unfinished Basement` | `Unfinished Basement` | `Unfinished Basement` |
 | `tiki_room` | `Tiki Room` | `Tiki Room` | `Tiki Room` |
 
