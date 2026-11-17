@@ -148,7 +148,11 @@ def _should_be_on(hour: int, guest_mode: str, trip_visit: str = "off") -> bool:
     env = Environment()
     env.globals["now"] = lambda: datetime(2026, 11, 14, hour, 30)
     env.globals["is_state"] = lambda entity_id, value: states[entity_id] == value
-    return env.from_string(template).render().strip() == "True"
+    rendered = env.from_string(template).render().strip()
+    # HA only coerces Python literals; anything else (e.g. "false") stays a
+    # truthy string, so the template must render exactly True or False.
+    assert rendered in {"True", "False"}, rendered
+    return rendered == "True"
 
 
 @pytest.mark.parametrize(

@@ -257,14 +257,13 @@ automation:
         entity_id: switch.basement_grow_light
     action:
       - variables:
+          # One expression so the template renders a real True/False; a bare
+          # `false` literal would render as a truthy string in HA.
           should_be_on: >-
-            {% if is_state('input_boolean.trip_guest_visit_active', 'on') %}
-              false
-            {% elif is_state('input_boolean.guest_mode', 'on') %}
-              {{ 11 <= now().hour < 22 }}
-            {% else %}
-              {{ now().hour >= 6 }}
-            {% endif %}
+            {{ is_state('input_boolean.trip_guest_visit_active', 'off')
+               and ((11 <= now().hour < 22)
+                    if is_state('input_boolean.guest_mode', 'on')
+                    else now().hour >= 6) }}
       - choose:
           - conditions:
               - condition: template
