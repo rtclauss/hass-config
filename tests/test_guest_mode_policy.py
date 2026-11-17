@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import time
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 import yaml
-from jinja2 import Environment
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,20 +137,29 @@ def test_guest_mode_suppresses_hallway_turn_on_but_not_vacancy_off(
 # --- catnip grow light guest window ---------------------------------------
 
 
+def _holds(condition: dict, states: dict[str, str], now: time) -> bool:
+    """Evaluate the native condition subset the reconcile uses."""
+    kind = condition["condition"]
+    if kind == "state":
+        return states[condition["entity_id"]] == condition["state"]
+    if kind == "time":
+        after = time.fromisoformat(condition.get("after", "00:00:00"))
+        before = time.fromisoformat(condition["before"]) if "before" in condition else None
+        return after <= now and (before is None or now < before)
+    if kind in ("and", "or"):
+        results = [_holds(child, states, now) for child in condition["conditions"]]
+        return all(results) if kind == "and" else any(results)
+    raise AssertionError(f"unexpected condition type in catnip reconcile: {kind}")
+
+
 def _should_be_on(hour: int, guest_mode: str, trip_visit: str = "off") -> bool:
     reconcile = _automation("packages/plants.yaml", "catnip_grow_light_reconcile")
-    template = next(
-        step["variables"]["should_be_on"] for step in reconcile["action"] if "variables" in step
-    )
+    choose = reconcile["action"][0]["choose"]
+    assert len(choose) == 1 and "default" in reconcile["action"][0]
+    # Native conditions only: no template booleans to mis-render.
+    assert not [n for n in _walk(reconcile["action"]) if n.get("condition") == "template"]
     states = {"input_boolean.guest_mode": guest_mode, "input_boolean.trip_guest_visit_active": trip_visit}
-    env = Environment()
-    env.globals["now"] = lambda: datetime(2026, 11, 14, hour, 30)
-    env.globals["is_state"] = lambda entity_id, value: states[entity_id] == value
-    rendered = env.from_string(template).render().strip()
-    # HA only coerces Python literals; anything else (e.g. "false") stays a
-    # truthy string, so the template must render exactly True or False.
-    assert rendered in {"True", "False"}, rendered
-    return rendered == "True"
+    return all(_holds(c, states, time(hour, 30)) for c in choose[0]["conditions"])
 
 
 @pytest.mark.parametrize(
