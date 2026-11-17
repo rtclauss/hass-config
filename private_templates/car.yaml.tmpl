@@ -233,6 +233,7 @@ automation:
             {% set trip_duration_min = (trip_duration.days * 1440) + (trip_duration.seconds // 60) %}
             {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
             {% set trip_all_day = state_attr('binary_sensor.upcoming_trip_charging', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set scoring_degraded = state_attr('binary_sensor.upcoming_trip_charging', 'scoring_degraded') in [true, 'true', 'True', 'on'] %}
             {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
             {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and has_calendar_departure %}
             {% if states('select.daily_ev_charging') not in ['unknown', 'unavailable'] %}
@@ -357,6 +358,11 @@ automation:
             {% if precondition and low_tpms %}
               {% set summary = summary ~ ' Tire pressure is low: ' ~ low_tpms_summary ~ '. Get air before you leave.' %}
             {% endif %}
+            {#- Never let a lost travel-time lookup pass as a normal plan: the
+                distance and departure time are assumptions, so say so. -#}
+            {% if scoring_degraded %}
+              {% set summary = summary ~ ' Travel time unavailable, so distance and departure are assumed (' ~ (trip_duration_min | round(0) | int) ~ ' min drive). Verify before you leave.' %}
+            {% endif %}
             {{ {
               'active': active,
               'source': source,
@@ -376,7 +382,8 @@ automation:
               'outside_temp_f': outside_temp_f,
               'high_tariff': high_tariff,
               'has_calendar_departure': has_calendar_departure,
-              'resident_home': resident_home
+              'resident_home': resident_home,
+              'scoring_degraded': scoring_degraded
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
@@ -894,6 +901,19 @@ input_number:
     mode: slider
     unit_of_measurement: mi
     icon: mdi:home-map-marker
+  # Conservative drive time assumed for a qualifying candidate whose travel
+  # time could not be scored (geocode or Waze lookup failed). Preconditioning
+  # has to start from *some* departure estimate; erring long starts the cabin
+  # early rather than after the real departure. Calibrate from observed drives.
+  tesla_degraded_travel_min:
+    name: Tesla Degraded Travel Fallback
+    initial: 60
+    min: 0
+    max: 180
+    step: 5
+    mode: box
+    unit_of_measurement: min
+    icon: mdi:car-clock
   # @@PRIVATE:vehicle_entity_slug@@_charge_limit:
   #   name: @@PRIVATE:vehicle_display_name@@ Charge Limit
   #   min: 0
@@ -914,6 +934,15 @@ input_text:
   home_address:
     max: 255
     initial: ""
+  # Manual escape hatch for the departure planner's destination lookup: set
+  # "lat,lon" here and it wins over geocoding for the soonest qualifying
+  # candidate. Useful when Nominatim resolves an address badly, or while an
+  # upstream geocoder is blocked (see docs/tesla_departure_planner.md).
+  tesla_destination_coords_override:
+    name: Tesla Destination Coordinates Override
+    max: 64
+    initial: ""
+    icon: mdi:crosshairs-gps
 
 ########################
 # iOS
@@ -933,6 +962,21 @@ rest_command:
     url: !secret private_garage_opener_restart_url
     method: POST
     payload: true
+  # Forward geocoding for the departure planner. Waze still routes fine by
+  # coordinate, but Waze blocked the address-autocomplete endpoint pywaze used
+  # to resolve an address string (eifinger/pywaze#119, core #191329/#191667),
+  # so waze_travel_time.get_travel_times now fails for any address input.
+  # Nominatim turns the calendar event's address into "lat,lon" for Waze.
+  # Results are cached on binary_sensor.upcoming_trip_charging so a repeat
+  # recompute of the same event does not re-query OSM.
+  geocode_address:
+    url: >-
+      https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q={{ query | urlencode }}
+    method: GET
+    timeout: 20
+    headers:
+      User-Agent: "HomeAssistant rtclauss-hass-config; contact https://github.com/rtclauss"
+      Accept: application/json
 
 ########################
 # Scenes
@@ -1156,8 +1200,51 @@ template:
             {{ (now() + timedelta(hours=24)).isoformat() }}
           local_trip_threshold_mi: >-
             {{ states('input_number.tesla_local_trip_threshold_mi') | float(default=10) }}
-          planner_home_address: >-
-            {{ states('input_text.home_address') }}
+          # Waze routes reliably by coordinate; only its address resolution is
+          # blocked upstream. zone.home already holds the authoritative home
+          # position, so the origin side never needs geocoding at all.
+          #
+          # Held inside a mapping, never as a bare "lat,lon" scalar. HA renders
+          # script variables and service data with native typing, and a bare
+          # coordinate pair literal_evals into a TUPLE — confirmed on this
+          # instance over the WebSocket render_template API, which returns
+          # `[40.001, -80.001]` for the bare form and keeps the string
+          # when the same value sits inside a rendered mapping. A `| string`
+          # filter does not save it: the parse happens after rendering, so the
+          # filtered form comes back as a tuple too. waze_travel_time's service
+          # schema uses TextSelector, which strictly validates `str`, and a
+          # config-validation error bypasses continue_on_error — so the bare
+          # form aborts the action before the degraded fallback can be produced
+          # (Codex P1 on #1199). Addresses were immune because they do not
+          # literal_eval, which is why this only appeared with coordinates.
+          planner_home_coords: >-
+            {% set lat = state_attr('zone.home', 'latitude') %}
+            {% set lon = state_attr('zone.home', 'longitude') %}
+            {{ {'pair': ((lat | string ~ ',' ~ lon | string) if (lat is not none and lon is not none) else '')} }}
+          # Mapping-held from this first evaluation, like the coordinates
+          # below: the helper's documented value is a numeric "lat,lon" pair,
+          # so a bare template here would already be converted to a tuple and
+          # wrapping it afterwards could not recover the string — the later
+          # normalization would yield a parenthesized "(40.001, -80.001)".
+          destination_coords_override: >-
+            {{ {'pair': (states('input_text.tesla_destination_coords_override') | default('', true) | string | trim)} }}
+          # Carry last cycle's address -> "lat,lon" map forward. During this
+          # action the sensor still holds its previous attributes, so repeat
+          # recomputes of the same event reuse the cached coordinates.
+          #
+          # Kept as a mapping end to end, never round-tripped through JSON.
+          # HA renders script variables with native typing, so a to_json'd
+          # mapping comes back as a dict (every key and value here is a
+          # string, so "{}" and {"addr": "lat,lon"} both literal_eval
+          # cleanly) and a following from_json would raise and abort the whole
+          # action before any candidate is scored. The nearby *_json variables
+          # survive that only because their payloads contain `false`, which
+          # literal_eval rejects (Codex P1 on #1199).
+          geo_cache_seed: >-
+            {% set cached = state_attr('binary_sensor.upcoming_trip_charging', 'geo_cache') %}
+            {{ cached if cached is mapping else {} }}
+          degraded_travel_min: >-
+            {{ states('input_number.tesla_degraded_travel_min') | float(default=60) }}
           personal_event_window: null
           curling_event_window: null
       - action: calendar.get_events
@@ -1240,38 +1327,118 @@ template:
       - variables:
           candidates: "{{ (candidates_json | default('[]', true) | string | trim | from_json) }}"
           scored_candidates: []
+          geo_cache: "{{ geo_cache_seed if geo_cache_seed is mapping else {} }}"
+          # The manual coordinate override targets the soonest candidate that
+          # has a location, so one "lat,lon" entry stays unambiguous even when
+          # several located events share the 24h window.
+          override_target_start: >-
+            {% set located = candidates | rejectattr('location', 'equalto', '') | list %}
+            {{ (located | map(attribute='start') | sort | first) if (located | count) > 0 else '' }}
       - repeat:
           for_each: "{{ candidates }}"
           sequence:
             - variables:
+                candidate_location: "{{ repeat.item.location | default('', true) | string | trim }}"
                 candidate_waze_result: null
+                # Mapping-held for the same native-typing reason as
+                # planner_home_coords above; `.pair` is the "lat,lon" string.
+                candidate_coords: "{{ {'pair': ''} }}"
+                # A manual override is never written back to the address cache:
+                # otherwise clearing or correcting the override would not
+                # restore real geocoding, since later recomputes would keep
+                # reading the overridden value, and a second event at the same
+                # location would inherit it despite the documented
+                # soonest-candidate-only scope (Codex P2 on #1199).
+                candidate_coords_from_override: false
                 candidate_distance_mi: 0
                 candidate_duration_min: 0
+                # An event with no location is legitimately not a trip, so it
+                # counts as scored at 0 mi. Only a *located* event whose travel
+                # time cannot be resolved becomes degraded below.
+                candidate_scored: true
             - if:
                 - condition: template
-                  value_template: "{{ (repeat.item.location | default('', true) | string | trim) != '' }}"
+                  value_template: "{{ candidate_location != '' }}"
               then:
-                - action: waze_travel_time.get_travel_times
-                  continue_on_error: true
-                  data:
-                    origin: "{{ planner_home_address }}"
-                    destination: "{{ repeat.item.location }}"
-                    region: us
-                    units: imperial
-                  response_variable: candidate_waze_result
                 - variables:
-                    candidate_distance_mi: >-
-                      {{ (candidate_waze_result.routes[0].distance | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
-                    candidate_duration_min: >-
-                      {{ (candidate_waze_result.routes[0].duration | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
+                    candidate_scored: false
+                    candidate_coords_from_override: >-
+                      {{ destination_coords_override.pair != '' and repeat.item.start == override_target_start }}
+                    candidate_coords: >-
+                      {% if destination_coords_override.pair != '' and repeat.item.start == override_target_start %}
+                        {{ {'pair': destination_coords_override.pair} }}
+                      {% else %}
+                        {{ {'pair': geo_cache.get(candidate_location, '')} }}
+                      {% endif %}
+                - if:
+                    - condition: template
+                      value_template: "{{ (candidate_coords.pair | default('', true) | string | trim) == '' }}"
+                  then:
+                    - action: rest_command.geocode_address
+                      continue_on_error: true
+                      data:
+                        query: "{{ candidate_location }}"
+                      response_variable: candidate_geo_result
+                    - variables:
+                        candidate_coords: >-
+                          {% set body = candidate_geo_result.content if (candidate_geo_result is mapping) else none %}
+                          {% if body is sequence and body is not mapping and (body | count) > 0 and body[0].lat is defined %}
+                            {{ {'pair': (body[0].lat | string ~ ',' ~ body[0].lon | string)} }}
+                          {% else %}
+                            {{ {'pair': ''} }}
+                          {% endif %}
+                - variables:
+                    candidate_coords: >-
+                      {{ {'pair': (candidate_coords.pair | default('', true) | string | trim)} }}
+                - if:
+                    - condition: template
+                      value_template: "{{ candidate_coords.pair != '' and planner_home_coords.pair != '' }}"
+                  then:
+                    - action: waze_travel_time.get_travel_times
+                      continue_on_error: true
+                      # The whole data mapping is one template, so the
+                      # coordinate strings reach the TextSelector as strings.
+                      data: >-
+                        {{ {
+                          'origin': planner_home_coords.pair,
+                          'destination': candidate_coords.pair,
+                          'region': 'us',
+                          'units': 'imperial'
+                        } }}
+                      response_variable: candidate_waze_result
+                    - variables:
+                        candidate_scored: >-
+                          {{ candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0 }}
+                        candidate_distance_mi: >-
+                          {{ (candidate_waze_result.routes[0].distance | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
+                        candidate_duration_min: >-
+                          {{ (candidate_waze_result.routes[0].duration | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
             - variables:
+                # Only geocoder-derived coordinates are cached. A manual
+                # override stays out, so clearing it restores real geocoding
+                # immediately instead of leaving a stale pin behind.
+                geo_cache: >-
+                  {{ (geo_cache | combine({candidate_location: candidate_coords.pair}))
+                     if (candidate_location != ''
+                         and candidate_coords.pair != ''
+                         and not (candidate_coords_from_override in [true, 'true', 'True', 1, '1']))
+                     else geo_cache }}
                 scored_candidates: >-
-                  {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min) ] }}
+                  {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min, scored=candidate_scored) ] }}
       - variables:
           trip_plan_json: >-
-            {% set ns2 = namespace(next=none, furthest=none) %}
+            {% set ns2 = namespace(next=none, furthest=none, degraded=false) %}
             {% for c in scored_candidates %}
-              {% if c.distance_mi >= local_trip_threshold_mi %}
+              {% set c_scored = c.scored in [true, 'true', 'True', 1, '1'] %}
+              {% set c_located = (c.location | default('', true) | string | trim) != '' %}
+              {#- A located event whose travel time could not be resolved is
+                  treated as a real trip rather than silently dropped: losing a
+                  lookup must not cancel preconditioning for a long drive. -#}
+              {% set qualifies = (c_located and not c_scored) or (c_scored and c.distance_mi >= local_trip_threshold_mi) %}
+              {% if qualifies %}
+                {% if not c_scored %}
+                  {% set ns2.degraded = true %}
+                {% endif %}
                 {% if ns2.next is none or (c.start | as_datetime) < (ns2.next.start | as_datetime) %}
                   {% set ns2.next = c %}
                 {% endif %}
@@ -1281,19 +1448,33 @@ template:
               {% endif %}
             {% endfor %}
             {% if ns2.next is none %}
-              {{ {'entry': '', 'start_time': '', 'all_day': false, 'location': '', 'distance_mi': 0, 'duration_min': 0, 'furthest_entry': '', 'active': false} | to_json }}
+              {{ {'entry': '', 'start_time': '', 'all_day': false, 'location': '', 'distance_mi': 0, 'duration_min': 0, 'furthest_entry': '', 'scoring_degraded': false, 'active': false} | to_json }}
             {% else %}
+              {% set next_scored = ns2.next.scored in [true, 'true', 'True', 1, '1'] %}
               {{ {
                 'entry': ns2.next.source ~ ': ' ~ ns2.next.message,
                 'start_time': ns2.next.start,
                 'all_day': false,
                 'location': ns2.next.location,
                 'distance_mi': ns2.furthest.distance_mi,
-                'duration_min': ns2.next.duration_min,
+                'duration_min': ns2.next.duration_min if next_scored else degraded_travel_min,
                 'furthest_entry': ns2.furthest.source ~ ': ' ~ ns2.furthest.message,
+                'scoring_degraded': ns2.degraded,
                 'active': true
               } | to_json }}
             {% endif %}
+          # Keep only the addresses still in play so the cache cannot grow
+          # without bound across a long uptime. Emitted as a mapping, not
+          # JSON, for the same native-typing reason as geo_cache_seed above.
+          geo_cache_pruned: >-
+            {% set keys = candidates | map(attribute='location') | reject('equalto', '') | list %}
+            {% set ns3 = namespace(out={}) %}
+            {% for k, v in geo_cache.items() %}
+              {% if k in keys %}
+                {% set ns3.out = ns3.out | combine({k: v}) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns3.out }}
     binary_sensor:
       - name: upcoming_trip_charging
         unique_id: upcoming_trip_charging
@@ -1314,6 +1495,13 @@ template:
             {{ (trip_plan_json | from_json).duration_min | default(0) }}
           furthest_entry: >-
             {{ (trip_plan_json | from_json).furthest_entry | default('', true) }}
+          # True when a qualifying event is in the plan but its travel time
+          # could not be scored, so distance/duration are assumptions rather
+          # than live Waze values. Surfaced in the planner summary.
+          scoring_degraded: >-
+            {{ (trip_plan_json | from_json).scoring_degraded | default(false) }}
+          geo_cache: >-
+            {{ geo_cache_pruned if geo_cache_pruned is mapping else {} }}
   - binary_sensor:
       - default_entity_id: binary_sensor.tesla_daily_plan_active
         unique_id: tesla_daily_plan_active
