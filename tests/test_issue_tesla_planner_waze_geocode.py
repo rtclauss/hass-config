@@ -63,7 +63,7 @@ def test_waze_origin_uses_zone_home_coordinates_not_an_address() -> None:
 
     assert "{% set lat = state_attr('zone.home', 'latitude') %}" in text
     assert "{% set lon = state_attr('zone.home', 'longitude') %}" in text
-    assert "origin: \"{{ planner_home_coords }}\"" in text
+    assert "'origin': planner_home_coords.pair," in text
 
     # The old address-based origin must be gone from the Waze call.
     assert "origin: \"{{ planner_home_address }}\"" not in text
@@ -74,9 +74,46 @@ def test_waze_destination_is_a_coordinate_pair() -> None:
     text = CAR_PATH.read_text(encoding="utf-8")
     block = _candidate_scoring_block(text)
 
-    assert "destination: \"{{ candidate_coords }}\"" in block
+    assert "'destination': candidate_coords.pair," in block
     # Passing the raw calendar location string is what Waze now rejects.
     assert "destination: \"{{ repeat.item.location }}\"" not in block
+
+
+def test_coordinates_never_reach_the_service_as_bare_scalars() -> None:
+    # Codex P1 on PR #1199. A bare "lat,lon" template literal_evals into a
+    # tuple under HA's native typing (verified on the live instance via the
+    # WebSocket render_template API: the bare form returns
+    # [44.761712, -93.203609], the same value inside a rendered mapping stays
+    # a string, and a `| string` filter does NOT help because the parse
+    # happens after rendering). waze_travel_time's schema uses TextSelector,
+    # which strictly validates `str`, and a config-validation error bypasses
+    # continue_on_error — so the bare form aborts the action outright.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    # Coordinates are carried inside mappings, read back via `.pair`.
+    assert "{{ {'pair': ''} }}" in text
+    assert "planner_home_coords.pair" in text
+    assert "candidate_coords.pair" in text
+
+    # No bare-scalar service data for either side.
+    assert "origin: \"{{ planner_home_coords }}\"" not in text
+    assert "destination: \"{{ candidate_coords }}\"" not in text
+    # The whole data mapping is rendered as one template instead.
+    assert "data: >-" in text
+    assert "'units': 'imperial'" in text
+
+
+def test_manual_override_is_not_written_into_the_address_cache() -> None:
+    # Codex P2 on PR #1199. Caching an override would mean clearing it never
+    # restores real geocoding, and a second event at the same location would
+    # inherit it despite the soonest-candidate-only scope.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert "candidate_coords_from_override: false" in text
+    assert (
+        "and not (candidate_coords_from_override in [true, 'true', 'True', 1, '1'])"
+        in text
+    )
 
 
 def test_geocode_rest_command_is_defined_with_a_contactable_user_agent() -> None:

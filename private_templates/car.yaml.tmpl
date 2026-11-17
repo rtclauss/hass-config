@@ -1203,10 +1203,24 @@ template:
           # Waze routes reliably by coordinate; only its address resolution is
           # blocked upstream. zone.home already holds the authoritative home
           # position, so the origin side never needs geocoding at all.
+          #
+          # Held inside a mapping, never as a bare "lat,lon" scalar. HA renders
+          # script variables and service data with native typing, and a bare
+          # coordinate pair literal_evals into a TUPLE — confirmed on this
+          # instance over the WebSocket render_template API, which returns
+          # `[44.761712, -93.203609]` for the bare form and keeps the string
+          # when the same value sits inside a rendered mapping. A `| string`
+          # filter does not save it: the parse happens after rendering, so the
+          # filtered form comes back as a tuple too. waze_travel_time's service
+          # schema uses TextSelector, which strictly validates `str`, and a
+          # config-validation error bypasses continue_on_error — so the bare
+          # form aborts the action before the degraded fallback can be produced
+          # (Codex P1 on #1199). Addresses were immune because they do not
+          # literal_eval, which is why this only appeared with coordinates.
           planner_home_coords: >-
             {% set lat = state_attr('zone.home', 'latitude') %}
             {% set lon = state_attr('zone.home', 'longitude') %}
-            {{ (lat ~ ',' ~ lon) if (lat is not none and lon is not none) else '' }}
+            {{ {'pair': ((lat | string ~ ',' ~ lon | string) if (lat is not none and lon is not none) else '')} }}
           destination_coords_override: >-
             {{ states('input_text.tesla_destination_coords_override') | default('', true) | string | trim }}
           # Carry last cycle's address -> "lat,lon" map forward. During this
@@ -1321,7 +1335,16 @@ template:
             - variables:
                 candidate_location: "{{ repeat.item.location | default('', true) | string | trim }}"
                 candidate_waze_result: null
-                candidate_coords: ""
+                # Mapping-held for the same native-typing reason as
+                # planner_home_coords above; `.pair` is the "lat,lon" string.
+                candidate_coords: "{{ {'pair': ''} }}"
+                # A manual override is never written back to the address cache:
+                # otherwise clearing or correcting the override would not
+                # restore real geocoding, since later recomputes would keep
+                # reading the overridden value, and a second event at the same
+                # location would inherit it despite the documented
+                # soonest-candidate-only scope (Codex P2 on #1199).
+                candidate_coords_from_override: false
                 candidate_distance_mi: 0
                 candidate_duration_min: 0
                 # An event with no location is legitimately not a trip, so it
@@ -1334,15 +1357,17 @@ template:
               then:
                 - variables:
                     candidate_scored: false
+                    candidate_coords_from_override: >-
+                      {{ destination_coords_override != '' and repeat.item.start == override_target_start }}
                     candidate_coords: >-
                       {% if destination_coords_override != '' and repeat.item.start == override_target_start %}
-                        {{ destination_coords_override }}
+                        {{ {'pair': destination_coords_override} }}
                       {% else %}
-                        {{ geo_cache.get(candidate_location, '') }}
+                        {{ {'pair': geo_cache.get(candidate_location, '')} }}
                       {% endif %}
                 - if:
                     - condition: template
-                      value_template: "{{ (candidate_coords | default('', true) | string | trim) == '' }}"
+                      value_template: "{{ (candidate_coords.pair | default('', true) | string | trim) == '' }}"
                   then:
                     - action: rest_command.geocode_address
                       continue_on_error: true
@@ -1353,21 +1378,28 @@ template:
                         candidate_coords: >-
                           {% set body = candidate_geo_result.content if (candidate_geo_result is mapping) else none %}
                           {% if body is sequence and body is not mapping and (body | count) > 0 and body[0].lat is defined %}
-                            {{ body[0].lat ~ ',' ~ body[0].lon }}
+                            {{ {'pair': (body[0].lat | string ~ ',' ~ body[0].lon | string)} }}
+                          {% else %}
+                            {{ {'pair': ''} }}
                           {% endif %}
                 - variables:
-                    candidate_coords: "{{ candidate_coords | default('', true) | string | trim }}"
+                    candidate_coords: >-
+                      {{ {'pair': (candidate_coords.pair | default('', true) | string | trim)} }}
                 - if:
                     - condition: template
-                      value_template: "{{ candidate_coords != '' and planner_home_coords != '' }}"
+                      value_template: "{{ candidate_coords.pair != '' and planner_home_coords.pair != '' }}"
                   then:
                     - action: waze_travel_time.get_travel_times
                       continue_on_error: true
-                      data:
-                        origin: "{{ planner_home_coords }}"
-                        destination: "{{ candidate_coords }}"
-                        region: us
-                        units: imperial
+                      # The whole data mapping is one template, so the
+                      # coordinate strings reach the TextSelector as strings.
+                      data: >-
+                        {{ {
+                          'origin': planner_home_coords.pair,
+                          'destination': candidate_coords.pair,
+                          'region': 'us',
+                          'units': 'imperial'
+                        } }}
                       response_variable: candidate_waze_result
                     - variables:
                         candidate_scored: >-
@@ -1377,9 +1409,15 @@ template:
                         candidate_duration_min: >-
                           {{ (candidate_waze_result.routes[0].duration | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
             - variables:
+                # Only geocoder-derived coordinates are cached. A manual
+                # override stays out, so clearing it restores real geocoding
+                # immediately instead of leaving a stale pin behind.
                 geo_cache: >-
-                  {{ (geo_cache | combine({candidate_location: candidate_coords}))
-                     if (candidate_location != '' and candidate_coords != '') else geo_cache }}
+                  {{ (geo_cache | combine({candidate_location: candidate_coords.pair}))
+                     if (candidate_location != ''
+                         and candidate_coords.pair != ''
+                         and not (candidate_coords_from_override in [true, 'true', 'True', 1, '1']))
+                     else geo_cache }}
                 scored_candidates: >-
                   {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min, scored=candidate_scored) ] }}
       - variables:
