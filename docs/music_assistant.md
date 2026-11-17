@@ -28,7 +28,7 @@ Behavior (what plays when) is owned by `specs/alarm_wakeup.allium` and
 - Sync groups (MA Sonos sync-group players, renamed from MA defaults):
   - `media_player.ma_group_everywhere` — bedroom, bathroom, office, den, tiki
     (default whole-house target)
-  - `media_player.ma_group_guest` — bedroom, bathroom (used when guest mode is on)
+  - `media_player.ma_group_guest` — bedroom, bathroom (owner-suite bedtime target, and guest-safe arrival target)
 - Wake-up scripts intentionally do not inherit `ma_group_everywhere` membership.
   They dynamically prepare the exact wake group from MA `ma_<room>` players:
   bedroom + bathroom in guest mode, and bedroom + bathroom + office + den when
@@ -97,11 +97,11 @@ both use the absolute curve for this reason.
 
 The bedtime **rampdown** (`spotify_bedtime_volume`) is the opposite case and
 deliberately steps DOWN from each room's own live volume (`max(live − step,
-floor)`): it descends toward a low floor — the regime where the dead zone helps
-reach floor rather than trapping the ramp — and its targets are live-paused in
-guest mode, so a live-relative step is the only pause-safe option (an absolute
-global-index curve would resume a paused room many steps below where it was
-left). See its inline comment for the full rationale.
+floor)`): it descends toward a low floor and follows manual adjustments or
+unavailable rooms recovering mid-ramp. Bedtime playback, pre-volume and rampdown
+are confined to Bedroom and Bathroom regardless of guest mode, as required by
+`BedtimeAudioRequested(bedroom_suite)` in `specs/night_routines.allium`.
+
 
 ## MA WebSocket API
 
