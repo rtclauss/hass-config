@@ -188,9 +188,11 @@ automation:
   - id: catnip_grow_light_on
     alias: catnip_grow_light_on
     description: >
-      Basement/Grow Light lives in the basement great room, a guest-capable
-      sleeping space (docs/room_intent.yaml). Skip turning it on while guest
-      mode is active so a 260W fixture doesn't intrude on a sleeping guest.
+      Basement/Grow Light lives in the unfinished basement
+      (docs/room_intent.yaml). The 06:00 start is the normal schedule only;
+      while guest mode is on, catnip_grow_light_reconcile owns the guest
+      window (11:00-22:00) so the 260W fixture stays off overnight and
+      through the morning while guests are staying.
     trace:
       stored_traces: 10
     trigger:
@@ -230,10 +232,11 @@ automation:
       a dedicated trigger for each way the switch can miss a transition. Also
       reacts immediately to guest_mode changes and to any state report from
       the switch itself (recovering from unavailable, first registration, or
-      a manual toggle): Basement/Grow Light sits in the guest-capable
-      basement great room (docs/room_intent.yaml), so this treats guest mode
-      as an override on the desired state, not just the scheduled on/off
-      automations.
+      a manual toggle). Basement/Grow Light sits in the unfinished basement
+      (docs/room_intent.yaml): with guests staying it may run during the day
+      but must be off from 22:00 to 11:00, so guest mode narrows the desired
+      window to 11:00-22:00 instead of the normal 06:00-24:00. A trip guest
+      visit keeps it off entirely, as before.
     trace:
       stored_traces: 10
     trigger:
@@ -241,6 +244,11 @@ automation:
         event: start
       - trigger: time_pattern
         minutes: "/15"
+      - alias: "Guest-window boundaries (11:00 on, 22:00 off while guests stay)"
+        trigger: time
+        at:
+          - "11:00:00"
+          - "22:00:00"
       - trigger: state
         entity_id: input_boolean.guest_mode
       - trigger: state
@@ -249,10 +257,13 @@ automation:
         entity_id: switch.basement_grow_light
     action:
       - variables:
+          # One expression so the template renders a real True/False; a bare
+          # `false` literal would render as a truthy string in HA.
           should_be_on: >-
-            {{ now().hour >= 6
-               and is_state('input_boolean.guest_mode', 'off')
-               and is_state('input_boolean.trip_guest_visit_active', 'off') }}
+            {{ is_state('input_boolean.trip_guest_visit_active', 'off')
+               and ((11 <= now().hour < 22)
+                    if is_state('input_boolean.guest_mode', 'on')
+                    else now().hour >= 6) }}
       - choose:
           - conditions:
               - condition: template
