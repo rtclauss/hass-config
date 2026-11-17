@@ -212,7 +212,7 @@ An illustrative shape: a 70 mi afternoon appointment plus a 17 mi evening event 
 - the pack is a 2019 Model 3 NCA, where routine 100% charging is the pattern to avoid and 90% is the daily ceiling
 - so over-charging carries a real cumulative cost and under-charging a small recoverable one — the planner informs and leaves the decision to the owner, who can Supercharge or flip `input_boolean.long_range_travel`
 
-The comparison uses `input_number.tesla_usable_range_mi` (rated miles at 100%, default 240). It is a **fixed, calibrated** figure, not a live reading — recalibrate it from an observed full charge if it drifts. It is only ever used to phrase the advisory.
+The comparison uses `input_number.tesla_usable_range_mi` (rated miles at 100%, falling back to 240 before it is first set). It is a **fixed, calibrated** figure, not a live reading — recalibrate it from an observed full charge if it drifts. Neither this helper nor `input_number.tesla_degraded_travel_min` declares `initial:`, deliberately: `initial:` forces an `input_number` back to that value at every restart, which would silently discard a calibration. The first-use defaults come from the templates' own `| float(default=…)` fallbacks. It is only ever used to phrase the advisory.
 
 Two honesty details. When `scoring_degraded` is set, an unscored trip is counted in `trip_count` but contributes no miles, so the wording becomes *"Day total at least N mi"* rather than understating the driving. And the total sums **all** qualifying events rather than only those too close together to recharge between — pessimistic by design, since the car usually does charge at home between trips. That approximation is acceptable because the figure is reported, never acted on.
 

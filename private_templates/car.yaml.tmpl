@@ -937,18 +937,21 @@ input_number:
   # planned driving fits inside the charge target the planner picked. It never
   # changes that target (#1202). A fixed, calibrated figure rather than a live
   # reading: recalibrate from an observed full charge if it drifts.
+  # No `initial:` on purpose: it would force this value at every restart and
+  # silently discard a calibration. Omitting it lets the helper restore, and
+  # the template's `| float(default=240)` supplies the first-use default.
   tesla_usable_range_mi:
     name: Tesla Usable Range At Full
-    initial: 240
     min: 100
     max: 400
     step: 5
     mode: box
     unit_of_measurement: mi
     icon: mdi:map-marker-distance
+  # No `initial:` here either, for the same reason; the first-use default
+  # comes from `| float(default=60)` at the point of use.
   tesla_degraded_travel_min:
     name: Tesla Degraded Travel Fallback
-    initial: 60
     min: 0
     max: 180
     step: 5

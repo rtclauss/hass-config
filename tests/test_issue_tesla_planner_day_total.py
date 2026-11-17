@@ -119,8 +119,36 @@ def test_usable_range_helper_is_a_fixed_calibrated_value() -> None:
 
     assert "tesla_usable_range_mi:" in text
     assert "name: Tesla Usable Range At Full" in text
-    assert "initial: 240" in text
     assert "states('input_number.tesla_usable_range_mi') | float(default=240)" in text
+
+    # No `initial:` on the helper. input_number `initial:` FORCES the value at
+    # every restart, so a calibration would be silently discarded and the
+    # advisory would quietly revert to the default range (Codex P2 on #1203).
+    # The first-use default comes from the template fallback above instead.
+    block = text[text.index("tesla_usable_range_mi:") :]
+    block = block[: block.index("tesla_degraded_travel_min:")]
+    # Ignore comment lines: the block explains why `initial:` is absent.
+    keys = [ln for ln in block.splitlines() if not ln.strip().startswith("#")]
+    assert not any("initial:" in ln for ln in keys), (
+        "usable-range calibration resets on restart"
+    )
+
+
+def test_degraded_travel_fallback_also_persists() -> None:
+    # Same defect, same fix: this helper is documented as calibrated from
+    # observed drives, so it must survive a restart too.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    start = text.index("tesla_degraded_travel_min:")
+    block = text[start : start + 400]
+    assert "name: Tesla Degraded Travel Fallback" in block
+    keys = [ln for ln in block.splitlines() if not ln.strip().startswith("#")]
+    assert not any("initial:" in ln for ln in keys), (
+        "degraded-travel calibration resets on restart"
+    )
+    assert (
+        "states('input_number.tesla_degraded_travel_min') | float(default=60)" in text
+    )
 
 
 def test_no_live_itinerary_details_in_public_planner_files() -> None:

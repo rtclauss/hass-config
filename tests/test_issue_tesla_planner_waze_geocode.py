@@ -228,7 +228,8 @@ def test_degraded_plan_uses_calibrated_fallback_duration() -> None:
 
     assert "tesla_degraded_travel_min:" in text
     assert "name: Tesla Degraded Travel Fallback" in text
-    assert "initial: 60" in text
+    # No `initial:`: it would force the value at every restart and discard a
+    # calibration. The default comes from the template fallback below.
     assert (
         "states('input_number.tesla_degraded_travel_min') | float(default=60)" in text
     )
