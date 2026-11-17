@@ -126,7 +126,22 @@ The schedule helper preserves the Tesla app's own charging schedule when the car
 - `OCC`
 - `SPCC`
 
-At `home`, Home Assistant always sets the charge limit. For a real calendar departure, it also schedules cabin preconditioning whenever both the resident and the vehicle are home, regardless of the selected charge target. The scheduled-departure command preserves the Tesla app's charging defaults by omitting off-peak charging fields at protected locations. Alarm-only plans still do not schedule cabin preconditioning.
+At `home`, Home Assistant always sets the charge limit. For a real calendar departure, it also schedules cabin preconditioning whenever both the resident and the vehicle are home, regardless of the selected charge target. At protected locations the command preserves the Tesla app's charging defaults by **echoing the vehicle's own current off-peak settings back**, not by omitting those fields — see [Scheduled departure needs all seven parameters](#scheduled-departure-needs-all-seven-parameters). Alarm-only plans still do not schedule cabin preconditioning.
+
+### Scheduled departure needs all seven parameters
+
+Tesla's `set_scheduled_departure` command requires **every** one of these, and rejects the whole command if any is absent:
+
+```
+enable  departure_time  preconditioning_enabled  preconditioning_weekdays_only
+off_peak_charging_enabled  off_peak_charging_weekdays_only  end_off_peak_time
+```
+
+A partial payload comes back as `{"result": false, "reason": "missing <name> param"}`, naming each absent field in turn. `teslajsonpy` maps the command to `POST api/1/vehicles/{vehicle_id}/command/set_scheduled_departure` and passes `**kwargs` straight through as the request body with no validation and no defaults, so an omitted field reaches Tesla genuinely missing.
+
+This is why preconditioning silently never armed at `home` until issue #1200: that path omitted all three off-peak fields to avoid disturbing the Tesla-app charging schedule, so the command was rejected every time. The fix sends the vehicle's own current values (`Off peak charging enabled`, `Off peak charging weekdays only`, `End off peak time`, read back from `binary_sensor.<vehicle_slug>_scheduled_departure`), which preserves those settings while satisfying the contract. `End off peak time` is `None` when off-peak charging has never been configured; `0` is accepted.
+
+`tesla_custom.api` is registered with `supports_response=True` and returns Tesla's answer. The planner now **captures** it on both enable paths and fails closed: an empty or absent response counts as failure, the reason reaches the logbook and a persistent notification (`tesla_departure_arm_failed`), and the script stops with an error so `input_number.tesla_managed_departure_ts` and `input_boolean.tesla_managed_departure_active` are never written for a schedule the car did not accept. Previously the response was discarded and HA recorded a managed departure regardless, so the only symptom was a `binary_sensor.<vehicle_slug>_scheduled_departure` that never turned on.
 
 `person.<resident>` and `device_tracker.<private_vehicle_tracker>` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` disables that managed departure and clears its tracking helpers after Tesla confirms the matching schedule. If the integration has not published the new departure timestamp yet, the automation keeps the departure tracked and retries when `binary_sensor.<vehicle_slug>_scheduled_departure` catches up.
 
