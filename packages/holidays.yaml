@@ -1154,11 +1154,11 @@ script:
             {% if fast is mapping %}
               {{ now().hour == (fast.start_hour | int) and now().minute >= (fast.start_minute | int) }}
             {% else %}
-              false
+              {{ false }}
             {% endif %}
           cadence_minutes: >-
             {% set fast = holiday.midnight_window | default(none, true) %}
-            {% if fast_window_active in [true, 'true', 'True', 'on'] and fast is mapping %}
+            {% if fast_window_active and fast is mapping %}
               {{ fast.cadence_minutes | int }}
             {% else %}
               {{ holiday.cadence_minutes | default(2) | int }}

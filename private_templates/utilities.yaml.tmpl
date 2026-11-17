@@ -517,7 +517,7 @@ automation:
       - condition: template
         value_template: >-
           {% if trigger.id == 'ha_start' %}
-            true
+            {{ true }}
           {% elif trigger.id == 'appdaemon_hass_websocket_reconnect_error' %}
             {% set state = trigger.to_state.state if trigger.to_state is not none else 'unknown' %}
             {% set last_triggered = this.attributes.last_triggered %}
@@ -527,7 +527,7 @@ automation:
                  or (now() - last_triggered).total_seconds() > 600
                ) }}
           {% else %}
-            false
+            {{ false }}
           {% endif %}
     action:
       - action: hassio.addon_restart
