@@ -113,7 +113,10 @@ def test_geocode_results_are_cached_and_pruned() -> None:
     assert (
         "state_attr('binary_sensor.upcoming_trip_charging', 'geo_cache')" in text
     )
-    assert "geo_cache: \"{{ geo_cache_seed | from_json }}\"" in text
+    assert (
+        "geo_cache: \"{{ geo_cache_seed if geo_cache_seed is mapping else {} }}\""
+        in text
+    )
     assert "geo_cache.get(candidate_location, '')" in text
     # Only addresses still in play survive, so the cache cannot grow forever.
     assert "geo_cache_pruned:" in text
@@ -205,3 +208,46 @@ def test_degraded_scoring_is_surfaced_not_silent() -> None:
     # The nightly/notification summary has to admit the numbers are assumed.
     assert "Travel time unavailable, so distance and departure are assumed" in text
     assert "'scoring_degraded': scoring_degraded" in text
+
+
+def test_geo_cache_is_never_round_tripped_through_json() -> None:
+    # Codex P1 on PR #1199. Home Assistant renders script variables with
+    # native typing, so a `| to_json`'d mapping comes back as a dict and a
+    # following `| from_json` raises, aborting the whole action before any
+    # candidate is scored — worse than the bug being fixed. The cache's keys
+    # and values are all strings, so both "{}" (first recompute) and
+    # {"addr": "lat,lon"} (populated) literal_eval cleanly and hit this.
+    #
+    # The neighbouring *_json variables are safe only incidentally: their
+    # payloads contain `false`, which literal_eval rejects, so they stay
+    # strings. Do not rely on that for the cache — keep it a mapping.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert "geo_cache_seed | from_json" not in text
+    assert "geo_cache_pruned | from_json" not in text
+    # No to_json on the cache either, in any spelling.
+    for line in text.splitlines():
+        if "geo_cache" in line:
+            assert "to_json" not in line, f"cache serialized to JSON: {line.strip()}"
+            assert "from_json" not in line, f"cache parsed from JSON: {line.strip()}"
+
+
+def test_geo_cache_mapping_guards_are_present() -> None:
+    # A non-mapping attribute (a restored string, a corrupted value) must
+    # degrade to an empty cache rather than erroring the action.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert "{{ cached if cached is mapping else {} }}" in text
+    assert "{{ geo_cache_seed if geo_cache_seed is mapping else {} }}" in text
+    assert "{{ geo_cache_pruned if geo_cache_pruned is mapping else {} }}" in text
+
+
+def test_trip_plan_json_still_carries_a_literal_eval_blocking_value() -> None:
+    # The *_json variables rely on `false` appearing in the payload so native
+    # typing leaves them as strings for `| from_json`. If a future edit made
+    # every value literal_eval-safe, those reads would break the same way the
+    # cache did. Pin the property rather than the incidental key.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert "'all_day': false," in text
+    assert "(trip_plan_json | from_json)" in text

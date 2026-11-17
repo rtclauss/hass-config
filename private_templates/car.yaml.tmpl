@@ -1212,8 +1212,18 @@ template:
           # Carry last cycle's address -> "lat,lon" map forward. During this
           # action the sensor still holds its previous attributes, so repeat
           # recomputes of the same event reuse the cached coordinates.
+          #
+          # Kept as a mapping end to end, never round-tripped through JSON.
+          # HA renders script variables with native typing, so a to_json'd
+          # mapping comes back as a dict (every key and value here is a
+          # string, so "{}" and {"addr": "lat,lon"} both literal_eval
+          # cleanly) and a following from_json would raise and abort the whole
+          # action before any candidate is scored. The nearby *_json variables
+          # survive that only because their payloads contain `false`, which
+          # literal_eval rejects (Codex P1 on #1199).
           geo_cache_seed: >-
-            {{ (state_attr('binary_sensor.upcoming_trip_charging', 'geo_cache') or {}) | to_json }}
+            {% set cached = state_attr('binary_sensor.upcoming_trip_charging', 'geo_cache') %}
+            {{ cached if cached is mapping else {} }}
           degraded_travel_min: >-
             {{ states('input_number.tesla_degraded_travel_min') | float(default=60) }}
           personal_event_window: null
@@ -1298,7 +1308,7 @@ template:
       - variables:
           candidates: "{{ (candidates_json | default('[]', true) | string | trim | from_json) }}"
           scored_candidates: []
-          geo_cache: "{{ geo_cache_seed | from_json }}"
+          geo_cache: "{{ geo_cache_seed if geo_cache_seed is mapping else {} }}"
           # The manual coordinate override targets the soonest candidate that
           # has a location, so one "lat,lon" entry stays unambiguous even when
           # several located events share the 24h window.
@@ -1411,7 +1421,8 @@ template:
               } | to_json }}
             {% endif %}
           # Keep only the addresses still in play so the cache cannot grow
-          # without bound across a long uptime.
+          # without bound across a long uptime. Emitted as a mapping, not
+          # JSON, for the same native-typing reason as geo_cache_seed above.
           geo_cache_pruned: >-
             {% set keys = candidates | map(attribute='location') | reject('equalto', '') | list %}
             {% set ns3 = namespace(out={}) %}
@@ -1420,7 +1431,7 @@ template:
                 {% set ns3.out = ns3.out | combine({k: v}) %}
               {% endif %}
             {% endfor %}
-            {{ ns3.out | to_json }}
+            {{ ns3.out }}
     binary_sensor:
       - name: upcoming_trip_charging
         unique_id: upcoming_trip_charging
@@ -1447,7 +1458,7 @@ template:
           scoring_degraded: >-
             {{ (trip_plan_json | from_json).scoring_degraded | default(false) }}
           geo_cache: >-
-            {{ geo_cache_pruned | from_json }}
+            {{ geo_cache_pruned if geo_cache_pruned is mapping else {} }}
   - binary_sensor:
       - default_entity_id: binary_sensor.tesla_daily_plan_active
         unique_id: tesla_daily_plan_active
