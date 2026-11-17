@@ -212,7 +212,32 @@ An illustrative shape: a 70 mi afternoon appointment plus a 17 mi evening event 
 - the pack is a 2019 Model 3 NCA, where routine 100% charging is the pattern to avoid and 90% is the daily ceiling
 - so over-charging carries a real cumulative cost and under-charging a small recoverable one — the planner informs and leaves the decision to the owner, who can Supercharge or flip `input_boolean.long_range_travel`
 
-The comparison uses `input_number.tesla_usable_range_mi` (rated miles at 100%, falling back to 240 before it is first set). It is a **fixed, calibrated** figure, not a live reading — recalibrate it from an observed full charge if it drifts. Neither this helper nor `input_number.tesla_degraded_travel_min` declares `initial:`, deliberately: `initial:` forces an `input_number` back to that value at every restart, which would silently discard a calibration. The first-use defaults come from the templates' own `| float(default=…)` fallbacks. It is only ever used to phrase the advisory.
+The comparison uses `input_number.tesla_usable_range_mi` (rated miles at 100%, defaulting to 240). It is a **fixed, calibrated** figure, not a live reading — recalibrate it from an observed full charge if it drifts. It is only ever used to phrase the advisory.
+
+#### How the calibration helpers persist
+
+`input_number.tesla_usable_range_mi` and `input_number.tesla_degraded_travel_min` both avoid two opposite traps, so the pattern is worth stating explicitly:
+
+- **Neither declares `initial:`.** Home Assistant returns early from `async_added_to_hass` whenever `initial` is set, skipping state restoration entirely — so `initial:` forces the value back on *every* restart and silently discards a calibration.
+- **But omitting `initial:` does not leave the entity `unknown`.** With no restorable state, HA falls back to `native_min_value`:
+
+  ```python
+  if (value is not None
+          and self.native_min_value <= value <= self.native_max_value):
+      self._attr_native_value = value
+  else:
+      self._attr_native_value = self.native_min_value
+  ```
+
+  So a template `| float(default=…)` can **never** supply a first-use default for such a helper: the state is always a valid number.
+
+The resolution is three-layered:
+
+1. Both helpers use **`min: 0`**, which is an impossible calibration for either — a zero usable range or a zero-minute drive allowance — so the fresh-install value is an unambiguous "not yet calibrated" sentinel. A `min: 100` on the range helper would instead have silently become a 100 mi range and fired false shortfall advisories.
+2. The templates reading them **treat `<= 0` as unset** and substitute the default, so correctness never depends on startup ordering.
+3. `automation.hydrate_tesla_calibration_helpers` seeds both at Home Assistant start, but **only when still at the sentinel** — so a real calibration is never overwritten on a normal restart. This exists for the dashboard's sake, so it shows 240 rather than 0 on a fresh install.
+
+`input_number.tesla_local_trip_threshold_mi` still carries `initial: 10` and therefore still resets on restart despite being documented as dashboard-adjustable — tracked separately in issue #1204.
 
 Two honesty details. When `scoring_degraded` is set, an unscored trip is counted in `trip_count` but contributes no miles, so the wording becomes *"Day total at least N mi"* rather than understating the driving. And the total sums **all** qualifying events rather than only those too close together to recharge between — pessimistic by design, since the car usually does charge at home between trips. That approximation is acceptable because the figure is reported, never acted on.
 

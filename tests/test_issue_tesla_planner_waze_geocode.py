@@ -230,9 +230,13 @@ def test_degraded_plan_uses_calibrated_fallback_duration() -> None:
     assert "name: Tesla Degraded Travel Fallback" in text
     # No `initial:`: it would force the value at every restart and discard a
     # calibration. The default comes from the template fallback below.
+    # Guarded against the sentinel: HA lands a helper with no `initial:` and no
+    # restorable state on its minimum (0 here), so a bare `| float(default=60)`
+    # would yield a 0-minute drive allowance (Codex P2 on #1203).
     assert (
         "states('input_number.tesla_degraded_travel_min') | float(default=60)" in text
     )
+    assert "{{ configured if configured > 0 else 60 }}" in text
     # Departure timing must not collapse to "start - buffer" when the drive
     # time is unknown, or preconditioning would begin after the real departure.
     assert (

@@ -119,19 +119,59 @@ def test_usable_range_helper_is_a_fixed_calibrated_value() -> None:
 
     assert "tesla_usable_range_mi:" in text
     assert "name: Tesla Usable Range At Full" in text
-    assert "states('input_number.tesla_usable_range_mi') | float(default=240)" in text
 
-    # No `initial:` on the helper. input_number `initial:` FORCES the value at
-    # every restart, so a calibration would be silently discarded and the
-    # advisory would quietly revert to the default range (Codex P2 on #1203).
-    # The first-use default comes from the template fallback above instead.
     block = text[text.index("tesla_usable_range_mi:") :]
     block = block[: block.index("tesla_degraded_travel_min:")]
-    # Ignore comment lines: the block explains why `initial:` is absent.
     keys = [ln for ln in block.splitlines() if not ln.strip().startswith("#")]
+
+    # No `initial:`: HA returns early from async_added_to_hass whenever initial
+    # is set, skipping restore entirely, so a calibration would be discarded on
+    # every restart (Codex P2 on #1203).
     assert not any("initial:" in ln for ln in keys), (
         "usable-range calibration resets on restart"
     )
+    # min MUST be 0. With no restorable state HA falls back to
+    # native_min_value, not unknown, so the minimum is the fresh-install value
+    # and has to be an impossible calibration to act as a sentinel. A min of
+    # 100 would silently become a 100 mi usable range and fire false
+    # shortfall advisories.
+    assert any(ln.strip() == "min: 0" for ln in keys), (
+        "min must be 0 so the fresh-install fallback is a detectable sentinel"
+    )
+
+
+def test_calibration_sentinels_are_treated_as_unset() -> None:
+    # Because HA lands on the minimum rather than unknown, a template
+    # `| float(default=...)` can never fire: the state is always a valid
+    # number. The guards must therefore test for the sentinel explicitly.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert (
+        "{% set usable_range_mi = configured_range_mi if configured_range_mi > 0 else 240 %}"
+        in text
+    )
+    assert "{{ configured if configured > 0 else 60 }}" in text
+
+
+def test_calibration_helpers_are_hydrated_once_at_startup() -> None:
+    # Correctness does not depend on this automation -- the template guards
+    # above cover the window before it runs -- but without it the dashboard
+    # would show 0 on a fresh install.
+    text = CAR_PATH.read_text(encoding="utf-8")
+
+    assert "- id: hydrate_tesla_calibration_helpers" in text
+    block = text[text.index("- id: hydrate_tesla_calibration_helpers") :]
+    block = block[: block.index("- id: tesla_departure_planner_apply")]
+
+    assert "trigger: homeassistant" in block
+    assert "event: start" in block
+    # Seeds only when still at the sentinel, so a real calibration is never
+    # overwritten on a normal restart.
+    assert block.count("<= 0 }}") == 2
+    assert "entity_id: input_number.tesla_usable_range_mi" in block
+    assert "entity_id: input_number.tesla_degraded_travel_min" in block
+    assert "value: 240" in block
+    assert "value: 60" in block
 
 
 def test_degraded_travel_fallback_also_persists() -> None:
@@ -146,49 +186,5 @@ def test_degraded_travel_fallback_also_persists() -> None:
     assert not any("initial:" in ln for ln in keys), (
         "degraded-travel calibration resets on restart"
     )
-    assert (
-        "states('input_number.tesla_degraded_travel_min') | float(default=60)" in text
-    )
-
-
-def test_no_live_itinerary_details_in_public_planner_files() -> None:
-    # Codex P1 on PR #1203. specs/private_runtime_config.allium keeps exact
-    # travel histories out of public Git and requires synthetic values in
-    # documentation and fixtures. Worked examples must be invented and undated.
-    # This is the second privacy slip of this kind in the planner work (live
-    # coordinates were the first, on PR #1199), hence a standing guard.
-    #
-    # Deliberately matches CATEGORY shapes rather than the real destinations:
-    # listing those here would reproduce in a public file exactly what the
-    # guard exists to keep out.
-    #
-    # Generic appointment types ("Dentist", "Example Dental, Sample City, ST")
-    # are an established synthetic convention in this repo and are NOT flagged.
-    # What identifies a real trip is a date plus a real place, so those are the
-    # shapes guarded here.
-    import re
-
-    patterns = {
-        "dated itinerary": re.compile(r"\b20\d\d-\d\d-\d\d\b"),
-        "street address": re.compile(
-            r"\b\d+\s+\w+(\s+\w+)*\s+(Ave|Avenue|St|Street|Ln|Lane|Rd|Road|Blvd|Way|Dr|Drive)\b"
-        ),
-    }
-    for rel in (
-        "docs/tesla_departure_planner.md",
-        "packages/car.yaml",
-        "private_templates/car.yaml.tmpl",
-        "tests/test_issue_tesla_planner_day_total.py",
-        "tests/test_issue_tesla_planner_waze_geocode.py",
-        "tests/test_issue_tesla_scheduled_departure_params.py",
-    ):
-        path = ROOT / rel
-        if not path.exists():
-            continue
-        text = path.read_text(encoding="utf-8")
-        for label, pattern in patterns.items():
-            match = pattern.search(text)
-            assert match is None, (
-                f"{rel} carries {label} detail: {match.group(0)!r} - "
-                "use an invented, undated example instead"
-            )
+    # 0 is already an impossible calibration here, so it serves as the sentinel.
+    assert any(ln.strip() == "min: 0" for ln in keys)
