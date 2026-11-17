@@ -214,7 +214,12 @@ def test_charge_limit_is_sized_off_the_furthest_qualifying_event() -> None:
         in text
     )
     assert "'distance_mi': ns2.furthest.distance_mi," in text
-    assert "'duration_min': ns2.next.duration_min," in text
+    # Duration still follows the soonest qualifying candidate, but falls back
+    # to the calibrated estimate when that candidate could not be scored.
+    assert (
+        "'duration_min': ns2.next.duration_min if next_scored else degraded_travel_min,"
+        in text
+    )
     assert "state_attr('sensor.waze_next_trip_distance'" not in text
 
 
@@ -232,7 +237,14 @@ def test_local_trip_threshold_helper_gates_candidacy() -> None:
         "states('input_number.tesla_local_trip_threshold_mi') | float(default=10)"
         in text
     )
-    assert "{% if c.distance_mi >= local_trip_threshold_mi %}" in text
+    # A *scored* candidate is still gated on the threshold. A located candidate
+    # that could not be scored bypasses the threshold on purpose — see
+    # tests/test_issue_tesla_planner_waze_geocode.py — so a lost lookup cannot
+    # silently demote a long drive to a local errand.
+    assert (
+        "{% set qualifies = (c_located and not c_scored)"
+        " or (c_scored and c.distance_mi >= local_trip_threshold_mi) %}" in text
+    )
 
 
 def test_tesla_departure_planner_recomputes_when_trip_distance_changes() -> None:

@@ -20,12 +20,14 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 
 - `binary_sensor.upcoming_trip_charging`
 - `input_number.tesla_local_trip_threshold_mi`
+- `input_number.tesla_degraded_travel_min`
+- `input_text.tesla_destination_coords_override`
 
 `binary_sensor.upcoming_trip_charging` is a **trigger-based** template sensor. On a schedule (HA start, every 15 minutes, and whenever `calendar.<private_owner_calendar>`, `calendar.curling`, or `binary_sensor.work_trip_today` changes) it:
 
 1. Fetches every event in the next 24 hours from `calendar.<private_owner_calendar>` and `calendar.curling` via the `calendar.get_events` action (not each calendar entity's own single pinned "current event" attribute — see below), plus `binary_sensor.work_trip_today`'s own event.
 2. Drops any event that is all-day, in the past, outside the 24-hour horizon, or a flight/`nocharge` event (via the shared `skip_charging_event` macro, unchanged).
-3. Calls `waze_travel_time.get_travel_times` once per remaining candidate that has a location, scoring it with a real drive distance/duration from home.
+3. Resolves each remaining candidate's `location` to a `lat,lon` pair (see [Coordinates, not addresses](#coordinates-not-addresses) below), then calls `waze_travel_time.get_travel_times` once per candidate, scoring it with a real drive distance/duration from home.
 4. Excludes any candidate closer than `input_number.tesla_local_trip_threshold_mi` (default 10 mi, adjustable on the dashboard) — a nearby errand is never treated as a "trip" worth preconditioning for.
 5. Of what's left ("qualifying" candidates), the **soonest** one drives departure timing/preconditioning (`entry`, `start_time`, `duration_min`), and the **furthest** one drives the charge limit (`distance_mi`, `furthest_entry`). If your day has a nearby dentist visit at 10am and a 100 mi loan closing at 1pm, the car preconditions for the 10am departure but charges to whatever the 100 mi trip needs.
 
@@ -33,7 +35,31 @@ This replaced an older design that read each calendar entity's own single "curre
 
 The planner now normalizes Waze duration with Home Assistant's `as_timedelta` helper where needed, so legacy numeric values still work.
 
-If a Waze lookup fails for one candidate (`continue_on_error: true`), that candidate degrades to 0 mi/0 min rather than crashing the whole sensor recompute — the same as if it were a local trip. `sensor.waze_next_trip_distance` and `sensor.calendar_destination` still exist as passive display-only entities (the "Next Calendar Destination" dashboard tile mirrors `binary_sensor.upcoming_trip_charging`'s `location` attribute, falling back to home), but neither is read by the planning logic anymore.
+`sensor.waze_next_trip_distance` and `sensor.calendar_destination` still exist as passive display-only entities (the "Next Calendar Destination" dashboard tile mirrors `binary_sensor.upcoming_trip_charging`'s `location` attribute, falling back to home), but neither is read by the planning logic anymore.
+
+### Coordinates, not addresses
+
+Waze routes reliably by coordinate, but in November 2026 Waze blocked the address-autocomplete endpoint `pywaze` used to turn an address string into coordinates ([eifinger/pywaze#119](https://github.com/eifinger/pywaze/issues/119), core [#191329](https://github.com/home-assistant/core/issues/191329) / [#191667](https://github.com/home-assistant/core/issues/191667)). `waze_travel_time.get_travel_times` now fails for *any* address input, so the planner passes coordinates on both sides:
+
+- **Origin** comes from `zone.home`'s own `latitude`/`longitude`. It never needs geocoding.
+- **Destination** is geocoded from the calendar event's `location` via `rest_command.geocode_address` (Nominatim, `format=jsonv2&limit=1`) with a contactable `User-Agent`, as Nominatim's usage policy requires. The error case is a JSON *mapping* and a no-match is an empty list, so the parser requires a non-mapping, non-empty sequence before indexing the first result.
+- Resolved coordinates are cached in `binary_sensor.upcoming_trip_charging`'s own `geo_cache` attribute and carried forward across recomputes, so the same event is not re-geocoded every 15 minutes. The cache is pruned each cycle to the addresses still in the 24-hour window.
+- `input_text.tesla_destination_coords_override` is the manual escape hatch. Set it to `lat,lon` and it wins outright for the **soonest candidate that has a location** — deliberately scoped that way so one entry stays unambiguous when several located events share the window. Clear it when the trip is over.
+
+This is also why `sensor.me_to_home` kept working throughout the outage: it is configured with a coordinate pair and never geocodes anything.
+
+### When a travel time cannot be scored
+
+A candidate that *has* a location but whose coordinates or Waze route could not be resolved is **not** scored as 0 mi. Scoring 0 was a fail-open bug: 0 is below the local-trip threshold, so a lost lookup silently reclassified a real long drive as a nearby errand, dropped it from candidacy, and cancelled preconditioning — leaving a plausible-looking alarm-tier charge limit as the only symptom (see the linked tracking issue).
+
+Instead such a candidate carries `scored: false` and:
+
+- still **qualifies** as a trip, bypassing the local-trip threshold, so preconditioning survives a geocoder or Waze outage
+- contributes 0 to the furthest-distance calculation, which keeps it in the conservative sub-90-mile `90%` tier rather than letting an unknown distance pin the car to `100%`
+- times departure off `input_number.tesla_degraded_travel_min` (default 60 min, calibrate from real drives) instead of an unknown 0-minute drive, so preconditioning starts early rather than after the real departure
+- sets `scoring_degraded` on the sensor, which the planner summary and notifications state explicitly — a degraded plan never passes as a normal one
+
+An event with **no** location is unchanged: it tells the planner nothing, stays a non-trip, and never starts preconditioning.
 
 The trip-selection template only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
 
@@ -121,6 +147,7 @@ When it is on, the planner pins the charge limit to `100%`.
 Decision summary (`distance_mi` below is always the **furthest** qualifying event in the next 24 hours, not necessarily the next one to depart):
 
 - inside the local trip threshold (`< input_number.tesla_local_trip_threshold_mi`, default 10 mi): not a trip at all — falls through to the alarm/no-plan tiers below
+- qualifying trip whose travel time could not be scored: `90%` (distance contributes 0, so it never reaches the `>= 90 mi` tier), with `scoring_degraded` set
 - long trip (`>= 90 mi`): `100%`
 - other qualifying trip (`>= threshold` and `< 90 mi`): `90%`
 - alarm + cold weather: `90%`
@@ -211,7 +238,12 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
 - A same-day all-day event (for example a recurring "Replace Contacts" reminder) never becomes the planner's selected `entry`/`start_time`, even while it is the only event calendar.<private_owner_calendar>'s own native attributes would otherwise expose; a real timed event later that day (for example a 10am dentist appointment) is still picked up via `calendar.get_events`.
 - With three same-day qualifying events — two inside the local trip threshold and one 100 mi away — the charge limit reflects the 100 mi trip (`distance_mi` = furthest), while `entry`/`start_time`/preconditioning still follow whichever qualifying event departs soonest.
-- Raising or lowering `input_number.tesla_local_trip_threshold_mi` changes which events count as a "trip" at all; an event just inside the radius produces no plan, and the same event just outside it produces one.
+- Raising or lowering `input_number.tesla_local_trip_threshold_mi` changes which events count as a "trip" at all; an event just inside the radius produces no plan, and the same event just outside it produces one. A candidate that could not be scored bypasses this threshold on purpose.
+- A `waze_travel_time.get_travel_times` call with a coordinate pair succeeds while the same call with a street address fails — the upstream block this design works around. Verify with a direct action call in Developer Tools.
+- A located candidate whose geocode returns a Nominatim error mapping, an empty list, or nothing at all still produces an active plan at `90%` with `scoring_degraded` true and departure timed off `input_number.tesla_degraded_travel_min` — not a dropped candidate and not a `100%` pin.
+- An event with no `location` still produces no plan even while geocoding is failing for everything else.
+- Setting `input_text.tesla_destination_coords_override` to `lat,lon` overrides the soonest located candidate's destination; with two located events, the later one is unaffected.
+- Repeated 15-minute recomputes of the same unchanged event hit `rest_command.geocode_address` once, not once per cycle (check `geo_cache` on the sensor).
 - If the Waze lookup for one candidate's location fails, that candidate scores 0 mi/0 min (treated like a local trip) instead of leaving a stale distance from a previous recompute or erroring the whole sensor.
 - At `home`, a real calendar departure schedules cabin preconditioning at `80%`, `90%`, or `100%` without changing Tesla-app charging defaults.
 - Alarm-only plans adjust charge limit and planner messaging but do not create Tesla scheduled departure or cabin-preconditioning overrides.
