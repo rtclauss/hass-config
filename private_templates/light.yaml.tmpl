@@ -2151,7 +2151,7 @@ automation:
 
   - id: office_lights_morning_on_vacancy_off
     alias: office_lights_morning_on_vacancy_off
-    description: Turn office lights on with morning motion/occupancy (when not in guest/trip mode), then turn them off only after the confidence model and local office sensors all show vacancy.
+    description: Turn office lights on with morning motion/occupancy (when not in guest/trip mode, never while the CPAP runs, and only with both office sensors agreeing while the bed is occupied), then turn them off only after the confidence model and local office sensors all show vacancy.
     mode: restart
     trace:
       stored_traces: 50
@@ -2207,6 +2207,31 @@ automation:
               - condition: state
                 entity_id: input_boolean.office_auto_on
                 state: "off"
+              # Sleep guard: a running CPAP means the owner is asleep, so any
+              # office motion is a pet or a sensor blip, not someone arriving.
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.owner_suite_cpap_running
+                    state: "on"
+              # While the bed still reads occupied, a single office sensor is
+              # not enough: lone motion blips (likely cats) lit the whole office
+              # at 06:05 and 07:00 on 2026-11-18 and on 11-12 mornings. Require
+              # both office sensors to agree. Negated bed check so an
+              # unavailable bed sensor falls back to normal morning behavior.
+              - or:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: binary_sensor.bed_occupied_debounced
+                        state: "on"
+                  - and:
+                      - condition: state
+                        entity_id: binary_sensor.office_motion_occupancy
+                        state: "on"
+                      - condition: state
+                        entity_id: binary_sensor.office_occupancy_2
+                        state: "on"
             sequence:
               - action: light.turn_on
                 data:
