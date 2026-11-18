@@ -92,11 +92,35 @@ automation:
                   {{ wait.trigger is not none
                      and wait.trigger.event.data.action == 'ACCEPT_MAP_MAINLEVEL' }}
             sequence:
-              - action: rest_command.valetudo_mainlevel_accept_map_change
-                continue_on_error: true
+              - variables:
+                  map_action: accept
         default:
-          - action: rest_command.valetudo_mainlevel_reject_map_change
-            continue_on_error: true
+          - variables:
+              map_action: reject
+      # Confirm the robot actually applied the choice. A PUT that fails (robot
+      # offline/unreachable) must not pass silently: the proposed map would stay
+      # pending and the current room layout could be lost on the next cycle.
+      # Capture the REST result and alert on anything but a 2xx response (and on
+      # a swallowed transport error, which leaves map_change_result undefined).
+      - action: "rest_command.valetudo_mainlevel_{{ map_action }}_map_change"
+        continue_on_error: true
+        response_variable: map_change_result
+      - if:
+          - condition: template
+            value_template: >-
+              {{ not (map_change_result is defined
+                      and (map_change_result.status | default(0) | int(0)) >= 200
+                      and (map_change_result.status | default(0) | int(0)) < 300) }}
+        then:
+          - action: !secret mobile_notify_service_02
+            data:
+              title: "Main Level Vacuum: map {{ map_action }} failed"
+              message: >-
+                Couldn't reach the robot to {{ map_action }} the proposed map.
+                The map change is likely still pending and the current room
+                layout may not be preserved — handle it in Valetudo.
+              data:
+                tag: "valetudo-mainlevel-map-guard-failed"
 
   - alias: "Guard Upstairs Vacuum Map"
     id: valetudo_upstairs_map_guard
@@ -136,8 +160,32 @@ automation:
                   {{ wait.trigger is not none
                      and wait.trigger.event.data.action == 'ACCEPT_MAP_UPSTAIRS' }}
             sequence:
-              - action: rest_command.valetudo_upstairs_accept_map_change
-                continue_on_error: true
+              - variables:
+                  map_action: accept
         default:
-          - action: rest_command.valetudo_upstairs_reject_map_change
-            continue_on_error: true
+          - variables:
+              map_action: reject
+      # Confirm the robot actually applied the choice. A PUT that fails (robot
+      # offline/unreachable) must not pass silently: the proposed map would stay
+      # pending and the current room layout could be lost on the next cycle.
+      # Capture the REST result and alert on anything but a 2xx response (and on
+      # a swallowed transport error, which leaves map_change_result undefined).
+      - action: "rest_command.valetudo_upstairs_{{ map_action }}_map_change"
+        continue_on_error: true
+        response_variable: map_change_result
+      - if:
+          - condition: template
+            value_template: >-
+              {{ not (map_change_result is defined
+                      and (map_change_result.status | default(0) | int(0)) >= 200
+                      and (map_change_result.status | default(0) | int(0)) < 300) }}
+        then:
+          - action: !secret mobile_notify_service_02
+            data:
+              title: "Upstairs Vacuum: map {{ map_action }} failed"
+              message: >-
+                Couldn't reach the robot to {{ map_action }} the proposed map.
+                The map change is likely still pending and the current room
+                layout may not be preserved — handle it in Valetudo.
+              data:
+                tag: "valetudo-upstairs-map-guard-failed"
