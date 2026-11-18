@@ -916,6 +916,125 @@
       ],
       "classification": "non-privacy behavior-preserving DRY refactor",
       "reason": "PR #1205 (https://github.com/rtclauss/hass-config/pull/1205): routes the flight-recognition booleans (route_summary, named_flight, looks_like_flight) in travel detection and flight-status tracking through the shared custom_templates/flight.jinja flight_signals macro, which was already the charge planner's source for the same rules. Public config only: no @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, synthetic fixtures, or ignore rules change; each site keeps its own destination-code parsing so behavior is unchanged by construction. specs/private_runtime_config.allium is intentionally not edited; the synthetic render validates and the full suite including tests/test_issue_tesla_planner_flight_exclusion.py and tests/test_trips_flight_classification.py passes."
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Turning sleep mode off makes Adaptive Lighting clear manual",
+        "+*# control and force a 2s sleep_transition jump to the daytime",
+        "+*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# the locks across the sleep-mode change for the ramp's duration.",
+        "+*- alias: \"Keep owner suite manual control across the sleep-mode change\"",
+        "+*continue_on_error: true",
+        "+*action: adaptive_lighting.change_switch_settings",
+        "+*data:",
+        "+*entity_id: switch.adaptive_lighting_owner_suite",
+        "+*use_defaults: current",
+        "+*reset_manual_control_on_sleep_mode_change: false",
+        "+*- alias: \"Keep bed strip manual control across the sleep-mode change\"",
+        "+*entity_id: switch.adaptive_lighting_owner_suite_bed_strip",
+        "+*- alias: \"Restore owner suite manual-control reset on sleep-mode change\"",
+        "+*reset_manual_control_on_sleep_mode_change: true",
+        "+*- alias: \"Restore bed strip manual-control reset on sleep-mode change\""
+      ],
+      "classification": "wake-ramp lock conformance repair",
+      "reason": "Issue #1210 (https://github.com/rtclauss/hass-config/issues/1210) / PR #1211 (https://github.com/rtclauss/hass-config/pull/1211): turning switch.sleep_mode off made Adaptive Lighting clear the owner-suite manual-control locks and force a 2s sleep_transition jump to the daytime target before the 180s ramp began. The ramp now disables reset_manual_control_on_sleep_mode_change on both owner-suite switches for its duration and restores it afterwards, bringing the implementation back in line with FinishWakeupSequence (3-minute ramp, manual control locked for the ramp). specs/alarm_wakeup.allium is intentionally not edited; covered by tests/test_wake_ramp_manual_control_lock.py."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Turning sleep mode off makes Adaptive Lighting clear manual",
+        "+*# control and force a 2s sleep_transition jump to the daytime",
+        "+*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# the locks across the sleep-mode change for the ramp's duration.",
+        "+*- alias: \"Keep owner suite manual control across the sleep-mode change\"",
+        "+*continue_on_error: true",
+        "+*action: adaptive_lighting.change_switch_settings",
+        "+*data:",
+        "+*entity_id: switch.adaptive_lighting_owner_suite",
+        "+*use_defaults: current",
+        "+*reset_manual_control_on_sleep_mode_change: false",
+        "+*- alias: \"Keep bed strip manual control across the sleep-mode change\"",
+        "+*entity_id: switch.adaptive_lighting_owner_suite_bed_strip",
+        "+*- alias: \"Restore owner suite manual-control reset on sleep-mode change\"",
+        "+*reset_manual_control_on_sleep_mode_change: true",
+        "+*- alias: \"Restore bed strip manual-control reset on sleep-mode change\""
+      ],
+      "classification": "non-diffuser wake-ramp change",
+      "reason": "Issue #1210 (https://github.com/rtclauss/hass-config/issues/1210) / PR #1211 (https://github.com/rtclauss/hass-config/pull/1211) only changes Adaptive Lighting manual-control handling inside the owner-suite wake light ramp. Diffuser sleep/wake participation, afternoon fallback, and oil-replacement reminders are unchanged; specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/arrival_lighting.allium",
+      "implementation_paths": [
+        "private_templates/adaptive_lighting.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*reset_manual_control_on_sleep_mode_change: true"
+      ],
+      "classification": "non-arrival adaptive-lighting setting pin",
+      "reason": "Issue #1210 (https://github.com/rtclauss/hass-config/issues/1210) / PR #1211 (https://github.com/rtclauss/hass-config/pull/1211) pins reset_manual_control_on_sleep_mode_change: true (its existing live value) for the two owner-suite switches in the startup reconcile, so an interrupted wake ramp cannot leave it disabled past a restart. Arrival switch lists, empty-house and manual-control gates are unchanged; specs/arrival_lighting.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl",
+        "private_templates/adaptive_lighting.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Turning sleep mode off makes Adaptive Lighting clear manual",
+        "+*# control and force a 2s sleep_transition jump to the daytime",
+        "+*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# the locks across the sleep-mode change for the ramp's duration.",
+        "+*- alias: \"Keep owner suite manual control across the sleep-mode change\"",
+        "+*continue_on_error: true",
+        "+*action: adaptive_lighting.change_switch_settings",
+        "+*data:",
+        "+*entity_id: switch.adaptive_lighting_owner_suite",
+        "+*use_defaults: current",
+        "+*reset_manual_control_on_sleep_mode_change: false",
+        "+*- alias: \"Keep bed strip manual control across the sleep-mode change\"",
+        "+*entity_id: switch.adaptive_lighting_owner_suite_bed_strip",
+        "+*- alias: \"Restore owner suite manual-control reset on sleep-mode change\"",
+        "+*reset_manual_control_on_sleep_mode_change: true",
+        "+*- alias: \"Restore bed strip manual-control reset on sleep-mode change\""
+      ],
+      "classification": "non-privacy behavior change",
+      "reason": "Issue #1210 (https://github.com/rtclauss/hass-config/issues/1210) / PR #1211 (https://github.com/rtclauss/hass-config/pull/1211): wake-ramp Adaptive Lighting manual-control fix. No @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/light.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*description: Turn office lights on with morning motion/occupancy (when not in guest/trip mode), then turn them off only after the confidence model and local office sensors all show vacancy.",
+        "+*description: Turn office lights on with morning motion/occupancy (when not in guest/trip mode, never while the CPAP runs, and only with both office sensors agreeing while the bed is occupied), then turn them off only after the confidence model and local office sensors all show vacancy.",
+        "+*# Sleep guard: a running CPAP means the owner is asleep, so any",
+        "+*# office motion is a pet or a sensor blip, not someone arriving.",
+        "+*- condition: not",
+        "+*conditions:",
+        "+*- condition: state",
+        "+*entity_id: binary_sensor.owner_suite_cpap_running",
+        "+*state: \"on\"",
+        "+*# While the bed still reads occupied, a single office sensor is",
+        "+*# not enough: lone motion blips (likely cats) lit the whole office",
+        "+*# at 06:05 and 07:00 on 2026-11-18 and on 11-12 mornings. Require",
+        "+*# both office sensors to agree. Negated bed check so an",
+        "+*# unavailable bed sensor falls back to normal morning behavior.",
+        "+*- or:",
+        "+*entity_id: binary_sensor.bed_occupied_debounced",
+        "+*- and:",
+        "+*entity_id: binary_sensor.office_motion_occupancy",
+        "+*entity_id: binary_sensor.office_occupancy_2"
+      ],
+      "classification": "non-privacy behavior change",
+      "reason": "Issue #1208 (https://github.com/rtclauss/hass-config/issues/1208) / PR #1209 (https://github.com/rtclauss/hass-config/pull/1209): the office morning auto-on is blocked while the CPAP runs and needs both office sensors while the bed reads occupied, so lone pet motion no longer lights the office before the owner is up. No @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited; covered by tests/test_office_morning_sleep_gate.py."
     }
   ]
 }
