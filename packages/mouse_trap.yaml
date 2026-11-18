@@ -40,4 +40,37 @@ automation:
           message: >
             The basement mouse bucket door opened.
             Total caught: {{ states('counter.mice_caught') }}.
+          data:
+            tag: mice-caught
+            group: mouse-trap
+            # Long-press (iOS) or expand (Android) to reveal the action.
+            actions:
+              - action: MICE_CAUGHT_RESET
+                title: "Reset to zero"
+                destructive: true
+    mode: single
+
+  - id: mouse_bucket_reset_counter_from_notification
+    alias: "Mouse Bucket — Reset counter from notification"
+    description: >
+      Reset the mice caught counter to zero when the "Reset to zero" action
+      is chosen on the catch notification.
+    trace:
+      stored_traces: 10
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: MICE_CAUGHT_RESET
+    action:
+      - action: counter.reset
+        target:
+          entity_id: counter.mice_caught
+      - action: notify.notify
+        data:
+          title: "Mouse Counter Reset"
+          message: "Mice caught counter reset to {{ states('counter.mice_caught') }}."
+          data:
+            tag: mice-caught
+            group: mouse-trap
     mode: single
