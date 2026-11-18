@@ -14,8 +14,8 @@ The planner passed addresses on both sides of the call:
 
 so every lookup failed. Because the Waze call is `continue_on_error: true`, a
 failed candidate used to degrade to `distance_mi: 0`, which is below
-`input_number.tesla_local_trip_threshold_mi` (default 10 mi). A real 69-mile
-drive to a dentist in Rochester was therefore silently reclassified as a local
+`input_number.tesla_local_trip_threshold_mi` (default 10 mi). A real 70-mile
+drive was therefore silently reclassified as a local
 errand, `binary_sensor.upcoming_trip_charging` stayed `off`, and the planner
 fell through to the alarm-only 85% tier with no preconditioning. The only
 visible symptom was a plausible-looking charge limit.
@@ -228,10 +228,15 @@ def test_degraded_plan_uses_calibrated_fallback_duration() -> None:
 
     assert "tesla_degraded_travel_min:" in text
     assert "name: Tesla Degraded Travel Fallback" in text
-    assert "initial: 60" in text
+    # No `initial:`: it would force the value at every restart and discard a
+    # calibration. The default comes from the template fallback below.
+    # Guarded against the sentinel: HA lands a helper with no `initial:` and no
+    # restorable state on its minimum (0 here), so a bare `| float(default=60)`
+    # would yield a 0-minute drive allowance (Codex P2 on #1203).
     assert (
         "states('input_number.tesla_degraded_travel_min') | float(default=60)" in text
     )
+    assert "{{ configured if configured > 0 else 60 }}" in text
     # Departure timing must not collapse to "start - buffer" when the drive
     # time is unknown, or preconditioning would begin after the real departure.
     assert (
