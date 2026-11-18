@@ -1035,6 +1035,15 @@
       ],
       "classification": "non-privacy behavior change",
       "reason": "Issue #1208 (https://github.com/rtclauss/hass-config/issues/1208) / PR #1209 (https://github.com/rtclauss/hass-config/pull/1209): the office morning auto-on is blocked while the CPAP runs and needs both office sensors while the bed reads occupied, so lone pet motion no longer lights the office before the owner is up. No @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited; covered by tests/test_office_morning_sleep_gate.py."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/zone.yaml.tmpl",
+        "private_templates/curling.yaml.tmpl"
+      ],
+      "classification": "non-privacy queued-request guard change",
+      "reason": "Issue #1213 (https://github.com/rtclauss/hass-config/issues/1213): vacuum_leave_home and leave_home_for_curling were away-triggered X40 launchers that did not set require_away, so a main-level clean queued behind an in-flight run on the single serialized dispatcher (script.x40_ultra_main_level_policy_clean, mode: queued) could be dequeued and started after the owner was home again; observed 2026-11-18 when a 487ms Bayesian presence flap queued a request that dequeued 38 minutes later. This passes require_away: true so the dispatcher's existing dequeue-time presence re-check drops it, matching every away-triggered launcher in trips.yaml.tmpl. Public config only: no @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited; covered by tests/test_issue_departure_clean_require_away.py."
     }
   ]
 }
