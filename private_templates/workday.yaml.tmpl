@@ -856,6 +856,24 @@ script:
                   lights:
                     - light.bed_lightstrip
                   manual_control: true
+              # Turning sleep mode off makes Adaptive Lighting clear manual
+              # control and force a 2s sleep_transition jump to the daytime
+              # target before the 180s apply below lands (issue #1210). Keep
+              # the locks across the sleep-mode change for the ramp's duration.
+              - alias: "Keep owner suite manual control across the sleep-mode change"
+                continue_on_error: true
+                action: adaptive_lighting.change_switch_settings
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  use_defaults: current
+                  reset_manual_control_on_sleep_mode_change: false
+              - alias: "Keep bed strip manual control across the sleep-mode change"
+                continue_on_error: true
+                action: adaptive_lighting.change_switch_settings
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+                  use_defaults: current
+                  reset_manual_control_on_sleep_mode_change: false
               - alias: "Ramp the owner suite lights to the current adaptive daytime target"
                 continue_on_error: true
                 action: switch.turn_off
@@ -890,6 +908,20 @@ script:
               - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
                 delay:
                   seconds: 180
+              - alias: "Restore owner suite manual-control reset on sleep-mode change"
+                continue_on_error: true
+                action: adaptive_lighting.change_switch_settings
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  use_defaults: current
+                  reset_manual_control_on_sleep_mode_change: true
+              - alias: "Restore bed strip manual-control reset on sleep-mode change"
+                continue_on_error: true
+                action: adaptive_lighting.change_switch_settings
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite_bed_strip
+                  use_defaults: current
+                  reset_manual_control_on_sleep_mode_change: true
               - alias: "Keep owner suite adaptive lighting in control after the wake ramp"
                 continue_on_error: true
                 action: switch.turn_on
