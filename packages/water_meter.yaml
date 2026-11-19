@@ -1,0 +1,125 @@
+################################################################
+## Packages / Water Meter Reader health
+################################################################
+# The water meter reader is a Raspberry Pi that photographs the meter every
+# 20 minutes, reads the digits, and publishes over MQTT. It creates
+# sensor.water_meter_reader_water_meter itself through MQTT discovery. On
+# every run it also publishes, retained:
+#   waterreader/sensor/water_meter/status             "ok" or "error:<reason>"
+#   waterreader/sensor/water_meter/last_reading_time  ISO time of the last
+#                                                     accepted reading
+# A rejected run (dark frame, implausible value) publishes an error status
+# and no new reading. A run that is accepted but unchanged for the reader's
+# whole history window publishes "error:stuck: ...".
+#
+# HA's MQTT sensor ignores repeats of an unchanged reading, so a quiet meter
+# and a dead reader look the same on the main sensor. This package watches
+# the reader's own status and timestamp instead, and alerts when no accepted
+# reading has arrived for an hour or the reader reports an error, either
+# lasting 30 minutes. A single dark frame clears on the next run and never
+# alerts.
+
+########################
+# MQTT
+########################
+mqtt:
+  - sensor:
+      - name: "Status"
+        unique_id: water_meter_status
+        default_entity_id: sensor.water_meter_status
+        state_topic: "waterreader/sensor/water_meter/status"
+        icon: mdi:water-check
+        entity_category: diagnostic
+        device:
+          identifiers:
+            - water_meter_reader
+
+      - name: "Last reading"
+        unique_id: water_meter_last_reading_time
+        default_entity_id: sensor.water_meter_last_reading_time
+        state_topic: "waterreader/sensor/water_meter/last_reading_time"
+        device_class: timestamp
+        entity_category: diagnostic
+        device:
+          identifiers:
+            - water_meter_reader
+
+########################
+# Template
+########################
+# The staleness test reads the reader's own timestamp, which MQTT redelivers
+# (retained) after a restart, so a restart does not hide an outage. The
+# 30-minute delay_on rides out one bad run and the start-up moment before
+# the retained messages arrive.
+template:
+  - binary_sensor:
+      - name: "Water Meter Reader Problem"
+        unique_id: water_meter_reader_problem
+        default_entity_id: binary_sensor.water_meter_reader_problem
+        device_class: problem
+        delay_on:
+          minutes: 30
+        state: >-
+          {% set last = states('sensor.water_meter_last_reading_time') | as_datetime(none) %}
+          {{ last is none
+             or now() - last > timedelta(hours=1)
+             or states('sensor.water_meter_status').startswith('error') }}
+
+########################
+# Automation
+########################
+automation:
+  - id: water_meter_reader_problem_alert
+    alias: "Water Meter Reader — Alert when readings stop"
+    description: >
+      Notifies once when binary_sensor.water_meter_reader_problem turns on
+      (no accepted reading for 90 minutes, or an error status for 30) and
+      again when it clears. The persistent notification stays up until the
+      reader recovers.
+    trace:
+      stored_traces: 10
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.water_meter_reader_problem
+        to: "on"
+        id: problem
+      - trigger: state
+        entity_id: binary_sensor.water_meter_reader_problem
+        from: "on"
+        to: "off"
+        id: recovered
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: problem
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: water_meter_reader_problem
+                  title: "Water meter reader needs attention"
+                  message: >-
+                    Reader status: {{ states('sensor.water_meter_status') }}.
+                    Last accepted reading:
+                    {{ states('sensor.water_meter_last_reading_time') }}.
+                    Check the reader with: journalctl -u water-meter-reader.
+              - action: notify.all
+                data:
+                  title: "Water meter reader needs attention"
+                  message: >-
+                    No good water meter reading recently (status:
+                    {{ states('sensor.water_meter_status') }}).
+          - conditions:
+              - condition: trigger
+                id: recovered
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: water_meter_reader_problem
+              - action: notify.all
+                data:
+                  title: "Water meter reader recovered"
+                  message: >-
+                    Water meter readings are coming in again
+                    ({{ states('sensor.water_meter_reader_water_meter') }} gal).
+    mode: queued
