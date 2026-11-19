@@ -678,8 +678,27 @@ automation:
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
+      # require_away is what makes this launcher safe behind a busy X40 queue.
+      # The main-level request funnels into the single serialized dispatcher
+      # (script.x40_ultra_main_level_policy_clean, mode: queued), so when a run
+      # is already in flight this one waits — and a departure request that waits
+      # can be dequeued long after the departure stopped being true. Observed
+      # 2026-11-18: a spurious 487ms Bayesian presence blip queued a full-floor
+      # request while the owner was pulling into the driveway; it dequeued 38
+      # minutes later, after the owner was home, and started a vacuum+mop cycle.
+      # The dispatcher already knows how to drop such a request at dequeue time
+      # (it re-reads presence there, not at queue time) — this launcher simply
+      # never opted in, unlike every away-triggered launcher in trips.yaml.
+      #
+      # No expires_at here, deliberately: unlike the time-of-day litter pass
+      # (which must not run a 13:00 pickup at 16:35), a departure clean is still
+      # exactly what we want whenever it dequeues, provided the house is still
+      # empty — and require_away is precisely that test. An expiry would only
+      # add a way to silently skip a wanted clean.
       - action: script.vacuum_main_and_upstairs_levels
         continue_on_error: true
+        data:
+          require_away: true
       - action: script.vacuum_den_guarded_start
         continue_on_error: true
 

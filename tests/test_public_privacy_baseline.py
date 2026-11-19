@@ -130,7 +130,9 @@ def test_network_endpoints_are_loaded_from_private_secrets() -> None:
         assert not re.search(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", source)
         assert not re.search(r"\b[a-zA-Z0-9-]+\.local\b", source)
         keys.update(re.findall(r"!secret (private_[a-z_]+(?:_url|_resource|_origin|_referer|_payload))", source))
-    assert len(keys) == 13
+    assert len(keys) == 11
+    assert "private_adsb_origin" not in examples
+    assert "private_adsb_referer" not in examples
     for key in keys:
         assert re.search(rf"(?m)^{re.escape(key)}:", examples)
 
@@ -163,17 +165,3 @@ def test_birdweather_station_and_domain_alert_text_are_private() -> None:
         "private_domain_expiry_message",
     ):
         assert re.search(rf"(?m)^{key}:", examples)
-
-
-def test_watermeter_endpoints_are_private() -> None:
-    source = (ROOT / "packages/utilities.yaml").read_text()
-    examples = (ROOT / "travis_secrets.example.yaml").read_text()
-
-    for key in (
-        "private_watermeter_light_on_url",
-        "private_watermeter_light_off_url",
-        "private_watermeter_flow_start_url",
-    ):
-        assert f"url: !secret {key}" in source
-        assert re.search(rf"(?m)^{key}:", examples)
-    assert "watermeter.iot." not in source

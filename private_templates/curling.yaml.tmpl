@@ -107,7 +107,14 @@ automation:
             - binary_sensor.curling_season
           state: "on"
     action:
+      # Same contract as vacuum_leave_home (#1213): this is an away-triggered
+      # launch, so the main-level request must be dropped at dequeue time if the
+      # owner is back before the single serialized X40 queue reaches it. A
+      # curling trip is a few hours, which is comfortably long enough for a
+      # full-floor cycle already in flight to still be running on return.
       - action: script.vacuum_main_and_upstairs_levels
+        data:
+          require_away: true
       - action: climate.set_preset_mode
         enabled: false
         target:

@@ -504,16 +504,18 @@ automation:
                 state: "off"
               - condition: template
                 value_template: >-
+                  {% from 'flight.jinja' import flight_signals %}
+                  {% set flight_classify = flight_signals | as_function %}
                   {% set summary = trigger.calendar_event.summary | default('', true) | string %}
                   {% set description = trigger.calendar_event.description | default('', true) | string %}
                   {% set location = trigger.calendar_event.location | default('', true) | string %}
                   {% set summary_lower = summary | lower %}
                   {% set location_lower = location | lower %}
                   {% set trip_text = [summary, description, location] | join(' ') | lower %}
-                  {% set route_summary = '→' in summary %}
-                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-                  {% set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text %}
-                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set flight_sig = flight_classify(summary, description, location) %}
+                  {% set route_summary = flight_sig.route_summary %}
+                  {% set named_flight = flight_sig.named_flight %}
+                  {% set looks_like_flight = flight_sig.looks_like_flight %}
                   {% set origin_code = '' %}
                   {% set destination_code = '' %}
                   {% if route_summary %}
@@ -2374,6 +2376,8 @@ template:
           # Only explicit flight summaries qualify here. Generic calendar locations like
           # "United States" or "@@PRIVATE:zone_07_label@@" must not be treated as flights.
           flight_to_@@PRIVATE:home_airport_primary_code_lower@@_match_json: >-
+            {% from 'flight.jinja' import flight_signals %}
+            {% set flight_classify = flight_signals | as_function %}
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
             {% for event in personal_events_list %}
@@ -2382,10 +2386,10 @@ template:
               {% set location = event.location | default('', true) | string %}
               {% set summary_lower = summary | lower %}
               {% set text = [summary, description, location] | join(' ') | lower %}
-              {% set route_summary = '→' in summary %}
-              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
-              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set flight_sig = flight_classify(summary, description, location) %}
+              {% set route_summary = flight_sig.route_summary %}
+              {% set named_flight = flight_sig.named_flight %}
+              {% set looks_like_flight = flight_sig.looks_like_flight %}
               {% set is_friend_itinerary = 'friend' in text %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
@@ -2443,6 +2447,8 @@ template:
               }}
             {% endif %}
           flight_to_@@PRIVATE:home_airport_secondary_code_lower@@_match_json: >-
+            {% from 'flight.jinja' import flight_signals %}
+            {% set flight_classify = flight_signals | as_function %}
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
             {% for event in personal_events_list %}
@@ -2451,10 +2457,10 @@ template:
               {% set location = event.location | default('', true) | string %}
               {% set summary_lower = summary | lower %}
               {% set text = [summary, description, location] | join(' ') | lower %}
-              {% set route_summary = '→' in summary %}
-              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
-              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set flight_sig = flight_classify(summary, description, location) %}
+              {% set route_summary = flight_sig.route_summary %}
+              {% set named_flight = flight_sig.named_flight %}
+              {% set looks_like_flight = flight_sig.looks_like_flight %}
               {% set is_friend_itinerary = 'friend' in text %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
@@ -2673,6 +2679,8 @@ template:
                 {% endif %}
               {% endif %}
             {% endfor %}
+            {% from 'flight.jinja' import flight_signals %}
+            {% set flight_classify = flight_signals | as_function %}
             {% for event in travel_events %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -2682,10 +2690,10 @@ template:
                 {% set location = event.location | default('', true) | string %}
                 {% set summary_lower = summary | lower %}
                 {% set flight_text = [summary, description, location] | join(' ') | lower %}
-                {% set route_summary = '→' in summary %}
-                {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-                {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
-                {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                {% set flight_sig = flight_classify(summary, description, location) %}
+                {% set route_summary = flight_sig.route_summary %}
+                {% set named_flight = flight_sig.named_flight %}
+                {% set looks_like_flight = flight_sig.looks_like_flight %}
                 {% set is_friend_itinerary = 'friend' in flight_text %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set origin_code = '' %}
@@ -2746,10 +2754,10 @@ template:
                   {% set location = event.location | default('', true) | string %}
                   {% set summary_lower = summary | lower %}
                   {% set flight_text = [summary, description, location] | join(' ') | lower %}
-                  {% set route_summary = '→' in summary %}
-                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-                  {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
-                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set flight_sig = flight_classify(summary, description, location) %}
+                  {% set route_summary = flight_sig.route_summary %}
+                  {% set named_flight = flight_sig.named_flight %}
+                  {% set looks_like_flight = flight_sig.looks_like_flight %}
                   {% set is_friend_itinerary = 'friend' in flight_text %}
                   {% set start_ts = as_timestamp(start_dt) %}
                   {% set destination_name = '' %}

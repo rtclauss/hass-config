@@ -80,9 +80,16 @@ def _skip_charging_event(summary: str, description: str = "", location: str = ""
 def test_flight_macro_file_defines_shared_recognition_macros() -> None:
     text = FLIGHT_MACRO_PATH.read_text(encoding="utf-8")
 
+    # flight_signals is the single source of the recognition rules; the other
+    # two macros delegate to it so the rules live in exactly one place and are
+    # reused by the charge planner, travel detection, and flight status.
+    assert "macro flight_signals(summary, description='', location='', returns=none)" in text
     assert "macro looks_like_flight(summary, description='', location='', returns=none)" in text
     assert "macro skip_charging_event(summary, description='', location='', returns=none)" in text
-    assert "{%- do returns(route_summary or named_flight or itinerary_marker) -%}" in text
+    assert "'looks_like_flight': route_summary or named_flight or itinerary_marker," in text
+    # looks_like_flight delegates to flight_signals; skip_charging_event in turn
+    # delegates to looks_like_flight and adds the manual nocharge opt-out.
+    assert "{%- set classify = flight_signals | as_function -%}" in text
     assert "{%- set flight_classifier = looks_like_flight | as_function -%}" in text
     assert "{%- do returns(is_flight or is_nocharge) -%}" in text
     # The detection rules must match the travel-detection logic in trips.yaml.
@@ -214,7 +221,12 @@ def test_charge_limit_is_sized_off_the_furthest_qualifying_event() -> None:
         in text
     )
     assert "'distance_mi': ns2.furthest.distance_mi," in text
-    assert "'duration_min': ns2.next.duration_min," in text
+    # Duration still follows the soonest qualifying candidate, but falls back
+    # to the calibrated estimate when that candidate could not be scored.
+    assert (
+        "'duration_min': ns2.next.duration_min if next_scored else degraded_travel_min,"
+        in text
+    )
     assert "state_attr('sensor.waze_next_trip_distance'" not in text
 
 
@@ -232,7 +244,14 @@ def test_local_trip_threshold_helper_gates_candidacy() -> None:
         "states('input_number.tesla_local_trip_threshold_mi') | float(default=10)"
         in text
     )
-    assert "{% if c.distance_mi >= local_trip_threshold_mi %}" in text
+    # A *scored* candidate is still gated on the threshold. A located candidate
+    # that could not be scored bypasses the threshold on purpose — see
+    # tests/test_issue_tesla_planner_waze_geocode.py — so a lost lookup cannot
+    # silently demote a long drive to a local errand.
+    assert (
+        "{% set qualifies = (c_located and not c_scored)"
+        " or (c_scored and c.distance_mi >= local_trip_threshold_mi) %}" in text
+    )
 
 
 def test_tesla_departure_planner_recomputes_when_trip_distance_changes() -> None:

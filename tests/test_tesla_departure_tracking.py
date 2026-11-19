@@ -65,13 +65,34 @@ def test_script_reports_whether_it_cleared_the_tesla_schedule() -> None:
 
 def test_script_result_is_computed_at_the_top_sequence_level() -> None:
     # A value set inside a choose/then sub-script is not visible to a later
-    # top-level step, so the result variable must be a top-level step.
+    # top-level step, so the stop that RETURNS the response must be top-level.
+    #
+    # Abort stops are exempt and are deliberately nested: the arm-failure guard
+    # for #1200 stops with `error: true` from inside a choose branch so the
+    # error propagates to the calling automation and the managed-departure
+    # helpers are never written. Those return nothing, so scoping is moot.
     block = _script_block("tesla_set_precondition_schedule_time")
     lines = block.splitlines()
 
-    stop_lines = [line for line in lines if line.strip().startswith("- stop:")]
+    stop_lines = [
+        (index, line)
+        for index, line in enumerate(lines)
+        if line.strip().startswith("- stop:")
+    ]
     assert stop_lines, "script never returns a response"
-    for line in stop_lines:
+
+    def _is_error_stop(index: int) -> bool:
+        for following in lines[index + 1 :]:
+            if not following.strip():
+                continue
+            return following.strip() == "error: true"
+        return False
+
+    response_stops = [
+        line for index, line in stop_lines if not _is_error_stop(index)
+    ]
+    assert response_stops, "script has no response-returning stop"
+    for line in response_stops:
         assert line.startswith("      - stop:"), f"stop is not a top-level step: {line!r}"
 
 
