@@ -3,8 +3,29 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 
 TIKI_TIME_PATH = Path(__file__).resolve().parents[1] / "packages" / "tiki_time.yaml"
+ROOM_INTENT_PATH = Path(__file__).resolve().parents[1] / "docs" / "room_intent.yaml"
+
+
+def test_tiki_time_remains_available_during_guest_mode_as_explicit_override() -> None:
+    package = yaml.safe_load(TIKI_TIME_PATH.read_text(encoding="utf-8"))
+    sequence = package["script"]["tiki_time"]["sequence"]
+    assert sequence[0]["action"] == "logbook.log"
+    assert "input_boolean.guest_mode" not in TIKI_TIME_PATH.read_text(encoding="utf-8")
+
+    room_intent = yaml.safe_load(ROOM_INTENT_PATH.read_text(encoding="utf-8"))
+    guest_policy = next(
+        policy
+        for policy in room_intent["global_policies"]
+        if policy["id"] == "broad_guest_mode_controls_intrusive_automation"
+    )
+    assert any(
+        "Tiki Time" in implication and "guest mode" in implication
+        for implication in guest_policy["automation_implications"]
+    )
 
 
 def _script_block(script_id: str) -> str:
