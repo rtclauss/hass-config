@@ -238,7 +238,12 @@ def test_local_trip_threshold_helper_gates_candidacy() -> None:
 
     assert "tesla_local_trip_threshold_mi:" in text
     assert "name: Tesla Local Trip Threshold" in text
-    assert "initial: 10" in text
+    helper = text.split("  tesla_local_trip_threshold_mi:\n", 1)[1].split("  tesla_degraded_travel_min:", 1)[0]
+    keys = [line.strip() for line in helper.splitlines() if not line.strip().startswith("#")]
+    assert not any(line.startswith("initial:") for line in keys)
+    # Zero is a valid deliberate threshold; preserve the full adjustable range.
+    assert "min: 0" in keys
+    assert "max: 50" in keys
     assert "unit_of_measurement: mi" in text
     assert (
         "states('input_number.tesla_local_trip_threshold_mi') | float(default=10)"
