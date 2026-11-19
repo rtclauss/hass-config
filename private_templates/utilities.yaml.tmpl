@@ -155,55 +155,6 @@ alarm_control_panel: []
 ## Automation
 ########################
 automation:
-  - alias: restart_water_meter
-    id: restart_water_meter
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: time_pattern
-        hours: "/1"
-    condition: []
-    action:
-      - action: switch.turn_off
-        target:
-          entity_id: switch.basement_water_meter_plug
-      - delay:
-          seconds: 20
-      - action: switch.turn_on
-        target:
-          entity_id: switch.basement_water_meter_plug
-
-        # in the wintertime the humidifier causes the meter to think there is a leak, throwing up a persistent error message that we need
-        # to get past.
-  - alias: trigger_winter_watermeter_flow
-    id: trigger_winter_watermeter_flow
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: time_pattern
-        minutes: "/23"
-    condition:
-      - alias: "winter month"
-        condition: template
-        value_template: "{{now().month in [1,2,10,11,12]}}"
-    action:
-      - action: rest_command.turn_off_watermeter_light
-      - delay:
-          seconds: 1
-      - action: rest_command.turn_on_watermeter_light
-      - delay:
-          seconds: 2
-      - action: rest_command.turn_off_watermeter_light
-      - delay:
-          seconds: 3
-      - action: rest_command.turn_on_watermeter_light
-      - delay:
-          seconds: 3
-      - action: rest_command.trigger_flow_watermeter_light
-      - delay:
-          minutes: 4
-      - action: rest_command.turn_off_watermeter_light
-
   - alias: check_non_responding_entities
     id: check_non_responding_entities
     trace:
@@ -1087,16 +1038,7 @@ plant: {}
 ########################
 # REST Command
 ########################
-rest_command:
-  turn_on_watermeter_light:
-    url: !secret private_watermeter_light_on_url
-    method: GET
-  turn_off_watermeter_light:
-    url: !secret private_watermeter_light_off_url
-    method: GET
-  trigger_flow_watermeter_light:
-    url: !secret private_watermeter_flow_start_url
-    method: GET
+rest_command: {}
 
 ########################
 # REST
@@ -1504,29 +1446,6 @@ utility_meter:
   weekly_vehicle_mileage:
     source: sensor.@@PRIVATE:vehicle_entity_slug@@_odometer
     cycle: weekly
-  # hourly_water:
-  #   source: sensor.watermeter_value
-  #   name: Hourly Water Usage
-  #   cycle: hourly
-  # daily_water:
-  #   source: sensor.watermeter_value
-  #   name: Daily Water Usage
-  #   cycle: daily
-  # weekly_water:
-  #   source: sensor.watermeter_value
-  #   name: Weekly Water Usage
-  #   cycle: weekly
-  # monthly_water:
-  #   source: sensor.watermeter_value
-  #   name: Monthly Water Usage
-  #   cycle: monthly
-  # quarterly_water:
-  #   source: sensor.watermeter_value
-  #   name: Quarterly Water Usage
-  #   cycle: quarterly
-  #   tariffs:
-  #     - under_15k_gal
-  #     - between_16k_30K_gal
 
 ########################
 # Weather
