@@ -146,5 +146,10 @@ def test_whole_house_shutdown_includes_bulbs_even_when_wall_switch_reports_off()
     lights += [SimpleNamespace(entity_id="light.hall_stairway", state="off")]
     lights += [SimpleNamespace(entity_id="light.outside_front_hue", state="on")]
     template = Environment().from_string(script["variables"]["all_other_lights"])
-    result = template.render(states=SimpleNamespace(light=lights), protected_lights=["light.outside_front_hue"])
+    result = template.render(
+        states=SimpleNamespace(light=lights),
+        protected_lights=["light.outside_front_hue"],
+        integration_entities=lambda integration: [],
+        state_attr=lambda entity, attribute: None,
+    )
     assert {entity.strip() for entity in result.split(",")} == set(bulbs)
