@@ -72,8 +72,8 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         "manual_control: true",
         "manual_control: false",
         "transition: 2",
-        "transition: 180",
-        "seconds: 180",
+        "transition: 300",
+        "seconds: 300",
         "seconds: 175",
         "cover.owner_suite_blinds_ha",
         "position: \"{{ repeat.index * 2 }}\"",
@@ -87,10 +87,10 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         assert token in block
 
     daytime_apply = block.split(
-        'alias: "Apply the daytime adaptive target to the owner suite lamps over three minutes"',
+        'alias: "Apply the daytime adaptive target to the owner suite lamps over five minutes"',
         maxsplit=1,
     )[1].split(
-        'alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"',
+        'alias: "Ramp the bed strip to its capped adaptive daytime target over five minutes"',
         maxsplit=1,
     )[0]
     assert "light.owner_suite_lamps" in daytime_apply
@@ -106,7 +106,7 @@ def test_wake_up_script_uses_shared_owner_suite_morning_transition() -> None:
 
     assert "script.owner_suite_morning_transition" in block
     assert "cover.owner_suite_blinds_ha" not in block
-    assert "transition: 180" not in block
+    assert "transition: 300" not in block
 
 
 def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> None:
