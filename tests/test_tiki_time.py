@@ -3,29 +3,29 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 import yaml
 
 
 TIKI_TIME_PATH = Path(__file__).resolve().parents[1] / "packages" / "tiki_time.yaml"
+ROOM_INTENT_PATH = Path(__file__).resolve().parents[1] / "docs" / "room_intent.yaml"
 
 
-@pytest.mark.parametrize("guest_state", ["on", "unknown", "unavailable", None, "off"])
-def test_tiki_time_guest_guard_precedes_every_side_effect(guest_state: str | None) -> None:
+def test_tiki_time_remains_available_during_guest_mode_as_explicit_override() -> None:
     package = yaml.safe_load(TIKI_TIME_PATH.read_text(encoding="utf-8"))
     sequence = package["script"]["tiki_time"]["sequence"]
-    guard = sequence[0]
+    assert sequence[0]["action"] == "logbook.log"
+    assert "input_boolean.guest_mode" not in TIKI_TIME_PATH.read_text(encoding="utf-8")
 
-    # HA's native state condition halts the sequence unless the helper is off.
-    assert guard["condition"] == "state"
-    assert guard["entity_id"] == "input_boolean.guest_mode"
-    assert guard["state"] == "off"
-    assert "guest privacy" in guard["alias"]
-    assert "action" not in guard
-    reached_actions = sequence[1:] if guest_state == guard["state"] else []
-    assert bool(reached_actions) is (guest_state == "off")
-    if reached_actions:
-        assert reached_actions[0]["action"] == "logbook.log"
+    room_intent = yaml.safe_load(ROOM_INTENT_PATH.read_text(encoding="utf-8"))
+    guest_policy = next(
+        policy
+        for policy in room_intent["global_policies"]
+        if policy["id"] == "broad_guest_mode_controls_intrusive_automation"
+    )
+    assert any(
+        "Tiki Time" in implication and "guest mode" in implication
+        for implication in guest_policy["automation_implications"]
+    )
 
 
 def _script_block(script_id: str) -> str:
