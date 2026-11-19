@@ -63,7 +63,7 @@ def test_wake_ramp_keeps_manual_control_locked_across_sleep_mode_change() -> Non
         lambda step: step.get("action") == "switch.turn_off"
         and step["data"]["entity_id"] == ["switch.sleep_mode"],
     )
-    ramp_delay = _index(steps, lambda step: step.get("delay") == {"seconds": 180})
+    ramp_delay = _index(steps, lambda step: step.get("delay") == {"seconds": 300})
 
     for switch in OWNER_SUITE_SWITCHES:
         lock = _index(steps, _lock(switch, True))

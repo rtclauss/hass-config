@@ -840,7 +840,7 @@ script:
           seconds: 1
       - parallel:
           - sequence:
-              - alias: "Lock adaptive lighting manual control to protect the 3-minute wake ramp"
+              - alias: "Lock adaptive lighting manual control to protect the 5-minute wake ramp"
                 continue_on_error: true
                 action: adaptive_lighting.set_manual_control
                 data:
@@ -848,7 +848,7 @@ script:
                   lights:
                     - light.owner_suite_lamps
                   manual_control: true
-              - alias: "Lock bed strip manual control to protect the 3-minute wake ramp"
+              - alias: "Lock bed strip manual control to protect the 5-minute wake ramp"
                 continue_on_error: true
                 action: adaptive_lighting.set_manual_control
                 data:
@@ -858,7 +858,7 @@ script:
                   manual_control: true
               # Turning sleep mode off makes Adaptive Lighting clear manual
               # control and force a 2s sleep_transition jump to the daytime
-              # target before the 180s apply below lands (issue #1210). Keep
+              # target before the 300s apply below lands (issue #1210). Keep
               # the locks across the sleep-mode change for the ramp's duration.
               - alias: "Keep owner suite manual control across the sleep-mode change"
                 continue_on_error: true
@@ -880,7 +880,7 @@ script:
                 data:
                   entity_id:
                     - switch.sleep_mode
-              - alias: "Apply the daytime adaptive target to the owner suite lamps over three minutes"
+              - alias: "Apply the daytime adaptive target to the owner suite lamps over five minutes"
                 continue_on_error: true
                 action: adaptive_lighting.apply
                 data:
@@ -890,11 +890,11 @@ script:
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: true
-                  transition: 180
+                  transition: 300
               # The bed strip switch's max_brightness is the automatic cap, so
               # its daytime target is already the lower of the room target and
               # the cap.
-              - alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"
+              - alias: "Ramp the bed strip to its capped adaptive daytime target over five minutes"
                 continue_on_error: true
                 action: adaptive_lighting.apply
                 data:
@@ -904,10 +904,10 @@ script:
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: true
-                  transition: 180
+                  transition: 300
               - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
                 delay:
-                  seconds: 180
+                  seconds: 300
               - alias: "Restore owner suite manual-control reset on sleep-mode change"
                 continue_on_error: true
                 action: adaptive_lighting.change_switch_settings
