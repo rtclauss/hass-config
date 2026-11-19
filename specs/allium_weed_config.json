@@ -1118,6 +1118,54 @@
       ],
       "classification": "retired private endpoint removal",
       "reason": "Retires the camera-based watermeter, replaced by the RTL-SDR water meter reader. Removes the disabled restart_water_meter automation, the failing trigger_winter_watermeter_flow automation, the three rest_command entries whose URLs resolved from !secret private_watermeter_* keys, and commented-out utility_meter blocks for sensor.watermeter_value, plus the matching synthetic keys in travis_secrets.example.yaml and the obsolete test_watermeter_endpoints_are_private regression test. No private value moves into public config; no @@PRIVATE markers, mapping keys, manifest entries, renderer targets, rendered-output handling, or ignore rules change. The live secrets.yaml keys are removed on the host after a byte-verified backup. specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*- alias: \"Lock adaptive lighting manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock adaptive lighting manual control to protect the 5-minute wake ramp\"",
+        "-*- alias: \"Lock bed strip manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock bed strip manual control to protect the 5-minute wake ramp\"",
+        "-*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# target before the 300s apply below lands (issue #1210). Keep",
+        "-*- alias: \"Apply the daytime adaptive target to the owner suite lamps over three minutes\"",
+        "+*- alias: \"Apply the daytime adaptive target to the owner suite lamps over five minutes\"",
+        "-*transition: 180",
+        "+*transition: 300",
+        "-*- alias: \"Ramp the bed strip to its capped adaptive daytime target over three minutes\"",
+        "+*- alias: \"Ramp the bed strip to its capped adaptive daytime target over five minutes\"",
+        "-*seconds: 180",
+        "+*seconds: 300"
+      ],
+      "classification": "non-diffuser wake-ramp change",
+      "reason": "Issue #1217 (https://github.com/rtclauss/hass-config/issues/1217): the owner-approved wake light fade goes from 3 to 5 minutes (morning_light_ramp_duration in specs/alarm_wakeup.allium is updated in the same change). Only the owner-suite lamp/bed-strip transition and manual-control hold change; diffuser sleep/wake participation, afternoon fallback, and oil-replacement reminders are unchanged. specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*- alias: \"Lock adaptive lighting manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock adaptive lighting manual control to protect the 5-minute wake ramp\"",
+        "-*- alias: \"Lock bed strip manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock bed strip manual control to protect the 5-minute wake ramp\"",
+        "-*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# target before the 300s apply below lands (issue #1210). Keep",
+        "-*- alias: \"Apply the daytime adaptive target to the owner suite lamps over three minutes\"",
+        "+*- alias: \"Apply the daytime adaptive target to the owner suite lamps over five minutes\"",
+        "-*transition: 180",
+        "+*transition: 300",
+        "-*- alias: \"Ramp the bed strip to its capped adaptive daytime target over three minutes\"",
+        "+*- alias: \"Ramp the bed strip to its capped adaptive daytime target over five minutes\"",
+        "-*seconds: 180",
+        "+*seconds: 300"
+      ],
+      "classification": "non-privacy behavior change",
+      "reason": "Issue #1217 (https://github.com/rtclauss/hass-config/issues/1217): wake light fade duration change only. No @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }
