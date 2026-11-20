@@ -21,7 +21,16 @@ device can require a new action even when the total count stays the same.
 - Startup synchronization and unavailable monitor recovery do not replay pushes.
 - An empty affected set clears the local notice and the existing mobile tag.
 - Routine sump runtime and weekly energy reports update one local notice each.
-- Sump high-water, leak, alarm, and severe-weather alert behavior is preserved.
+- Sump high-water, leak, alarm, and severe-weather alerts still push. A leak
+  sensor that dries silently replaces its own wet alert (same per-sensor tag,
+  iOS `passive`, Android `alert_once`), so the record stays without a new
+  interruption.
+- Sump high-water alerts link to the level only. They do not link to the pump
+  switch, whose dialog would put an off toggle one tap away during a flood.
+- Open-window rain warnings name the open windows when the
+  `binary_sensor.any_window_open` `open_windows` attribute lists them.
+- The laundry reminder opens the machine its message is about (the washer
+  when both loads wait).
 - Task notifications for leaks, alarms, sump high water, garage, batteries,
   offline devices, laundry, open-window rain risks, and salt have useful buttons
   and tap destinations. Both `url` (Apple) and `clickAction` (Android) are supplied.
@@ -29,7 +38,11 @@ device can require a new action even when the total count stays the same.
   event or pretending physical work has been completed. Existing task handlers
   such as delivery retrieval, salt purchase, and diffuser replacement stay intact.
 - Playlist selection goes to the logbook instead of a phone push. Blind
-  forensics retain the logbook and traces without accumulating persistent notices.
+  forensics log every move with its context. Only an open with neither a parent
+  nor a user context (the issue #781 signature) keeps one overwriting Home
+  Assistant notice, `blind_forensics_unattributed_open`, and never a phone push.
+  A physical remote press can match that signature too, so check the logbook
+  context before treating a notice as the culprit.
 
 The [audit](notification_audit.md) classifies the remaining sources and records
 runtime gaps, current task relevance, and follow-up work. Navigation uses the

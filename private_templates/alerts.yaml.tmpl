@@ -129,6 +129,7 @@ automation:
                   message: >-
                     {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} is wet.
                   data:
+                    tag: "wet-floor-{{ trigger.from_state.entity_id }}"
                     url: "/?more-info-entity-id=switch.basement_water_shutoff"
                     clickAction: "/?more-info-entity-id=switch.basement_water_shutoff"
                     actions:
@@ -153,6 +154,13 @@ automation:
                 data:
                   message: >-
                     {{ ((device_name(trigger.from_state.entity_id) ~ ' ') if device_name(trigger.from_state.entity_id) else '') ~ (entity_name(trigger.from_state.entity_id) | default(trigger.from_state.entity_id, true)) }} has dried.
+                  # Recovery silently replaces that sensor's wet alert (same
+                  # tag) so the record stays visible without a new interruption.
+                  data:
+                    tag: "wet-floor-{{ trigger.from_state.entity_id }}"
+                    alert_once: true
+                    push:
+                      interruption-level: passive
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip

@@ -1141,7 +1141,7 @@
         "private_templates/weather.yaml.tmpl"
       ],
       "classification": "task-focused notifications and navigation",
-      "reason": "Owner requested action-only notifications plus useful controls. Adds same-server entity/detail links, keeps routine reports local, and logs playlist diagnostics. No private mapping keys, manifest targets, renderer behavior, or private output ownership change; existing private markers remain private. Deployment preserves and checks live inputs before rendering selected outputs with the installation mapping. Alarm, wake, night, and device-control behavior are unchanged.",
+      "reason": "Owner requested action-only notifications plus useful controls. Adds same-server entity/detail links, keeps routine reports local, logs playlist diagnostics, names open windows in rain warnings, and silently replaces a sensor's wet alert when it dries. No pump-switch link is offered from high-water alerts. No private mapping keys, manifest targets, renderer behavior, or private output ownership change; existing private markers remain private. Deployment preserves and checks live inputs before rendering selected outputs with the installation mapping. Alarm, wake, night, and device-control behavior are unchanged.",
       "allowed_changed_line_patterns": [
         "+                  data:",
         "+                    url: \"/?more-info-entity-id=switch.basement_water_shutoff\"",
@@ -1179,8 +1179,6 @@
         "+            clickAction: \"/?more-info-entity-id=sensor.sump_fill\"",
         "+                title: Sump level",
         "+                uri: \"/?more-info-entity-id=sensor.sump_fill\"",
-        "+                title: Pump controls",
-        "+                uri: \"/?more-info-entity-id=switch.basement_sump_pump\"",
         "+          data: *sump_attention_controls",
         "-    description: Notify number of times the sump pump runs",
         "+    description: Keep routine sump activity in Home Assistant; high-water warnings still push.",
@@ -1197,7 +1195,26 @@
         "+            actions: &window_attention_buttons",
         "+                title: Open windows",
         "+                uri: \"/?more-info-entity-id=binary_sensor.any_window_open\"",
-        "+            actions: *window_attention_buttons"
+        "+            actions: *window_attention_buttons",
+        "+                    tag: \"wet-floor-{{ trigger.from_state.entity_id }}\"",
+        "+                  # Recovery silently replaces that sensor's wet alert (same",
+        "+                  # tag) so the record stays visible without a new interruption.",
+        "+                    alert_once: true",
+        "+                    push:",
+        "+                      interruption-level: passive",
+        "+            # No pump-switch link: its dialog puts an off toggle one tap away",
+        "+            # during a high-water alert.",
+        "-            rain is likely in the next 12 hours. Close the windows before you go.",
+        "+            {% set open_windows = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}",
+        "+            rain is likely in the next 12 hours. Close",
+        "+            {{ ('these windows before you go: ' ~ open_windows ~ '.') if open_windows else 'the windows before you go.' }}",
+        "-          message: \"Rain is likely in the next 15 minutes and a window is open. Close the windows.\"",
+        "+          message: >-",
+        "+            {% if open_windows %}",
+        "+              Rain is likely in the next 15 minutes and these windows are open: {{ open_windows }}. Close them.",
+        "+            {% else %}",
+        "+              Rain is likely in the next 15 minutes and a window is open. Close the windows.",
+        "+            {% endif %}"
       ]
     }
   ]

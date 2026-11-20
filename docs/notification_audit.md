@@ -46,8 +46,8 @@ transport housekeeping, not debug alerts to remove.
 | Notification family and source | Classification | When it merits attention | Existing affordance / gap |
 | --- | --- | --- | --- |
 | Tornado warning (`weather`) | 1 | Active relevant warning | Already has critical sound and shelter instruction; preserve it |
-| Wet floor (`alerts`) | 1 | Active leak | Add water controls and sensor details; dry/recovered is a local incident update |
-| Sump getting full / full (`utilities`) | 1 | Valid high-water reading | Add pump/level links; fix missing monitoring before claiming coverage |
+| Wet floor (`alerts`) | 1 | Active leak | Water controls and sensor details added; drying silently replaces that sensor's wet alert |
+| Sump getting full / full (`utilities`) | 1 | Valid high-water reading | Level link added (no pump-switch toggle one tap from a flood alert); fix missing monitoring before claiming coverage |
 | Away activity / triggered alarm (`alerts`) | 1 | Armed-away security incident | Add alarm controls; consolidate the activity/alarm/camera copies into one incident later |
 | Garage left open (`car`, `trips`) | 2, potentially 1 by context | Door remains open when it should be secured | Trip flow already offers Close / Ignore; ordinary reminder needs garage controls |
 | Departure / goodnight integrity (`zone`, `house_mode`) | 2 | A requirement is still wrong after verification/retry | Real exceptions already consolidated; needs links to the specific failed controls |
@@ -61,7 +61,7 @@ transport housekeeping, not debug alerts to remove.
 | Energy anomaly (`utilities`) | 2 or 3 | Unexpected load persists and needs investigation | Identify likely load / link to energy; normal automatic loads must not produce tasks |
 | Battery below 10% (`batteries`) | 3, higher for a critical sensor | A device needs charging or replacement | Newly affected devices only; add details button; distinguish a phone from a replaceable battery |
 | Battery reading unavailable (`batteries`) | 2 or 3 by device function | A sustained outage needs investigation | Unavailable does not prove dead battery; group correlated outages and provide device details |
-| Washer waiting / musty, dryer waiting (`cleaning`) | 3 | Load still needs unloading and owner can act | Add status links; retain actual door/state completion detection, not a pretend Done button |
+| Washer waiting / musty, dryer waiting (`cleaning`) | 3 | Load still needs unloading and owner can act | Status links added (tap opens the machine named); retain actual door/state completion detection, not a pretend Done button |
 | Delivered mail/packages (`mail_packages`) | 3 | Delivery remains uncollected and owner can retrieve it | Already has Retrieved / Still outside; avoid duplicate mailbox/tracker notices and reminders while away |
 | Garbage / changed pickup (`utilities`) | 3 | Bins need setting out or the schedule changes tonight's task | Keep the task-specific reminder; later add completion tracking if a reliable signal is available |
 | Salt low / forecast low (`water_softener`) | 3 | Refill is actually due, or purchase opportunity is useful | Existing cleaning link; add level button; merge forecast and actual-low into one task lifecycle |
@@ -76,7 +76,7 @@ transport housekeeping, not debug alerts to remove.
 | Vacuum MQTT reload / CleanGenius restore exhausted (`zigbee_zwave`, `xiaomi_robot_vacuum`) | 3 | Repair remains necessary before next needed run | Currently local notices; link to robot/integration and notify once if intervention is needed |
 | Guest mode / startup trip confirmation (`guest`, `trips`) | 3 | Context is genuinely ambiguous and a decision is pending | Existing Yes/No and Enable/Disable buttons; remove prompts once context is resolved |
 | Windows open / climate paused (`climate`) | 3 | Open windows conflict with active climate, or climate needs resuming | Existing Pause/Resume/Ignore controls; respect Ignore/Keep paused and suppress irrelevant follow-ups |
-| Open windows with imminent rain (`weather`) | 2 or 3 | A window is actually open and rain matters now | Add open-window details; merge pressure/forecast/departure signals into one incident |
+| Open windows with imminent rain (`weather`) | 2 or 3 | A window is actually open and rain matters now | Messages name the open windows; merge pressure/forecast/departure signals into one incident later |
 | General weather / legacy NWS push (`weather`) | 2, 3, or 4 by event | A relevant alert requires a specific protective task | Dedicated tornado path exists; generic and legacy paths still need event-ID/severity deduplication |
 | Z2M device removal results (`z2m_lifecycle`) | 3 for requested operation | Removal failed, or inventory reconciliation is pending | Link to the administrative task; ordinary removal progress stays local |
 | Unexpected authentication failures (HA integration notice) | 2 if repeated/unrecognized | Access investigation is needed | A single stale client's failure is troubleshooting context; do not treat all failures alike |
@@ -104,7 +104,7 @@ when its condition is false or already handled:
 
 | Source | Examples | Disposition |
 | --- | --- | --- |
-| `blind_forensics` | Blind movement context IDs, positions, per-context persistent notices | Debug; keep logs/traces, stop accumulating user notices. Runtime watcher is enabled |
+| `blind_forensics` | Blind movement context IDs, positions, per-context persistent notices | Debug; keep logs/traces. Only an unattributed open (#781 signature) keeps one overwriting notice. Runtime watcher is enabled |
 | `media_player` | Playlist selection pushes the internal `script.bedroom_playlist_*` name | Debug; log the selection. Runtime automation is enabled |
 | `water_softener` | `temp_notify_place_name` place/category dump | Debug; its only trigger is already disabled even though the automation entity is on |
 | `parasoll_fix` | Reconfiguring, applied, configure queued | Debug/progress; only a sustained configuration failure needs a task |

@@ -436,7 +436,9 @@ automation:
             {% else %}
               You're leaving the neighborhood and
             {% endif %}
-            rain is likely in the next 12 hours. Close the windows before you go.
+            {% set open_windows = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}
+            rain is likely in the next 12 hours. Close
+            {{ ('these windows before you go: ' ~ open_windows ~ '.') if open_windows else 'the windows before you go.' }}
           data:
             tag: window-rain-departure
             url: "/?more-info-entity-id=binary_sensor.any_window_open"
@@ -483,7 +485,13 @@ automation:
       - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Rain warning"
-          message: "Rain is likely in the next 15 minutes and a window is open. Close the windows."
+          message: >-
+            {% set open_windows = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}
+            {% if open_windows %}
+              Rain is likely in the next 15 minutes and these windows are open: {{ open_windows }}. Close them.
+            {% else %}
+              Rain is likely in the next 15 minutes and a window is open. Close the windows.
+            {% endif %}
           data:
             tag: window-rain-home
             url: "/?more-info-entity-id=binary_sensor.any_window_open"

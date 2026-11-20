@@ -145,17 +145,106 @@ def test_attention_alerts_have_cross_platform_links_and_uri_buttons(package, aut
                 button["uri"]
             ).render(trigger={"from_state": {"entity_id": "binary_sensor.example_leak"}})
             assert re.fullmatch(r"/\?more-info-entity-id=[a-z_]+\.[a-z0-9_]+", rendered)
+            assert "switch.basement_sump_pump" not in rendered  # No one-tap pump off.
 
 
-def test_blind_diagnostics_keep_evidence_without_user_notifications():
+@pytest.mark.parametrize(
+    "pending_loads,entity_id",
+    [("washer", "input_select.washer_state"), ("both", "input_select.washer_state"),
+     ("dryer", "input_select.dryer_state")],
+)
+def test_laundry_tap_opens_the_machine_the_message_is_about(pending_loads, entity_id):
+    automation = next(
+        a for a in _load_package("cleaning")["automation"]
+        if a["id"] == "laundry_room_entry_reminder"
+    )
+    push, = [a for a in _walk_actions(automation) if a["action"] == "notify.all"]
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    for key in ["url", "clickAction"]:
+        rendered = env.from_string(push["data"]["data"][key]).render(pending_loads=pending_loads)
+        assert rendered == f"/?more-info-entity-id={entity_id}"
+
+
+def test_leak_recovery_silently_replaces_the_same_sensor_alert():
+    automation = next(
+        a for a in _load_package("alerts")["automation"] if a["id"] == "water_leak_detected"
+    )
+    wet, dry = [a for a in _walk_actions(automation) if a["action"] == "notify.all"]
+    assert wet["data"]["data"]["tag"] == dry["data"]["data"]["tag"]
+    assert "trigger.from_state.entity_id" in wet["data"]["data"]["tag"]
+    assert dry["data"]["data"]["push"] == {"interruption-level": "passive"}
+    assert dry["data"]["data"]["alert_once"] is True
+    assert "interruption-level" not in str(wet["data"]["data"])  # Wet still alerts.
+
+
+@pytest.mark.parametrize(
+    "automation_id,trigger",
+    [
+        ("window_open_departure_rain_warning", {"id": "leave_home"}),
+        ("window_open_home_rain_warning", {"id": "rain_soon"}),
+    ],
+)
+@pytest.mark.parametrize("open_windows", ["Office Window, Den Window", ""])
+def test_rain_warnings_name_the_open_windows(automation_id, trigger, open_windows):
+    automation = next(
+        a for a in _load_package("weather")["automation"] if a["id"] == automation_id
+    )
+    push, = [
+        a for a in _walk_actions(automation)
+        if a.get("data", {}).get("title") == "Rain warning"
+    ]
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    message = " ".join(env.from_string(push["data"]["message"]).render(
+        trigger=trigger,
+        state_attr=lambda entity_id, attribute: open_windows,
+    ).split())
+    if open_windows:
+        assert f"these windows {'before you go: ' if 'departure' in automation_id else 'are open: '}{open_windows}" in message
+    else:
+        assert "Close the windows" in message
+
+
+def _blind_trigger(state, parent_id=None, user_id=None):
+    return {
+        "entity_id": "cover.owner_suite_north_blind",
+        "from_state": {"state": "closed", "attributes": {"current_position": 0}},
+        "to_state": {
+            "state": state,
+            "name": "North blind",
+            "attributes": {"current_position": 80},
+            "context": {"id": "ctx", "parent_id": parent_id, "user_id": user_id},
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "trigger,expected",
+    [
+        (_blind_trigger("open"), True),
+        (_blind_trigger("opening"), True),
+        (_blind_trigger("closed"), False),
+        (_blind_trigger("open", parent_id="automation_ctx"), False),
+        (_blind_trigger("open", user_id="owner"), False),
+    ],
+)
+def test_blind_diagnostics_log_everything_and_flag_only_unattributed_opens(trigger, expected):
     automation, = _load_package("blind_forensics")["automation"]
     assert automation["trace"]["stored_traces"] == 50
-    assert [a["action"] for a in automation["actions"]] == ["logbook.log"]
-    assert "trigger.to_state.context.id" in automation["actions"][0]["data"]["message"]
+    log, flag = automation["actions"]
+    assert log["action"] == "logbook.log"
+    assert "trigger.to_state.context.id" in log["data"]["message"]
+    condition, = flag["if"]
+    rendered = jinja2.Environment().from_string(condition["value_template"]).render(trigger=trigger)
+    assert rendered.strip() == str(expected)
+    notice, = flag["then"]
+    assert notice["action"] == "persistent_notification.create"
+    # One overwriting notice, never a growing pile and never a phone push.
+    assert notice["data"]["notification_id"] == "blind_forensics_unattributed_open"
+    assert "notify." not in str(automation["actions"])
 
 
 def test_local_persistent_notices_do_not_receive_mobile_only_data():
-    for name in ["alerts", "batteries", "utilities"]:
+    for name in ["alerts", "batteries", "blind_forensics", "utilities"]:
         for action in _walk_actions(_load_package(name)):
             if action["action"] == "persistent_notification.create":
                 assert set(action["data"]) <= {"title", "message", "notification_id"}
