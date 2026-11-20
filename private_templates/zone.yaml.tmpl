@@ -234,6 +234,10 @@ automation:
         entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "on"
         to: "off"
+        # Arrival handoff in #1215 stayed off for 36 seconds. The first away
+        # transition is immediate; its 10-second delay only protects retries.
+        # Debounce here so every Bayesian departure consumer is protected.
+        for: "00:01:00"
     action:
       - event: @@PRIVATE:presence_person_slug@@_departure
         event_data:

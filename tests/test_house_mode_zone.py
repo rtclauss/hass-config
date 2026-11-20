@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 
 HOUSE_MODE_PATH = Path(__file__).resolve().parents[1] / "packages" / "house_mode.yaml"
 ZONE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zone.yaml"
@@ -357,6 +359,26 @@ def test_presence_event_emitters_own_shared_arrival_and_departure_triggers() -> 
     assert "id: bayesian_presence_off" in departure_emitter
     assert f"event: {PRESENCE_SLUG}_departure" in departure_emitter
     assert "source_trigger: \"{{ trigger.id }}\"" in departure_emitter
+
+
+def test_bayesian_departure_requires_sustained_absence_before_emitting() -> None:
+    departure = yaml.safe_load(_automation_block(ZONE_PATH, f"{PRESENCE_SLUG}_departure_emitter"))
+    if isinstance(departure, list):
+        departure = departure[0]
+    triggers = {item["id"]: item for item in departure["trigger"]}
+    assert triggers["bayesian_presence_off"] == {
+        "trigger": "state",
+        "id": "bayesian_presence_off",
+        "entity_id": f"binary_sensor.bayesian_{PRESENCE_SLUG}_home",
+        "from": "on",
+        "to": "off",
+        "for": "00:01:00",
+    }
+    # The observed 36-second arrival handoff must expire before departure.
+    assert "for" not in triggers["tracker_left_home"]
+    assert departure["action"][0]["event"] == f"{PRESENCE_SLUG}_departure"
+    arrival = _automation_block(ZONE_PATH, f"{PRESENCE_SLUG}_arrival_emitter")
+    assert "for:" not in arrival
 
 
 def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
