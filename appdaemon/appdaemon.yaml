@@ -1,8 +1,7 @@
-# THIS FILE HAS MOVED UNDER /addon_configs/a0d7b954_appdaemon
-# MAKE FURTHER CHANGES THERE
+# Repo mirror of the live AppDaemon add-on config (/addon_configs/a0d7b954_appdaemon,
+# mounted as /config in the add-on). See docs/appdaemon_sync.md.
 
 secrets: /homeassistant/secrets.yaml
-app_dir: /homeassistant/appdaemon/apps/
 #log:
 #  logfile: /config/logs/appdaemon.log
 #  errorfile: /config/logs/appdaemon_error.log
@@ -16,6 +15,13 @@ logs:
   #   filename: /homeassistant/logs/chatgpt_bed_occupancy.log
   #   log_level: DEBUG
 appdaemon:
+  # app_dir belongs under `appdaemon:` (AppDaemon 4.5). It used to sit at the top
+  # level pointing at /homeassistant/appdaemon/apps/, where AppDaemon ignored it
+  # and fell back to /config/apps (#1223). /config/apps is the add-on tree that
+  # appdaemon_sync.py pushes to and that holds the rendered apps.yaml, so pin it
+  # explicitly. The git-pulled /homeassistant/appdaemon/apps/ has no rendered
+  # apps.yaml and must not be selected.
+  app_dir: /config/apps
   latitude: !secret home_latitude
   longitude: !secret home_longitude
   elevation: !secret home_elevation

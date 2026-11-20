@@ -185,9 +185,11 @@ automation:
       - condition: state
         entity_id: input_boolean.wakeup_alarm_firing
         state: "on"
+      # Canonical presence, not the derived GPS tracker: a stale tracker must not
+      # block snooze while the bayesian sensor knows we are home (#1223).
       - condition: state
-        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-        state: "home"
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+        state: "on"
       - condition: state
         entity_id: input_boolean.master_bed_occupancy
         state: "on"
@@ -230,9 +232,13 @@ automation:
     condition:
       condition: and
       conditions:
+        # Canonical presence, not the derived GPS tracker: the tracker can sit at
+        # not_home after an AppDaemon startup failure while the bayesian sensor is
+        # correctly on, which silently skipped every alarm (#1223). The fused
+        # tracker stays the source for GPS/zone consumers.
         - condition: state
-          entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-          state: "home"
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+          state: "on"
         - condition: state
           entity_id: binary_sensor.planned_vacation_calendar
           state: "off"
