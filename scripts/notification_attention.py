@@ -47,7 +47,9 @@ def add_recipient_attention(
         "clear_notification", "request_location_update",
     } or original_message.startswith("command_"):
         raise ValueError("Original action must be an alert, not a mobile command")
-    actions.insert(0, {"action": recipient_service, "continue_on_error": True,
+    # Conditions, waits, variables, and earlier operations must gate both routes.
+    position = actions.index(notifications[0])
+    actions.insert(position, {"action": recipient_service, "continue_on_error": True,
         "data": {"title": title, "message": message, "data": {
             "tag": tag, "url": buttons[0]["uri"], "clickAction": buttons[0]["uri"],
             "actions": buttons}}})

@@ -60,3 +60,26 @@ def test_mobile_commands_are_never_reissued_as_attention_alerts(message):
 def test_unknown_or_ambiguous_structure_fails_closed(actions):
     with pytest.raises(ValueError):
         _add({"actions": actions})
+
+
+@pytest.mark.parametrize("prefix", [
+    [{"condition": "template", "value_template": "{{ false }}"}],
+    [{"delay": "00:05:00"}],
+    [{"variables": {"detail": "Check the power supply"}}],
+    [{"condition": "template", "value_template": "{{ false }}"},
+     {"delay": "00:05:00"}, {"variables": {"detail": "Check the power supply"}}],
+])
+def test_preceding_conditions_delays_and_variables_gate_the_new_route(prefix):
+    original_alert = {"action": "notify.all", "data": {"message": "{{ detail }}"}}
+    following = {"action": "logbook.log", "data": {"name": "Evidence", "message": "Saved"}}
+    config = {"variables": {"detail": "Check the appliance"},
+              "actions": [*prefix, original_alert, following]}
+    original = deepcopy(config)
+    result = _add(config, message="{{ detail }}")
+    # A false action condition still stops HA before either notification; a delay
+    # or variable initialization likewise remains before the owner's new route.
+    assert result["actions"][:len(prefix)] == prefix
+    assert result["actions"][len(prefix)]["action"] == OWNER
+    assert result["actions"][len(prefix)]["data"]["message"] == "{{ detail }}"
+    assert result["actions"][len(prefix) + 1:] == [original_alert, following]
+    assert config == original

@@ -73,6 +73,8 @@ The earlier HA-only audit is not a complete cross-application notification audit
 fresh automation export. The caller must supply the verified expanded audience,
 explicit owner service, installation-specific tag, and existing entity IDs. The
 transform rejects an already-covered recipient and ambiguous action structures.
+The new route is inserted immediately before the original notification, after
+any preceding action conditions, waits, variables, and equipment operations.
 It performs no network calls or device operations. Keep real exports and audience
 values in ignored local storage; committed tests use synthetic identities.
 
@@ -100,6 +102,6 @@ and destination entities were verified from the running installation; automatic
 reference checking was unavailable because the optional HA MCP tools component
 was not installed. No test notification or physical operation was sent.
 
-The synthetic regression matrix has 18 cases and 100% statement/branch coverage
+The synthetic regression matrix has 22 cases and 100% statement/branch coverage
 for the recipient-specific transformation module. This does not claim end-to-end
 mobile delivery or phone-side navigation coverage.
