@@ -581,6 +581,58 @@ automation:
             - binary_sensor.arrival_sensor_presence
             - @@PRIVATE:appdaemon_location_source_01@@_wifi
 
+  - id: presence_tracker_problem_alert
+    alias: "Presence Tracker — Alert on contradictory presence"
+    description: >
+      Notifies when binary_sensor.presence_tracker_problem turns on (canonical
+      presence home but the fused tracker is not, the presence sensor has no
+      data, or the AppDaemon tracker has a config error) and again when it
+      clears, so a broken tracker cannot sit unnoticed behind an armed alarm
+      (#1223).
+    mode: queued
+    trace:
+      stored_traces: 10
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.presence_tracker_problem
+        to: "on"
+        id: problem
+      - trigger: state
+        entity_id: binary_sensor.presence_tracker_problem
+        from: "on"
+        to: "off"
+        id: recovered
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: problem
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: presence_tracker_problem
+                  title: "Presence tracker needs attention"
+                  message: >-
+                    {{ state_attr('binary_sensor.presence_tracker_problem', 'reason') }}.
+                    Check the AppDaemon bayesian_device_tracker app
+                    (sensor.bayesian_@@PRIVATE:presence_person_slug@@_home_tracker_status) and its error log.
+              - action: notify.all
+                data:
+                  title: "Presence tracker needs attention"
+                  message: >-
+                    {{ state_attr('binary_sensor.presence_tracker_problem', 'reason') }}.
+          - conditions:
+              - condition: trigger
+                id: recovered
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: presence_tracker_problem
+              - action: notify.all
+                data:
+                  title: "Presence tracker recovered"
+                  message: "Presence sensor and tracker agree again."
+
   - id: update_trip_origin
     alias: update_trip_origin
     trace:
@@ -1640,6 +1692,37 @@ template:
         state: >-
           {{ states('sensor.diy_store_current') not in
              ['none', 'unknown', 'unavailable'] }}
+
+      # Presence health (#1223). The bayesian sensor is canonical; the fused
+      # device_tracker (AppDaemon tracker.py) must follow it home. If AppDaemon
+      # fails to start the tracker, the tracker silently stays not_home and
+      # zone/GPS consumers go stale, so make the contradiction a visible fault.
+      # Also faults while the canonical sensor itself has no data (wake/snooze
+      # are gated on it) or the app reports a config error. delay_on rides out
+      # startup and the moment between the sensor flipping and the app writing.
+      - name: Presence Tracker Problem
+        unique_id: presence_tracker_problem
+        default_entity_id: binary_sensor.presence_tracker_problem
+        device_class: problem
+        icon: mdi:map-marker-alert
+        delay_on:
+          minutes: 10
+        state: >-
+          {% set bayes = states('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home') %}
+          {% set tracker = states('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home') %}
+          {% set app = states('sensor.bayesian_@@PRIVATE:presence_person_slug@@_home_tracker_status') %}
+          {{ bayes in ['unknown', 'unavailable']
+             or (bayes == 'on' and tracker != 'home')
+             or app == 'config_error' }}
+        attributes:
+          reason: >-
+            {% set bayes = states('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home') %}
+            {% set tracker = states('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home') %}
+            {% set app = states('sensor.bayesian_@@PRIVATE:presence_person_slug@@_home_tracker_status') %}
+            {% if bayes in ['unknown', 'unavailable'] %}presence sensor is {{ bayes }}
+            {% elif bayes == 'on' and tracker != 'home' %}presence sensor is home but tracker is {{ tracker }} (AppDaemon tracker status: {{ app }})
+            {% elif app == 'config_error' %}AppDaemon tracker config error: {{ state_attr('sensor.bayesian_@@PRIVATE:presence_person_slug@@_home_tracker_status', 'detail') }}
+            {% else %}ok{% endif %}
 
       - name: test_homeward
         unique_id: test_homeward
