@@ -47,15 +47,3 @@ automation:
             ctx={{ trigger.to_state.context.id }}
             parent={{ trigger.to_state.context.parent_id }}
             user={{ trigger.to_state.context.user_id }}
-      - action: persistent_notification.create
-        data:
-          notification_id: "blind_forensics_{{ trigger.to_state.context.id }}"
-          title: "Blind {{ trigger.to_state.state }}: {{ trigger.to_state.name }}"
-          message: >-
-            {{ now().strftime('%Y-%m-%d %H:%M:%S') }} local |
-            {{ trigger.entity_id }}:
-            {{ trigger.from_state.state }}->{{ trigger.to_state.state }}
-            (position {{ trigger.from_state.attributes.current_position | default('?') }}->{{ trigger.to_state.attributes.current_position | default('?') }}) |
-            context.id={{ trigger.to_state.context.id }} |
-            context.parent_id={{ trigger.to_state.context.parent_id }} |
-            context.user_id={{ trigger.to_state.context.user_id }}

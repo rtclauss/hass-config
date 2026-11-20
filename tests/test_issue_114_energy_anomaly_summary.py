@@ -76,4 +76,6 @@ def test_weekly_energy_summary_uses_tariffed_last_period_costs() -> None:
     assert "0.4420" in block
     assert "weekday:" in block
     assert "          - mon" in block
-    assert "tag: weekly-energy-cost-summary" in block
+    assert "notification_id: weekly-energy-cost-summary" in block
+    assert "persistent_notification.create" in block
+    assert "notify.all" not in block
