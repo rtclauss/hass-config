@@ -53,11 +53,12 @@ def test_idle_resets_and_invalid_sides_never_select_a_playlist(selection: dict, 
     ("old", "side"),
     [(old, side) for old in ["", "None", *SIDES] for side in SIDES if old != side],
 )
-def test_real_flips_preserve_notifications_and_script_mapping(selection: dict, old: str, side: str) -> None:
+def test_real_flips_log_selection_and_preserve_script_mapping(selection: dict, old: str, side: str) -> None:
     trigger, = selection["trigger"]
     assert old in trigger["from"] and side in trigger["to"]
     notify, play = selection["action"]
-    assert notify["action"] == "notify.all"
+    assert notify["action"] == "logbook.log"
+    assert notify["data"]["name"] == "Playlist selected"
     assert play["action"] == "script.turn_on"
     env = jinja2.Environment(undefined=jinja2.StrictUndefined)
     variables = {"trigger": {"to_state": {"state": side}}}
