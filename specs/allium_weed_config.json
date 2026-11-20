@@ -1216,6 +1216,66 @@
         "+              Rain is likely in the next 15 minutes and a window is open. Close the windows.",
         "+            {% endif %}"
       ]
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "wake/snooze presence-gate conformance repair",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225): alarm_wake_up and alarm_snooze evaluated WakeupContext.resident_home from the derived device_tracker, which could stay not_home after an AppDaemon tracker startup failure while the canonical bayesian presence sensor was correctly on, so TriggerWeekdayWakeup/TriggerWeekendWakeup/TriggerSpecialMeetingWakeup and SnoozeWakeup silently failed their resident_home requirement. Both now read resident_home from binary_sensor.bayesian_<slug>_home = on. Vacation, bed-occupancy, workday and weekday/weekend/meeting precedence are unchanged. specs/alarm_wakeup.allium is intentionally not edited; covered by tests/test_issue_1223_presence_alarm_gate.py and tests/test_alarm_night_allium_alignment.py."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "non-diffuser presence-gate change",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225) only changes the presence entity in the alarm_wake_up and alarm_snooze conditions. Diffuser sleep/wake participation, afternoon fallback, and oil-replacement reminders are unchanged; specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "presence entity swap within existing private marker",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225) swaps device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home for binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home using the same existing presence_person_slug marker. No new @@PRIVATE markers, mapping keys, manifest entries, renderer targets, rendered-output handling, synthetic fixtures, or ignore rules change. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }
