@@ -99,6 +99,28 @@ The public repository contains only a Zigbee2MQTT example. Keep the active
 on the Home Assistant host. Do not copy the example over a running installation:
 changing the Zigbee network key requires re-pairing devices.
 
+### White-only Hue state-cache exceptions
+
+A white-only Hue bulb can advertise only on/off and brightness while an older
+Zigbee2MQTT state cache still carries `color_mode` and `color_temp`. Home
+Assistant correctly rejects those keys when MQTT discovery advertises
+`supported_color_modes: [brightness]`. Do not edit `state.json` or broaden the
+Home Assistant discovery contract to hide the mismatch.
+
+Use a private, per-device Zigbee2MQTT override like the synthetic example in
+`zigbee2mqtt/configuration.example.yaml`: disable `hue_native_control` for the
+white-only bulb, filter `^color_(mode|temp)$` from published attributes, and
+filter the same keys from the cache. Apply the options through the Zigbee2MQTT
+frontend or `zigbee2mqtt/bridge/request/device/options`, not by editing runtime
+state. The published-attribute filter suppresses already-cached invalid keys;
+the cache filter prevents future reports from restoring them.
+
+After applying the private override, verify that discovery still advertises
+brightness only, the device state payload omits both color keys, and Home
+Assistant logs stay clear through at least one normal reporting interval. If a
+later re-interview proves that the physical device genuinely supports color
+temperature, remove the exception instead of keeping the narrower contract.
+
 ## Existing checkout migration
 
 Removing a tracked file in Git also deletes it from an existing checkout during
