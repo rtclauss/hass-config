@@ -31,6 +31,10 @@ device can require a new action even when the total count stays the same.
   `binary_sensor.any_window_open` `open_windows` attribute lists them.
 - The laundry reminder opens the machine its message is about (the washer
   when both loads wait).
+- Litter-Robot bag and litter reminders (`litter_robot`) push once per task.
+  A latch stops cloud blips, restarts, and the 10:00 recheck from re-alerting.
+  Emptying the drawer or topping up the litter clears the latch and removes the
+  phone notification by tag, without a new push.
 - Task notifications for leaks, alarms, sump high water, garage, batteries,
   offline devices, laundry, open-window rain risks, and salt have useful buttons
   and tap destinations. Both `url` (Apple) and `clickAction` (Android) are supplied.

@@ -1,0 +1,245 @@
+# Home Assistant package for the Whisker Litter-Robot (litterrobot integration,
+# device "Main Level"). Two owner tasks, per docs/notification_policy.md:
+#
+#   * Replace the bag — the waste drawer reaches its threshold, or the robot
+#     reports a drawer-full status (df1 / df2 = 2 / 1 cycles left, dfs = full).
+#   * Add litter — the litter level stays below its threshold.
+#
+# Each task pushes once per cycle. A latch (input_boolean) blocks a second push
+# while the task is still open, so Whisker cloud blips (the entities flick to
+# `unavailable` for a few seconds and re-arm numeric_state triggers) and Home
+# Assistant restarts do not re-alert. Once the drawer is emptied or the litter is
+# topped up, the latch clears and the phone notification is removed silently
+# (same tag, `clear_notification`). A 10:00 daily recheck catches a crossing that
+# happened while Home Assistant or the Whisker cloud was down, and retries a
+# push that failed: the latch is set only after the notification is sent.
+#
+# Thresholds are helpers, not literals. Their `initial:` values are starting
+# guesses (drawer 80%, litter 70%): Home Assistant re-applies `initial:` at
+# startup, so to recalibrate, change the value here and set the live helper to
+# match.
+
+################################################################
+## Packages / Litter-Robot
+################################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "litter_robot"
+
+################################################
+## Helpers
+################################################
+input_number:
+  litter_robot_drawer_full_threshold:
+    name: Litter-Robot drawer full threshold
+    icon: mdi:delete-variant
+    min: 50
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    initial: 80
+  litter_robot_litter_low_threshold:
+    name: Litter-Robot litter low threshold
+    icon: mdi:gauge-low
+    min: 30
+    max: 90
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    initial: 70
+
+input_boolean:
+  # No `initial:` so the latch restores across restarts.
+  litter_robot_bag_reminder_sent:
+    name: Litter-Robot bag reminder sent
+    icon: mdi:delete-variant
+  litter_robot_litter_reminder_sent:
+    name: Litter-Robot litter reminder sent
+    icon: mdi:gauge-low
+
+################################################
+## Automations
+################################################
+automation:
+  - id: litter_robot_replace_bag_reminder
+    alias: Litter-Robot — Replace bag reminder
+    description: >-
+      Push once when the waste drawer needs emptying and a new bag; clear the
+      notification silently once the drawer is emptied.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: numeric_state
+        id: drawer_full
+        entity_id: sensor.main_level_waste_drawer
+        above: input_number.litter_robot_drawer_full_threshold
+      - trigger: state
+        id: drawer_full
+        entity_id: sensor.main_level_status_code
+        to: &drawer_full_codes
+          - df1
+          - df2
+          - dfs
+      - trigger: time
+        id: daily_recheck
+        at: "10:00:00"
+      - trigger: numeric_state
+        id: drawer_emptied
+        entity_id: sensor.main_level_waste_drawer
+        below: input_number.litter_robot_drawer_full_threshold
+        for:
+          minutes: 5
+    action:
+      - choose:
+          - alias: "Drawer emptied: clear the task"
+            conditions:
+              - condition: trigger
+                id: drawer_emptied
+              - condition: state
+                entity_id: input_boolean.litter_robot_bag_reminder_sent
+                state: "on"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.main_level_status_code
+                    state: *drawer_full_codes
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.litter_robot_bag_reminder_sent
+              - action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: litter_robot_replace_bag
+          - alias: "Drawer full: push once per cycle"
+            conditions:
+              - condition: trigger
+                id:
+                  - drawer_full
+                  - daily_recheck
+              - condition: state
+                entity_id: input_boolean.litter_robot_bag_reminder_sent
+                state: "off"
+              - condition: or
+                conditions:
+                  - condition: numeric_state
+                    entity_id: sensor.main_level_waste_drawer
+                    above: input_number.litter_robot_drawer_full_threshold
+                  - condition: state
+                    entity_id: sensor.main_level_status_code
+                    state: *drawer_full_codes
+            sequence:
+              # Notify first, then latch, so a failed send is retried at the
+              # next recheck instead of suppressing the task for the cycle.
+              - action: notify.all
+                data:
+                  title: Replace the litter bag
+                  message: >-
+                    {% set code = states('sensor.main_level_status_code') %}
+                    {% set level = states('sensor.main_level_waste_drawer') %}
+                    {% if code == 'dfs' %}
+                      The Litter-Robot waste drawer is full and it will stop cycling. Empty it and put in a new bag.
+                    {% elif code in ['df1', 'df2'] %}
+                      The Litter-Robot waste drawer is nearly full ({{ 2 if code == 'df1' else 1 }} {{ 'cycles' if code == 'df1' else 'cycle' }} left). Empty it and put in a new bag.
+                    {% else %}
+                      The Litter-Robot waste drawer is {{ level }}% full. Empty it and put in a new bag.
+                    {% endif %}
+                  data:
+                    tag: litter_robot_replace_bag
+                    url: "/?more-info-entity-id=sensor.main_level_waste_drawer"
+                    clickAction: "/?more-info-entity-id=sensor.main_level_waste_drawer"
+                    actions:
+                      - action: URI
+                        title: Waste drawer
+                        uri: "/?more-info-entity-id=sensor.main_level_waste_drawer"
+                      - action: URI
+                        title: Litter box
+                        uri: "/?more-info-entity-id=vacuum.main_level_litter_box"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.litter_robot_bag_reminder_sent
+
+  - id: litter_robot_add_litter_reminder
+    alias: Litter-Robot — Add litter reminder
+    description: >-
+      Push once when the litter level stays low; clear the notification silently
+      once the litter is topped up.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      # The level is read after cycles; `for:` keeps a mid-cycle dip from
+      # counting as a refill task.
+      - trigger: numeric_state
+        id: litter_low
+        entity_id: sensor.main_level_litter_level
+        below: input_number.litter_robot_litter_low_threshold
+        for:
+          minutes: 30
+      - trigger: time
+        id: daily_recheck
+        at: "10:00:00"
+      - trigger: numeric_state
+        id: litter_refilled
+        entity_id: sensor.main_level_litter_level
+        above: input_number.litter_robot_litter_low_threshold
+        for:
+          minutes: 10
+    action:
+      - choose:
+          - alias: "Litter topped up: clear the task"
+            conditions:
+              - condition: trigger
+                id: litter_refilled
+              - condition: state
+                entity_id: input_boolean.litter_robot_litter_reminder_sent
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.litter_robot_litter_reminder_sent
+              - action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: litter_robot_add_litter
+          - alias: "Litter low: push once per cycle"
+            conditions:
+              - condition: trigger
+                id:
+                  - litter_low
+                  - daily_recheck
+              - condition: state
+                entity_id: input_boolean.litter_robot_litter_reminder_sent
+                state: "off"
+              - condition: numeric_state
+                entity_id: sensor.main_level_litter_level
+                below: input_number.litter_robot_litter_low_threshold
+            sequence:
+              - action: notify.all
+                data:
+                  title: Add litter
+                  message: >-
+                    The Litter-Robot litter level is down to {{ states('sensor.main_level_litter_level') | float(0) | round(0) | int }}%. Top it up to the fill line.
+                  data:
+                    tag: litter_robot_add_litter
+                    url: "/?more-info-entity-id=sensor.main_level_litter_level"
+                    clickAction: "/?more-info-entity-id=sensor.main_level_litter_level"
+                    actions:
+                      - action: URI
+                        title: Litter level
+                        uri: "/?more-info-entity-id=sensor.main_level_litter_level"
+                      - action: URI
+                        title: Litter box
+                        uri: "/?more-info-entity-id=vacuum.main_level_litter_box"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.litter_robot_litter_reminder_sent
