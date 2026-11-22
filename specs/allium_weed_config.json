@@ -70,12 +70,6 @@
   ],
   "classified_gaps": [
     {
-      "spec": "specs/private_runtime_config.allium",
-      "implementation_paths": ["private_templates/light.yaml.tmpl"],
-      "classification": "native light-group command deduplication",
-      "reason": "Issue #923 (https://github.com/rtclauss/hass-config/issues/923): the live lights_off_except trace sent both native group targets and every group member. Remove only native groups whose direct members are already selected, preserving exclusions, retries, opaque groups and member coverage. No private markers, values, renderer, manifest, or deployment contract changes. The privacy spec remains unchanged; rendered-template coverage is in tests/test_lights_off_group_fanout.py."
-    },
-    {
       "spec": "specs/alarm_wakeup.allium",
       "implementation_paths": [
         "packages/media_player.yaml"
@@ -1282,6 +1276,12 @@
       ],
       "classification": "presence entity swap within existing private marker",
       "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225) swaps device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home for binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home using the same existing presence_person_slug marker. No new @@PRIVATE markers, mapping keys, manifest entries, renderer targets, rendered-output handling, synthetic fixtures, or ignore rules change. specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": ["private_templates/light.yaml.tmpl"],
+      "classification": "native light-group command deduplication",
+      "reason": "Issue #923 (https://github.com/rtclauss/hass-config/issues/923): the live lights_off_except trace sent both native group targets and every group member. Remove only native groups whose direct members are already selected, preserving exclusions, retries, opaque groups and member coverage. No private markers, values, renderer, manifest, or deployment contract changes. The privacy spec remains unchanged; rendered-template coverage is in tests/test_lights_off_group_fanout.py."
     }
   ]
 }
