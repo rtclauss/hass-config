@@ -1282,6 +1282,54 @@
       "implementation_paths": ["private_templates/light.yaml.tmpl"],
       "classification": "native light-group command deduplication",
       "reason": "Issue #923 (https://github.com/rtclauss/hass-config/issues/923): the live lights_off_except trace sent both native group targets and every group member. Remove only native groups whose direct members are already selected, preserving exclusions, retries, opaque groups and member coverage. No private markers, values, renderer, manifest, or deployment contract changes. The privacy spec remains unchanged; rendered-template coverage is in tests/test_lights_off_group_fanout.py."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*- alias: \"Lock adaptive lighting manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock adaptive lighting manual control to protect the 5-minute wake ramp\"",
+        "-*- alias: \"Lock bed strip manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock bed strip manual control to protect the 5-minute wake ramp\"",
+        "-*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# target before the 300s apply below lands (issue #1210). Keep",
+        "-*- alias: \"Apply the daytime adaptive target to the owner suite lamps over three minutes\"",
+        "+*- alias: \"Apply the daytime adaptive target to the owner suite lamps over five minutes\"",
+        "-*transition: 180",
+        "+*transition: 300",
+        "-*- alias: \"Ramp the bed strip to its capped adaptive daytime target over three minutes\"",
+        "+*- alias: \"Ramp the bed strip to its capped adaptive daytime target over five minutes\"",
+        "-*seconds: 180",
+        "+*seconds: 300"
+      ],
+      "classification": "non-diffuser wake-ramp change",
+      "reason": "Issue #1217 (https://github.com/rtclauss/hass-config/issues/1217): the owner-approved wake light fade goes from 3 to 5 minutes (morning_light_ramp_duration in specs/alarm_wakeup.allium is updated in the same change). Only the owner-suite lamp/bed-strip transition and manual-control hold change; diffuser sleep/wake participation, afternoon fallback, and oil-replacement reminders are unchanged. specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*- alias: \"Lock adaptive lighting manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock adaptive lighting manual control to protect the 5-minute wake ramp\"",
+        "-*- alias: \"Lock bed strip manual control to protect the 3-minute wake ramp\"",
+        "+*- alias: \"Lock bed strip manual control to protect the 5-minute wake ramp\"",
+        "-*# target before the 180s apply below lands (issue #1210). Keep",
+        "+*# target before the 300s apply below lands (issue #1210). Keep",
+        "-*- alias: \"Apply the daytime adaptive target to the owner suite lamps over three minutes\"",
+        "+*- alias: \"Apply the daytime adaptive target to the owner suite lamps over five minutes\"",
+        "-*transition: 180",
+        "+*transition: 300",
+        "-*- alias: \"Ramp the bed strip to its capped adaptive daytime target over three minutes\"",
+        "+*- alias: \"Ramp the bed strip to its capped adaptive daytime target over five minutes\"",
+        "-*seconds: 180",
+        "+*seconds: 300"
+      ],
+      "classification": "non-privacy behavior change",
+      "reason": "Issue #1217 (https://github.com/rtclauss/hass-config/issues/1217): wake light fade duration change only. No @@PRIVATE markers, private values, manifest entries, renderer targets, rendered-output handling, or live credentials change. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }
