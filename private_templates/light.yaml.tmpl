@@ -2831,7 +2831,23 @@ script:
       # the protected lights and any light groups that would turn those
       # protected members off indirectly.
       all_other_lights: >
-        {%- for device in states.light | rejectattr('entity_id', 'in', protected_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {% set candidates = states.light | rejectattr('entity_id', 'in', protected_lights)
+          | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | list %}
+        {% set native_groups = integration_entities('group') %}
+        {% set ns = namespace(targets=[]) %}
+        {% for entity in candidates %}
+          {% set members = state_attr(entity, 'entity_id') %}
+          {# Native light groups forward the same off/transition to their members.
+             Omit only fully covered groups; retain opaque integration groups and
+             groups with off, unavailable, missing, or otherwise unselected members. #}
+          {% set redundant = entity in native_groups and members is iterable
+            and members is not string and members | count > 0
+            and members | reject('in', candidates) | list | count == 0 %}
+          {% if not redundant %}
+            {% set ns.targets = ns.targets + [entity] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.targets | join(', ') }}
     sequence:
       # Fixed: guard the entire sequence so that when all non-excluded lights
       # are already off (all_other_lights resolves to an empty string), the
