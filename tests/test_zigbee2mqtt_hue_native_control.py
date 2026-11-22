@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ZIGBEE2MQTT_CONFIG_PATH = REPO_ROOT / "zigbee2mqtt" / "configuration.example.yaml"
@@ -24,6 +26,22 @@ def test_hue_native_control_is_enabled_by_default_for_devices() -> None:
     device_options = _section_lines("device_options")
 
     assert "  hue_native_control: true" in device_options
+
+
+def test_white_only_hue_example_filters_stale_color_cache() -> None:
+    configuration = yaml.safe_load(
+        ZIGBEE2MQTT_CONFIG_PATH.read_text(encoding="utf-8")
+    )
+    devices = configuration["devices"]
+    white_only_bulb = next(
+        device
+        for device in devices.values()
+        if device["friendly_name"] == "Owner Suite/Lamp Bulb 1"
+    )
+
+    assert white_only_bulb["hue_native_control"] is False
+    assert white_only_bulb["filtered_attributes"] == ["^color_(mode|temp)$"]
+    assert white_only_bulb["filtered_cache"] == ["^color_(mode|temp)$"]
 
 
 def _group_blocks() -> dict[str, list[str]]:
