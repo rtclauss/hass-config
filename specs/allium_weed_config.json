@@ -1120,6 +1120,170 @@
       "reason": "Retires the camera-based watermeter, replaced by the RTL-SDR water meter reader. Removes the disabled restart_water_meter automation, the failing trigger_winter_watermeter_flow automation, the three rest_command entries whose URLs resolved from !secret private_watermeter_* keys, and commented-out utility_meter blocks for sensor.watermeter_value, plus the matching synthetic keys in travis_secrets.example.yaml and the obsolete test_watermeter_endpoints_are_private regression test. No private value moves into public config; no @@PRIVATE markers, mapping keys, manifest entries, renderer targets, rendered-output handling, or ignore rules change. The live secrets.yaml keys are removed on the host after a byte-verified backup. specs/private_runtime_config.allium is intentionally not edited."
     },
     {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/car.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "-    initial: 10"
+      ],
+      "classification": "restore adjustable Tesla threshold",
+      "reason": "Issue #1204 removes the restart-forced helper value so saved thresholds restore. No private markers, renderer behavior or deployment ownership changes. https://github.com/rtclauss/hass-config/issues/1204"
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/alerts.yaml.tmpl",
+        "private_templates/car.yaml.tmpl",
+        "private_templates/media_player.yaml.tmpl",
+        "private_templates/utilities.yaml.tmpl",
+        "private_templates/water_softener.yaml.tmpl",
+        "private_templates/weather.yaml.tmpl"
+      ],
+      "classification": "task-focused notifications and navigation",
+      "reason": "Owner requested action-only notifications plus useful controls. Adds same-server entity/detail links, keeps routine reports local, logs playlist diagnostics, names open windows in rain warnings, and silently replaces a sensor's wet alert when it dries. No pump-switch link is offered from high-water alerts. No private mapping keys, manifest targets, renderer behavior, or private output ownership change; existing private markers remain private. Deployment preserves and checks live inputs before rendering selected outputs with the installation mapping. Alarm, wake, night, and device-control behavior are unchanged.",
+      "allowed_changed_line_patterns": [
+        "+                  data:",
+        "+                    url: \"/?more-info-entity-id=switch.basement_water_shutoff\"",
+        "+                    clickAction: \"/?more-info-entity-id=switch.basement_water_shutoff\"",
+        "+                    actions:",
+        "+                      - action: URI",
+        "+                        title: Water controls",
+        "+                        uri: \"/?more-info-entity-id=switch.basement_water_shutoff\"",
+        "+                        title: Leak sensor",
+        "+                        uri: \"/?more-info-entity-id={{ trigger.from_state.entity_id }}\"",
+        "+          data: &alarm_attention_controls",
+        "+            url: \"/?more-info-entity-id=alarm_control_panel.home_alarm\"",
+        "+            clickAction: \"/?more-info-entity-id=alarm_control_panel.home_alarm\"",
+        "+            actions:",
+        "+              - action: URI",
+        "+                title: Alarm controls",
+        "+                uri: \"/?more-info-entity-id=alarm_control_panel.home_alarm\"",
+        "+          data: *alarm_attention_controls",
+        "+          data:",
+        "+            url: \"/?more-info-entity-id=cover.garage_door\"",
+        "+            clickAction: \"/?more-info-entity-id=cover.garage_door\"",
+        "+                title: Garage controls",
+        "+                uri: \"/?more-info-entity-id=cover.garage_door\"",
+        "-      - action: notify.all",
+        "+      - action: logbook.log",
+        "+          name: Playlist selected",
+        "-      Send a weekly energy summary that combines whole-home and EV tariff",
+        "+      Store a weekly energy summary that combines whole-home and EV tariff",
+        "+      - action: persistent_notification.create",
+        "-          data:",
+        "-            tag: weekly-energy-cost-summary",
+        "+          notification_id: weekly-energy-cost-summary",
+        "+          data: &sump_attention_controls",
+        "+            url: \"/?more-info-entity-id=sensor.sump_fill\"",
+        "+            clickAction: \"/?more-info-entity-id=sensor.sump_fill\"",
+        "+                title: Sump level",
+        "+                uri: \"/?more-info-entity-id=sensor.sump_fill\"",
+        "+          data: *sump_attention_controls",
+        "-    description: Notify number of times the sump pump runs",
+        "+    description: Keep routine sump activity in Home Assistant; high-water warnings still push.",
+        "+          title: Sump pump activity",
+        "+          notification_id: sump-runtime-summary",
+        "+            clickAction: \"/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2\"",
+        "+            actions: &salt_attention_buttons",
+        "+                title: Salt level",
+        "+                uri: \"/?more-info-entity-id=sensor.water_softener_salt_level\"",
+        "+                        clickAction: \"/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning-v2\"",
+        "+                        actions: *salt_attention_buttons",
+        "+            url: \"/?more-info-entity-id=binary_sensor.any_window_open\"",
+        "+            clickAction: \"/?more-info-entity-id=binary_sensor.any_window_open\"",
+        "+            actions: &window_attention_buttons",
+        "+                title: Open windows",
+        "+                uri: \"/?more-info-entity-id=binary_sensor.any_window_open\"",
+        "+            actions: *window_attention_buttons",
+        "+                    tag: \"wet-floor-{{ trigger.from_state.entity_id }}\"",
+        "+                  # Recovery silently replaces that sensor's wet alert (same",
+        "+                  # tag) so the record stays visible without a new interruption.",
+        "+                    alert_once: true",
+        "+                    push:",
+        "+                      interruption-level: passive",
+        "+            # No pump-switch link: its dialog puts an off toggle one tap away",
+        "+            # during a high-water alert.",
+        "-            rain is likely in the next 12 hours. Close the windows before you go.",
+        "+            {% set open_windows = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}",
+        "+            rain is likely in the next 12 hours. Close",
+        "+            {{ ('these windows before you go: ' ~ open_windows ~ '.') if open_windows else 'the windows before you go.' }}",
+        "-          message: \"Rain is likely in the next 15 minutes and a window is open. Close the windows.\"",
+        "+          message: >-",
+        "+            {% if open_windows %}",
+        "+              Rain is likely in the next 15 minutes and these windows are open: {{ open_windows }}. Close them.",
+        "+            {% else %}",
+        "+              Rain is likely in the next 15 minutes and a window is open. Close the windows.",
+        "+            {% endif %}"
+      ]
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "wake/snooze presence-gate conformance repair",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225): alarm_wake_up and alarm_snooze evaluated WakeupContext.resident_home from the derived device_tracker, which could stay not_home after an AppDaemon tracker startup failure while the canonical bayesian presence sensor was correctly on, so TriggerWeekdayWakeup/TriggerWeekendWakeup/TriggerSpecialMeetingWakeup and SnoozeWakeup silently failed their resident_home requirement. Both now read resident_home from binary_sensor.bayesian_<slug>_home = on. Vacation, bed-occupancy, workday and weekday/weekend/meeting precedence are unchanged. specs/alarm_wakeup.allium is intentionally not edited; covered by tests/test_issue_1223_presence_alarm_gate.py and tests/test_alarm_night_allium_alignment.py."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "non-diffuser presence-gate change",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225) only changes the presence entity in the alarm_wake_up and alarm_snooze conditions. Diffuser sleep/wake participation, afternoon fallback, and oil-replacement reminders are unchanged; specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/workday.yaml.tmpl"
+      ],
+      "allowed_changed_line_patterns": [
+        "+*# Canonical presence, not the derived GPS tracker: a stale tracker must not",
+        "+*# block snooze while the bayesian sensor knows we are home (#1223).",
+        "+*# Canonical presence, not the derived GPS tracker: the tracker can sit at",
+        "+*# not_home after an AppDaemon startup failure while the bayesian sensor is",
+        "+*# correctly on, which silently skipped every alarm (#1223). The fused",
+        "+*# tracker stays the source for GPS/zone consumers.",
+        "-*entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "-*state: \"home\"",
+        "+*entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home",
+        "+*state: \"on\""
+      ],
+      "classification": "presence entity swap within existing private marker",
+      "reason": "Issue #1223 (https://github.com/rtclauss/hass-config/issues/1223) / PR #1225 (https://github.com/rtclauss/hass-config/pull/1225) swaps device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home for binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home using the same existing presence_person_slug marker. No new @@PRIVATE markers, mapping keys, manifest entries, renderer targets, rendered-output handling, synthetic fixtures, or ignore rules change. specs/private_runtime_config.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": ["private_templates/light.yaml.tmpl"],
+      "classification": "native light-group command deduplication",
+      "reason": "Issue #923 (https://github.com/rtclauss/hass-config/issues/923): the live lights_off_except trace sent both native group targets and every group member. Remove only native groups whose direct members are already selected, preserving exclusions, retries, opaque groups and member coverage. No private markers, values, renderer, manifest, or deployment contract changes. The privacy spec remains unchanged; rendered-template coverage is in tests/test_lights_off_group_fanout.py."
+    },
+    {
       "spec": "specs/diffusers.allium",
       "implementation_paths": [
         "private_templates/workday.yaml.tmpl"

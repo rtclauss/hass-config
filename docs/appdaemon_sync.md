@@ -50,6 +50,22 @@ local and ignored; they contain private history and identifiers.
 Use `--delete` on push only when you explicitly want the live add-on tree to be
 pruned to match the repo.
 
+## App directory
+
+`appdaemon/appdaemon.yaml` pins `appdaemon.app_dir: /config/apps`, the add-on
+tree this tool pushes to. AppDaemon 4.5 only reads `app_dir` under the
+`appdaemon:` section; a top-level `app_dir` is silently ignored (#1223). Do not
+point it at the git-pulled `/homeassistant/appdaemon/apps/`: that tree has no
+rendered `apps.yaml`.
+
+Deploy app Python and its rendered `apps.yaml` args together (`render`, then
+`push`). A tracker.py that needs args the live `apps.yaml` lacks now fails at
+startup with an explicit `missing required apps.yaml args` error and publishes
+`sensor.bayesian_<slug>_home_tracker_status = config_error`. After a push, check
+the AppDaemon startup log for the loaded app directory and each app's state
+(not just that the container is running), and confirm
+`binary_sensor.presence_tracker_problem` is `off`.
+
 ## Local Runtime Targets
 
 This workflow reads Samba connection details from the main checkout's

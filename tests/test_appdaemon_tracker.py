@@ -622,3 +622,192 @@ def test_location_update_suppresses_jitter_when_zone_unchanged(monkeypatch) -> N
     app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
+
+
+# --- #1223: startup race, missing-source handling, config validation ---------
+
+TRACKER_TEMPLATE = ROOT / "private_templates" / "appdaemon_apps.yaml.tmpl"
+BAYES = "binary_sensor.bayesian_resident_home"
+FUSED = "device_tracker.bayesian_resident_home"
+STATUS = "sensor.bayesian_resident_home_tracker_status"
+ARGS = {
+    "bayesian_device_tracker_name": "bayesian_resident_home",
+    "bayesian_device_tracker_friendly_name": "Resident",
+    "bayesian_input": BAYES,
+    "gps_location_sources": ["device_tracker.example_phone", "device_tracker.example_vehicle"],
+    "ios_speed_tracker_entity": "device_tracker.example_phone",
+    "minimum_update_distance": 20,
+    "minimum_update_window": 5,
+    "gps_accuracy_tolerance": 200,
+}
+
+
+def _make_init_app(monkeypatch, bayes_state, args=None):
+    """App wired for initialize(): AppDaemon scheduling/listener APIs mocked.
+
+    `bayes_state` is a mutable one-item list so a test can "publish" a new
+    source state between calls.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.args = dict(ARGS if args is None else args)
+    app.log = Mock()
+    app.error = Mock()
+    app.listen_state = Mock()
+    app.listen_event = Mock()
+    app.run_in = Mock(side_effect=lambda cb, delay, **kw: "timer-{}".format(app.run_in.call_count))
+    app.cancel_timer = Mock()
+    app.set_state = Mock()
+    app.get_plugin_config = Mock(return_value={"latitude": 10.0, "longitude": -20.0})
+
+    def fake_get_state(entity=None, attribute=None):
+        if entity == BAYES:
+            return bayes_state[0]
+        if entity == "zone":
+            return {}
+        return None
+
+    app.get_state = Mock(side_effect=fake_get_state)
+    return app
+
+
+def _fused_writes(app):
+    return [c for c in app.set_state.call_args_list if c.args[0] == FUSED]
+
+
+def _status_writes(app):
+    return [c.kwargs["state"] for c in app.set_state.call_args_list if c.args[0] == STATUS]
+
+
+def test_initialize_survives_absent_source_then_goes_home(monkeypatch) -> None:
+    bayes = [None]  # entity not in AppDaemon's state cache yet
+    app = _make_init_app(monkeypatch, bayes)
+
+    app.initialize()  # must not raise (was TypeError: 'NoneType' not subscriptable)
+
+    listened = [c.kwargs["entity_id"] for c in app.listen_state.call_args_list]
+    assert listened == [BAYES, "device_tracker.example_phone", "device_tracker.example_vehicle"]
+    assert _fused_writes(app) == []  # no manufactured away/home
+    assert _status_writes(app) == ["waiting_for_source"]
+    app.run_in.assert_called_once()  # bounded retry scheduled
+
+    bayes[0] = {"state": "on", "attributes": {"probability": 0.97}}
+    app.bayes_updated(BAYES, "state", None, "on", {})
+
+    writes = _fused_writes(app)
+    assert len(writes) == 1
+    assert writes[0].kwargs["state"] == "home"
+    assert writes[0].kwargs["attributes"]["home_probability"] == 0.97
+    assert _status_writes(app)[-1] == "ok"
+    app.cancel_timer.assert_called_once_with("timer-1")
+
+
+def test_listeners_registered_before_initial_reconcile(monkeypatch) -> None:
+    bayes = [{"state": "on", "attributes": {"probability": 0.9}}]
+    app = _make_init_app(monkeypatch, bayes)
+    order = []
+    app.listen_state.side_effect = lambda *a, **k: order.append("listen")
+    app.get_state.side_effect = lambda entity=None, attribute=None: (
+        order.append("get") or (bayes[0] if entity == BAYES else None))
+
+    app.initialize()
+
+    assert order[:3] == ["listen", "listen", "listen"]
+    assert "get" in order[3:]
+
+
+@pytest.mark.parametrize("initial", ["unknown", "unavailable"])
+def test_unknown_or_unavailable_source_never_emits_departure(monkeypatch, initial) -> None:
+    bayes = [{"state": initial, "attributes": {}}]
+    app = _make_init_app(monkeypatch, bayes)
+
+    app.initialize()
+    assert _fused_writes(app) == []
+    assert _status_writes(app) == ["waiting_for_source"]
+
+    # A GPS report while the authority is unusable must not publish either.
+    app.run_update = Mock()
+    app.location_update("device_tracker.example_phone", "all", {},
+                        {"attributes": {"latitude": 11.0, "longitude": -19.0, "gps_accuracy": 10}}, {})
+    app.run_update.assert_not_called()
+    assert _fused_writes(app) == []
+
+    bayes[0] = {"state": "on", "attributes": {"probability": 0.95}}
+    app.bayes_updated(BAYES, "state", initial, "on", {})
+    assert [w.kwargs["state"] for w in _fused_writes(app)] == ["home"]
+
+
+def test_startup_retry_is_bounded(monkeypatch) -> None:
+    app = _make_init_app(monkeypatch, [None])
+    app.initialize()
+
+    for _ in range(app.STARTUP_RETRY_LIMIT + 5):
+        app._initial_reconcile({})
+
+    assert app.run_in.call_count == app.STARTUP_RETRY_LIMIT
+    assert _fused_writes(app) == []
+
+
+def test_already_home_startup_reconciles_once_without_retry(monkeypatch) -> None:
+    app = _make_init_app(monkeypatch, [{"state": "on", "attributes": {"probability": 0.99}}])
+
+    app.initialize()
+
+    assert [w.kwargs["state"] for w in _fused_writes(app)] == ["home"]
+    app.run_in.assert_not_called()
+    assert _status_writes(app) == ["ok"]
+
+
+def test_off_source_does_not_write_tracker(monkeypatch) -> None:
+    app = _make_init_app(monkeypatch, [{"state": "off", "attributes": {"probability": 0.1}}])
+
+    app.initialize()
+
+    assert _fused_writes(app) == []
+    assert _status_writes(app) == ["ok"]
+    app.run_in.assert_not_called()
+
+
+def test_reconnect_reconciles_without_duplicate_listeners_or_timers(monkeypatch) -> None:
+    bayes = [{"state": "on", "attributes": {"probability": 0.99}}]
+    app = _make_init_app(monkeypatch, bayes)
+    app.initialize()
+    app.listen_event.assert_called_once_with(app._on_plugin_started, "plugin_started")
+    listeners_before = app.listen_state.call_count
+
+    app._on_plugin_started("plugin_started", {"name": "HASS"}, {})
+    app._on_plugin_started("plugin_started", {"name": "HASS"}, {})
+
+    assert app.listen_state.call_count == listeners_before
+    assert app.listen_event.call_count == 1
+    app.run_in.assert_not_called()
+    assert [w.kwargs["state"] for w in _fused_writes(app)] == ["home", "home", "home"]
+
+
+def test_missing_required_arg_fails_loudly_with_status(monkeypatch) -> None:
+    args = dict(ARGS)
+    del args["ios_speed_tracker_entity"]
+    del args["bayesian_device_tracker_friendly_name"]
+    app = _make_init_app(monkeypatch, [None], args=args)
+
+    with pytest.raises(ValueError, match="ios_speed_tracker_entity.*|.*friendly_name"):
+        app.initialize()
+
+    assert _status_writes(app) == ["config_error"]
+    message = app.error.call_args.args[0]
+    assert "ios_speed_tracker_entity" in message
+    assert "bayesian_device_tracker_friendly_name" in message
+    app.listen_state.assert_not_called()
+
+
+def test_apps_template_provides_every_required_tracker_arg(monkeypatch) -> None:
+    module = _load_tracker_module(monkeypatch)
+    text = TRACKER_TEMPLATE.read_text(encoding="utf-8")
+    start = text.index("\nbayesian_device_tracker:\n")
+    end = text.find("\n\n", start + 1)
+    block = text[start:end if end != -1 else None]
+
+    assert "class: BayesianDeviceTracker" in block
+    assert "module: tracker" in block
+    for key in module.BayesianDeviceTracker.REQUIRED_ARGS:
+        assert "\n  {}:".format(key) in block, key

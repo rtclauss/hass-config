@@ -11,7 +11,30 @@ from pygeodesy import ellipsoidalKarney
 
 
 class BayesianDeviceTracker(hass.Hass):
+    # Every arg initialize() reads. Validated up front so a stale/partial
+    # apps.yaml fails with one clear message (and a published config_error
+    # status) instead of a bare KeyError halfway through startup (#1223).
+    REQUIRED_ARGS = (
+        "bayesian_device_tracker_name",
+        "bayesian_device_tracker_friendly_name",
+        "bayesian_input",
+        "gps_location_sources",
+        "ios_speed_tracker_entity",
+        "minimum_update_distance",
+        "minimum_update_window",
+        "gps_accuracy_tolerance",
+    )
+    # Source states that carry no presence information. They must never be read
+    # as "away": the tracker waits for real data instead (#1223).
+    NO_DATA_STATES = (None, "unknown", "unavailable")
+    # Bounded startup retry while the bayesian source has not arrived yet. The
+    # state listener also reconciles as soon as it arrives; the retry covers a
+    # source that appears without a state-change event reaching us.
+    STARTUP_RETRY_SECONDS = 30
+    STARTUP_RETRY_LIMIT = 10
+
     def initialize(self):
+        self._validate_args()
         self.bayesian_device_tracker_id = self.args["bayesian_device_tracker_name"]
         self.bayesian = self.args["bayesian_input"]
         self.gps_sensor_sources = self.args["gps_location_sources"]
@@ -26,21 +49,112 @@ class BayesianDeviceTracker(hass.Hass):
         # Per-source last accepted position {source_entity_id: (lat, lon)} for the
         # accumulated-distance gate in location_update.
         self._last_accepted_pos = {}
+        self._startup_retry_handle = None
+        self._startup_retries = 0
 
-        self.log("preparing to system on init")
-        self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
-        self.log('done with init')
-
-        self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
+        # Register listeners BEFORE the initial reconcile (#1223). Previously the
+        # reconcile ran first; an absent source made it raise, initialize() aborted
+        # with zero listeners, and no later presence update could recover the app.
         self.log("registering callback for changes on bayesian sensor: {}".format(self.bayesian))
         self.listen_state(self.bayes_updated, entity_id=self.bayesian)
         for tracker in self.gps_sensor_sources:
             self.log("registering tracking callback for gps item {}".format(tracker))
             self.listen_state(self.location_update, entity_id=tracker, attribute="all")
 
+        # A Home Assistant reconnect does not re-run initialize(), and the bayesian
+        # state may not "change" across it, so reconcile explicitly. Registered
+        # once here, so reconnects never stack listeners.
+        self.listen_event(self._on_plugin_started, "plugin_started")
+
+        self.log("initial reconcile against {}".format(self.bayesian))
+        self._initial_reconcile({})
+        self.log('done with init')
+
+    def _validate_args(self):
+        args = getattr(self, "args", None) or {}
+        missing = [key for key in self.REQUIRED_ARGS if args.get(key) in (None, "")]
+        if missing:
+            message = "missing required apps.yaml args: {}".format(", ".join(missing))
+            self.error("BayesianDeviceTracker config error: {}".format(message))
+            tracker_name = args.get("bayesian_device_tracker_name")
+            if tracker_name:
+                self._publish_status("config_error", message, tracker_name=tracker_name)
+            raise ValueError(message)
+
+    def status_entity_id(self, tracker_name=None):
+        return "sensor.{}_tracker_status".format(tracker_name or self.bayesian_device_tracker_id)
+
+    def _publish_status(self, status, detail, tracker_name=None):
+        """Publish app health for HA-side fault detection.
+
+        ok: last reconcile used a valid bayesian state. waiting_for_source: the
+        bayesian sensor is absent/unknown/unavailable. config_error: required args
+        are missing and the app could not start.
+        """
+        try:
+            self.set_state(
+                self.status_entity_id(tracker_name),
+                state=status,
+                attributes={
+                    "friendly_name": "Presence tracker status",
+                    "icon": "mdi:map-marker-alert" if status != "ok" else "mdi:map-marker-check",
+                    "detail": detail,
+                    "updated": datetime.now(timezone.utc).isoformat(),
+                },
+                replace=True,
+            )
+        except Exception as exc:  # pragma: no cover - status is best effort
+            self.log("could not publish tracker status {}: {}".format(status, exc))
+
+    def _initial_reconcile(self, kwargs):
+        self._startup_retry_handle = None
+        if self._reconcile_bayesian():
+            return
+        if self._startup_retries >= self.STARTUP_RETRY_LIMIT:
+            self.log("{} still has no usable state after {} retries; waiting for its state listener".format(
+                self.bayesian, self._startup_retries))
+            return
+        self._startup_retries += 1
+        self._startup_retry_handle = self.run_in(self._initial_reconcile, self.STARTUP_RETRY_SECONDS)
+
+    def _cancel_startup_retry(self):
+        handle = getattr(self, "_startup_retry_handle", None)
+        if handle is None:
+            return
+        self._startup_retry_handle = None
+        try:
+            self.cancel_timer(handle)
+        except Exception:  # pragma: no cover - timer may already have fired
+            pass
+
+    def _on_plugin_started(self, event_name, data, kwargs):
+        self.log("plugin_started ({}); reconciling {}".format(data, self.bayesian))
+        if self._reconcile_bayesian():
+            self._cancel_startup_retry()
+
     def bayes_updated(self, entity, attribute, old, new, kwargs):
+        if self._reconcile_bayesian(entity):
+            # Valid data arrived through the listener; a pending startup retry
+            # would only repeat the same reconcile.
+            self._cancel_startup_retry()
+
+    def _reconcile_bayesian(self, entity=None):
+        """Apply the bayesian sensor to the fused tracker.
+
+        Returns True when the sensor had a usable on/off state, False when it is
+        absent, unknown or unavailable. "off" deliberately does not write the
+        tracker: GPS updates own the away position, and a missing/unknown source
+        must never manufacture an away transition.
+        """
+        entity = entity or self.bayesian
         sensor_state = self.get_state(entity, attribute="all")
-        if sensor_state['state'] == 'on':
+        state = sensor_state.get("state") if isinstance(sensor_state, dict) else None
+        if state in self.NO_DATA_STATES:
+            self.log("{} has no usable state ({!r}); not changing the tracker".format(entity, state))
+            self._publish_status("waiting_for_source", "{} is {}".format(entity, state or "missing"))
+            return False
+        self._publish_status("ok", "{} is {}".format(entity, state))
+        if state == 'on':
             config = self.get_plugin_config()
             self.log("bayes_updated and bayes sensor says I am home")
             self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
@@ -50,7 +164,7 @@ class BayesianDeviceTracker(hass.Hass):
                 longitude=config["longitude"],
                 attributes={
                     "course": 0.0,
-                    "home_probability": sensor_state["attributes"]["probability"],
+                    "home_probability": (sensor_state.get("attributes") or {}).get("probability"),
                 },
                 # The bayesian sensor is the home/away authority; force "home"
                 # rather than relying on zone resolution, which can silently
@@ -58,14 +172,18 @@ class BayesianDeviceTracker(hass.Hass):
                 # tracker "not_home" while the sensor says we're home.
                 state="home",
             )
-        else:
-            return
+        return True
 
     def location_update(self, entity, attribute, old, new, kwargs):
         self.log("in location_update")
         self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
         bayesian_state = self.get_state(self.bayesian, attribute="all")
         self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
+        if not isinstance(bayesian_state, dict) or bayesian_state.get("state") in self.NO_DATA_STATES:
+            # Without the home/away authority we cannot tell a real departure from
+            # a startup gap, so publish nothing rather than a guessed state (#1223).
+            self.log("{} has no usable state; skipping GPS update from {}".format(self.bayesian, entity))
+            return
 
         try:
             if new["attributes"].get("gps_accuracy") > self.gps_accuracy_tolerance:

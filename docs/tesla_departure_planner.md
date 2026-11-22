@@ -29,7 +29,7 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 1. Fetches every event in the next 24 hours from `calendar.<private_owner_calendar>` and `calendar.curling` via the `calendar.get_events` action (not each calendar entity's own single pinned "current event" attribute — see below), plus `binary_sensor.work_trip_today`'s own event.
 2. Drops any event that is all-day, in the past, outside the 24-hour horizon, or a flight/`nocharge` event (via the shared `skip_charging_event` macro, unchanged).
 3. Resolves each remaining candidate's `location` to a `lat,lon` pair (see [Coordinates, not addresses](#coordinates-not-addresses) below), then calls `waze_travel_time.get_travel_times` once per candidate, scoring it with a real drive distance/duration from home.
-4. Excludes any candidate closer than `input_number.tesla_local_trip_threshold_mi` (default 10 mi, adjustable on the dashboard) — a nearby errand is never treated as a "trip" worth preconditioning for.
+4. Excludes any candidate closer than `input_number.tesla_local_trip_threshold_mi` (adjustable on the dashboard; recommended 10 mi) — a nearby errand is never treated as a "trip" worth preconditioning for.
 5. Of what's left ("qualifying" candidates), the **soonest** one drives departure timing/preconditioning (`entry`, `start_time`, `duration_min`), and the **furthest** one drives the charge limit (`distance_mi`, `furthest_entry`). If your day has a nearby dentist visit at 10am and a 100 mi loan closing at 1pm, the car preconditions for the 10am departure but charges to whatever the 100 mi trip needs.
 
 This replaced an older design that read each calendar entity's own single "current event" attribute (`state_attr(calendar, 'start_time'/'message')`). HA calendar entities only ever expose *one* such event, and while a same-day **all-day** event is active (for example a recurring "Replace Contacts" reminder) it pins that attribute for the entire day — so a real timed event later that day (a 10am dentist appointment) was invisible to the planner. All-day events are now excluded from candidacy outright, and the full event list is enumerated instead of trusting that single pinned attribute.
@@ -166,7 +166,7 @@ Decision summary (`distance_mi` below is always the **furthest** qualifying even
 
 > **These thresholds are one-way figures acting as round-trip proxies.** The car's charger is at home, so every out-leg implies a return leg. Read the table as: `>= 90 mi` one-way is a **~180 mi round trip**, and the `>= threshold and < 90 mi` band covers round trips up to ~180 mi. A 70 mi one-way appointment is **~140 mi of driving**, not 70. Mistaking these for one-way-only numbers makes the tiers look far more conservative than they are.
 
-- inside the local trip threshold (`< input_number.tesla_local_trip_threshold_mi`, default 10 mi): not a trip at all — falls through to the alarm/no-plan tiers below
+- inside the local trip threshold (`< input_number.tesla_local_trip_threshold_mi`, recommended 10 mi): not a trip at all — falls through to the alarm/no-plan tiers below
 - qualifying trip whose travel time could not be scored: `90%` (distance contributes 0, so it never reaches the `>= 90 mi` tier), with `scoring_degraded` set
 - long trip (`>= 90 mi`): `100%`
 - other qualifying trip (`>= threshold` and `< 90 mi`): `90%`
@@ -237,7 +237,13 @@ The resolution is three-layered:
 2. The templates reading them **treat `<= 0` as unset** and substitute the default, so correctness never depends on startup ordering.
 3. `automation.hydrate_tesla_calibration_helpers` seeds both at Home Assistant start, but **only when still at the sentinel** — so a real calibration is never overwritten on a normal restart. This exists for the dashboard's sake, so it shows 240 rather than 0 on a fresh install.
 
-`input_number.tesla_local_trip_threshold_mi` still carries `initial: 10` and therefore still resets on restart despite being documented as dashboard-adjustable — tracked separately in issue #1204.
+`input_number.tesla_local_trip_threshold_mi` also omits `initial:` so the saved
+threshold survives restart, including an intentional zero. Unlike the calibration
+helpers, zero is a valid threshold and must not be treated as an unset sentinel.
+On a fresh installation with no restored state, it starts at its minimum (0 mi);
+set the dashboard control to the recommended 10 mi before enabling the planner.
+The `float(default=10)` fallback covers unavailable/non-numeric states only,
+not a fresh numeric zero. Existing installations retain their saved threshold.
 
 Two honesty details. When `scoring_degraded` is set, an unscored trip is counted in `trip_count` but contributes no miles, so the wording becomes *"Day total at least N mi"* rather than understating the driving. And the total sums **all** qualifying events rather than only those too close together to recharge between — pessimistic by design, since the car usually does charge at home between trips. That approximation is acceptable because the figure is reported, never acted on.
 

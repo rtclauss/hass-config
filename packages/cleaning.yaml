@@ -296,6 +296,17 @@ automation:
             {% else %}
               Dryer load is waiting in the laundry room. 🧺
             {% endif %}
+          data:
+            # Tap opens the machine the message is about (washer when both wait).
+            url: "/?more-info-entity-id=input_select.{{ 'dryer_state' if pending_loads == 'dryer' else 'washer_state' }}"
+            clickAction: "/?more-info-entity-id=input_select.{{ 'dryer_state' if pending_loads == 'dryer' else 'washer_state' }}"
+            actions:
+              - action: URI
+                title: Washer status
+                uri: "/?more-info-entity-id=input_select.washer_state"
+              - action: URI
+                title: Dryer status
+                uri: "/?more-info-entity-id=input_select.dryer_state"
 
   - id: washer_reminder
     alias: washer_reminder
@@ -339,6 +350,13 @@ automation:
       - action: notify.all
         data:
           message: "Laundry has been sitting in the washer for an hour. \U0001F9FA"
+          data:
+            url: "/?more-info-entity-id=input_select.washer_state"
+            clickAction: "/?more-info-entity-id=input_select.washer_state"
+            actions:
+              - action: URI
+                title: Washer status
+                uri: "/?more-info-entity-id=input_select.washer_state"
       - if:
           - condition: state
             entity_id: input_boolean.guest_mode

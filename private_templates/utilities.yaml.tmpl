@@ -386,7 +386,7 @@ automation:
   - id: notify_weekly_energy_cost_summary
     alias: notify_weekly_energy_cost_summary
     description: >
-      Send a weekly energy summary that combines whole-home and EV tariff
+      Store a weekly energy summary that combines whole-home and EV tariff
       utility meters into readable cost context.
     trace:
       stored_traces: 10
@@ -432,7 +432,7 @@ automation:
         }}
       total_cost: "{{ (home_cost | float(default=0) + ev_cost | float(default=0)) | round(2) }}"
     action:
-      - action: notify.all
+      - action: persistent_notification.create
         continue_on_error: true
         data:
           title: Weekly energy summary
@@ -440,8 +440,7 @@ automation:
             Last week: whole-home {{ home_kwh }} kWh / ${{ "%.2f" | format(home_cost | float(default=0)) }};
             EV charging {{ ev_kwh }} kWh / ${{ "%.2f" | format(ev_cost | float(default=0)) }}.
             Estimated total: ${{ "%.2f" | format(total_cost | float(default=0)) }}.
-          data:
-            tag: weekly-energy-cost-summary
+          notification_id: weekly-energy-cost-summary
 
   - alias: Restart AppDaemon on HA startup or websocket reconnect failure
     description: >
@@ -758,6 +757,15 @@ automation:
         data:
           message: >-
             "Sump pit is getting full! Check the sump pump!"
+          data: &sump_attention_controls
+            url: "/?more-info-entity-id=sensor.sump_fill"
+            clickAction: "/?more-info-entity-id=sensor.sump_fill"
+            actions:
+              - action: URI
+                title: Sump level
+                uri: "/?more-info-entity-id=sensor.sump_fill"
+            # No pump-switch link: its dialog puts an off toggle one tap away
+            # during a high-water alert.
 
   - alias: Notify Sump Pit Full
     id: notify_sump_pit_full
@@ -772,10 +780,11 @@ automation:
         data:
           message: >-
             "Sump pit is getting very full! Check the sump pump!"
+          data: *sump_attention_controls
 
   - alias: Notify Sump Runs
     id: notify_sump_runs
-    description: Notify number of times the sump pump runs
+    description: Keep routine sump activity in Home Assistant; high-water warnings still push.
     trace:
       stored_traces: 10
     trigger:
@@ -787,8 +796,10 @@ automation:
         entity_id: sensor.sump_runs
         above: 0
     action:
-      - action: notify.all
+      - action: persistent_notification.create
         data:
+          title: Sump pump activity
+          notification_id: sump-runtime-summary
           message: >-
             {% set sump_runtime = states("sensor.sump_pump_time_on_past_24_hours")|float * 60 *60 %}
 

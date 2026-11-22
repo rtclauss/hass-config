@@ -56,6 +56,17 @@ def test_airplanes_routeset_templates_guard_error_mappings_and_invalid_json() ->
     assert routeset_block.count("j is sequence and j is not mapping") == 2
 
 
+def test_aircraft_route_template_guards_null_airline_metadata() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+    route_block = text.split('name: "Closest Aircraft Route"', 1)[1].split("  - sensor:", 1)[0]
+    airline_block = route_block.split("          airline: >-", 1)[1].split("          source: >-", 1)[0]
+
+    assert route_block.count("r.flightroute.airline is defined") == 2
+    assert route_block.count("r.flightroute.airline is not none") == 2
+    assert route_block.count("r.flightroute.airline.name is defined") == 2
+    assert "r.flightroute.airline is not none" in airline_block
+
+
 def test_aircraft_refresh_automation_updates_a_single_routeset_sensor() -> None:
     text = AIRPLANES_PATH.read_text(encoding="utf-8")
 

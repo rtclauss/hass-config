@@ -65,6 +65,12 @@
 - It ships with `dry_run: true`; only flip it to `false` in `apps.yaml` after watching real dry-run notifications for a while, per the doc's rollout section.
 - Test with `uv run --with pytest pytest tests/test_appdaemon_rtlsdr_watchdog.py`.
 
+## Notifications
+- Use `docs/notification_policy.md` as the source of truth before adding or changing push notifications, persistent notices, notification buttons/links, or their routing. `docs/notification_audit.md` classifies the remaining producers and follow-ups.
+- Push only when a task needs attention. Routine reports, successful automatic actions, and changing measurements stay in Home Assistant; recoveries update the original alert silently instead of sending a new one.
+- Buttons and tap targets open relevant status (`url` for Apple, `clickAction` for Android); do not link a safety alert to a control whose dialog makes the wrong action one tap away.
+- Test with `uv run --with pytest pytest tests/test_actionable_notifications.py`.
+
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
 - Do not commit `AGENTS.local.md` unless explicitly asked.

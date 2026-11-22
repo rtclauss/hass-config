@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from privacy_ids import PRESENCE_TRACKER
+from privacy_ids import PRESENCE_SENSOR
 
 import re
 from pathlib import Path
@@ -195,7 +195,7 @@ def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
 
     for token in (
         "entity_id: input_boolean.wakeup_alarm_firing\n        state: \"on\"",
-        f"entity_id: {PRESENCE_TRACKER}",
+        f"entity_id: {PRESENCE_SENSOR}\n        state: \"on\"",
         "entity_id: input_boolean.master_bed_occupancy",
         "entity_id: script.snooze_script",
     ):

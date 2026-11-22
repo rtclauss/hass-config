@@ -92,12 +92,13 @@ def test_battery_automations_update_notifications_from_dynamic_sensor_summaries(
         assert "battery_message" in block
         assert "battery sensor' if battery_count == 1 else 'battery sensors" in block
         assert "Affected sensor' if battery_count == 1 else 'Affected sensors" in block
-        assert "condition: trigger" in block
-        assert "id: summary_change" in block
-        assert "battery_summary | trim != ''" in block
+        if threshold == "10":
+            assert "condition: trigger" in block
+            assert "new_battery_attention" in block
         assert "message: clear_notification" in block
         assert 'tag: "{{ notification_tag }}"' in block
-        assert "persistent: true" in block
+        if threshold == "10":
+            assert "persistent: true" in block
         assert "continue_on_error: true" in block
         assert f"notification_id: low-battery-{threshold}" in block
         assert f"below {threshold}%" in block
@@ -125,7 +126,7 @@ def test_battery_dead_automation_updates_notifications_for_unavailable_battery_s
     assert "Affected sensor' if battery_count == 1 else 'Affected sensors" in block
     assert "condition: trigger" in block
     assert "id: summary_change" in block
-    assert "battery_summary | trim != ''" in block
+    assert "value_template: *new_battery_attention" in block
     assert "message: clear_notification" in block
     assert 'tag: "{{ notification_tag }}"' in block
     assert "persistent: true" in block

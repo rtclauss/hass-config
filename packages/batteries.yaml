@@ -229,7 +229,7 @@ template:
 automation:
   - id: notify_battery_dying_20
     alias: notify_battery_dying_20
-    description: Keep the 20 percent battery notification current and send a push message when the situation gets worse.
+    description: Keep early battery warnings in Home Assistant without interrupting personal devices.
     mode: queued
     max: 10
     trace:
@@ -279,26 +279,10 @@ automation:
               title: "{{ battery_title }}"
               message: "{{ battery_message }}"
               notification_id: low-battery-20
-          - choose:
-              - conditions:
-                  - condition: trigger
-                    id: summary_change
-                  - condition: template
-                    value_template: >-
-                      {{ battery_summary | trim != '' }}
-                sequence:
-                  - continue_on_error: true
-                    action: notify.all
-                    data:
-                      title: "{{ battery_title }}"
-                      message: "{{ battery_message }}"
-                      data:
-                        tag: "{{ notification_tag }}"
-                        persistent: true
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
-    description: Keep the 10 percent battery notification current and send a push message when the situation gets worse.
+    description: Update battery warnings in Home Assistant; push only when another device falls below 10 percent.
     mode: queued
     max: 10
     trace:
@@ -353,8 +337,23 @@ automation:
                   - condition: trigger
                     id: summary_change
                   - condition: template
-                    value_template: >-
-                      {{ battery_summary | trim != '' }}
+                    # Compare device identities, not percentages or list counts.
+                    # A replacement at the same count still needs attention;
+                    # percentage drift, recovery, and startup sync do not.
+                    value_template: &new_battery_attention >-
+                      {% set previous = trigger.from_state %}
+                      {% set current = trigger.to_state %}
+                      {% if previous is not none and current is not none
+                            and previous.state not in ['unknown', 'unavailable']
+                            and current.state not in ['unknown', 'unavailable'] %}
+                        {% set old_devices = previous.attributes.get('summary', '')
+                          | default('', true) | regex_findall('(?m)^- (sensor\\.[a-z0-9_]+):') %}
+                        {% set new_devices = current.attributes.get('summary', '')
+                          | default('', true) | regex_findall('(?m)^- (sensor\\.[a-z0-9_]+):') %}
+                        {{ new_devices | reject('in', old_devices) | list | count > 0 }}
+                      {% else %}
+                        {{ false }}
+                      {% endif %}
                 sequence:
                   - continue_on_error: true
                     action: notify.all
@@ -362,12 +361,18 @@ automation:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
                       data:
+                        url: "/?more-info-entity-id=sensor.battery_low_10"
+                        clickAction: "/?more-info-entity-id=sensor.battery_low_10"
+                        actions:
+                          - action: URI
+                            title: Review low batteries
+                            uri: "/?more-info-entity-id=sensor.battery_low_10"
                         tag: "{{ notification_tag }}"
                         persistent: true
 
   - id: notify_battery_dead
     alias: notify_battery_dead
-    description: Keep the offline battery notification current and send a push message when a battery-powered device goes unavailable.
+    description: Update offline battery warnings in Home Assistant; push only for newly offline devices, not recoveries.
     mode: queued
     max: 10
     trace:
@@ -422,8 +427,7 @@ automation:
                   - condition: trigger
                     id: summary_change
                   - condition: template
-                    value_template: >-
-                      {{ battery_summary | trim != '' }}
+                    value_template: *new_battery_attention
                 sequence:
                   - continue_on_error: true
                     action: notify.all
@@ -431,6 +435,12 @@ automation:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
                       data:
+                        url: "/?more-info-entity-id=sensor.battery_dead"
+                        clickAction: "/?more-info-entity-id=sensor.battery_dead"
+                        actions:
+                          - action: URI
+                            title: Review offline devices
+                            uri: "/?more-info-entity-id=sensor.battery_dead"
                         tag: "{{ notification_tag }}"
                         persistent: true
 
