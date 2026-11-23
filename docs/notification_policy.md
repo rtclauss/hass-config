@@ -35,6 +35,12 @@ device can require a new action even when the total count stays the same.
   A latch stops cloud blips, restarts, and the 10:00 recheck from re-alerting.
   Emptying the drawer or topping up the litter clears the latch and removes the
   phone notification by tag, without a new push.
+- Smart Cat (`smartcat`) pushes when a cat shows a new kind of pattern change
+  (visits, a long visit, weight) and when it suspects a cat it does not know.
+  A changed number on an existing change does not re-alert; startup and reloads
+  do not replay pushes; returning to normal or adding the cat removes the phone
+  notification by tag without a new push. Litter forecasts are not pushed: the
+  `litter_robot` reminders already cover the actual task.
 - Task notifications for leaks, alarms, sump high water, garage, batteries,
   offline devices, laundry, open-window rain risks, and salt have useful buttons
   and tap destinations. Both `url` (Apple) and `clickAction` (Android) are supplied.

@@ -120,6 +120,8 @@ def _walk_actions(value):
         ("water_softener", "water_softener_forecast_refill_reminder"),
         ("litter_robot", "litter_robot_replace_bag_reminder"),
         ("litter_robot", "litter_robot_add_litter_reminder"),
+        ("smartcat", "smartcat_cat_needs_attention"),
+        ("smartcat", "smartcat_new_cat_suspected"),
     ],
 )
 def test_attention_alerts_have_cross_platform_links_and_uri_buttons(package, automation_id):
