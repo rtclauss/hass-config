@@ -411,21 +411,20 @@ automation:
     alias: toggle_lava_lamp_workday
     trace:
       stored_traces: 50
+    # Native time triggers with offsets replace hour-arithmetic templates that
+    # built invalid times ("24:00" for meetings at 15:00 or later, "-1:30" for
+    # 00:xx) and polled sensor.time every minute.
     trigger:
-      - trigger: template
+      - trigger: time
         id: lava-lamp-off
-        value_template: >-
-          {% set forward_time = states.input_datetime.next_work_meeting.state[0:2] | int + 9 %}
-          {% set nine_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
-          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
-          {{ formatted_time == nine_hoursforward }}
-      - trigger: template
+        at:
+          entity_id: input_datetime.next_work_meeting
+          offset: "09:00:00"
+      - trigger: time
         id: lava-lamp-on
-        value_template: >-
-          {% set back_time = states.input_datetime.next_work_meeting.state[0:2] | int - 1 %}
-          {% set one_hourback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
-          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
-          {{ formatted_time == one_hourback }}
+        at:
+          entity_id: input_datetime.next_work_meeting
+          offset: "-01:00:00"
     condition:
       - condition: state
         entity_id: binary_sensor.workday_sensor

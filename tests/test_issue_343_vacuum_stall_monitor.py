@@ -217,23 +217,25 @@ def test_config_and_dashboard_wire_all_vacuums() -> None:
     gitignore_text = GITIGNORE_PATH.read_text(encoding="utf-8")
 
     for entity_id in (
-        "vacuum.valetudo_mainlevel",
         "vacuum.valetudo_den",
         "vacuum.valetudo_upstairs_vacuum",
     ):
         assert entity_id in config_text
 
+    # The ground-floor Valetudo vacuum was replaced by the Dreame X40, which has
+    # no Valetudo map/segment entities; a monitor pointed at the retired entity
+    # can only poll a vacuum that no longer exists.
+    assert "vacuum.valetudo_mainlevel" not in config_text
+    assert "vacuum_stall_monitor_mainlevel" not in config_text
+
     for sensor_id in (
-        "sensor.valetudo_mainlevel_stall_status",
         "sensor.valetudo_den_stall_status",
         "sensor.valetudo_upstairs_vacuum_stall_status",
-        "binary_sensor.valetudo_mainlevel_stalled",
         "binary_sensor.valetudo_den_stalled",
         "binary_sensor.valetudo_upstairs_vacuum_stalled",
     ):
         assert sensor_id in dashboard_text
 
-    assert "Ground Floor Stall Evidence" in dashboard_text
     assert "Den Stall Evidence" in dashboard_text
     assert "Upstairs Stall Evidence" in dashboard_text
     assert "!appdaemon/apps/vacuum_stall_monitor.py" in gitignore_text
