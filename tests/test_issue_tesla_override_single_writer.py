@@ -57,6 +57,12 @@ def test_notification_actions_only_toggle_the_override() -> None:
             assert not _writes_charge_limit(branch)
 
 
+def test_notification_toggle_does_not_drop_the_state_run() -> None:
+    # A notification action toggles the boolean mid-run; under the default
+    # `single` mode the resulting state-triggered run would be discarded.
+    assert _automation("set_charging_rate").get("mode") == "queued"
+
+
 def test_override_writes_charge_limit_only_when_car_is_away() -> None:
     writers = [branch for branch in _branches() if _writes_charge_limit(branch)]
 

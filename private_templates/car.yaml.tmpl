@@ -698,9 +698,13 @@ automation:
   # reconciles once the car is parked, so writing a limit here too raced it
   # (turning the override off left a hardcoded 80% over the planner's 85%
   # alarm-tier target). Away from home the planner never runs, so the
-  # override still writes the limit directly there.
+  # override still writes the limit directly there. Queued so the state run
+  # that a notification action's toggle starts is not dropped as "already
+  # running" while the notification run is still active.
   - id: set_charging_rate
     alias: set_charging_rate
+    mode: queued
+    max: 5
     trace:
       stored_traces: 10
     trigger:
