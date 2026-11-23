@@ -699,20 +699,30 @@ automation:
       - action: rest_command.restart_garage_opener
         continue_on_error: true
 
+  # Max-range override plumbing. At home, tesla_departure_planner_apply owns
+  # the charge limit: it triggers on input_boolean.long_range_travel and
+  # reconciles once the car is parked, so writing a limit here too raced it
+  # (turning the override off left a hardcoded 80% over the planner's 85%
+  # alarm-tier target). Away from home the planner never runs, so the
+  # override still writes the limit directly there. Queued so the state run
+  # that a notification action's toggle starts is not dropped as "already
+  # running" while the notification run is still active.
   - id: set_charging_rate
     alias: set_charging_rate
-    description: "Switch the Tesla charge limit between max-range and normal from the long-range-travel helper or the matching phone notification actions."
+    description: "Max-range override plumbing: phone notification actions toggle the long-range-travel helper, and helper changes set the Tesla charge limit to 100%/80% only while the car is away (at home the departure planner owns the limit)."
+    mode: queued
+    max: 5
     trace:
       stored_traces: 10
     trigger:
       - trigger: event
         event_type: mobile_app_notification_action
-        id: max_range
+        id: notify_max_range
         event_data:
           action: MAX_RANGE
       - trigger: event
         event_type: mobile_app_notification_action
-        id: normal_range
+        id: notify_normal_range
         event_data:
           action: NORMAL_RANGE
       - trigger: state
@@ -730,30 +740,35 @@ automation:
       - choose:
           - conditions:
               - condition: trigger
-                id: max_range
+                id: notify_max_range
             sequence:
-              - action: number.set_value
-                target:
-                  entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
-                data:
-                  value: >-
-                    100
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.long_range_travel
           - conditions:
               - condition: trigger
-                id: normal_range
+                id: notify_normal_range
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.long_range_travel
+          - conditions:
+              - condition: trigger
+                id:
+                  - max_range
+                  - normal_range
+              - alias: Leave the charge limit to the planner while the car is home
+                condition: not
+                conditions:
+                  - condition: state
+                    entity_id: @@PRIVATE:appdaemon_location_source_02@@
+                    state: "home"
             sequence:
               - action: number.set_value
                 target:
                   entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
                 data:
-                  value: >-
-                    80
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: input_boolean.long_range_travel
+                  value: "{{ 100 if trigger.id == 'max_range' else 80 }}"
 
   # - id: turn_off_max_range_charge_when_arrive_home
   #   alias: turn_off_max_range_charge_when_arrive_home

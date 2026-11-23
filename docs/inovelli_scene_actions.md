@@ -18,7 +18,6 @@ automation; scene actions must not make ordinary operation surprising.
 | `sensor.owner_suite_fan_switch_action` | Up / down double | Increase or decrease `fan.owner_suite` speed. | Single up turns on the ceiling and lamps (plus the bed strip) through adaptive lighting; single down turns the ceiling off. |
 | `sensor.office_fan_switch_action` | Up / down double | Increase or decrease `fan.office_ceiling_fan` speed. | Single taps turn `light.office_ceiling` on/off. |
 | `sensor.guest_room_fan_switch_action` | Up / down double | Increase or decrease `fan.guest_room` speed. | Single taps turn `light.guest_room_ceiling` on/off. |
-| `sensor.basement_bathroom_shower_switch_action` | Up / down double | No mapped action (triggers exist, no branch). | Single taps turn the shower light on/off. |
 
 ## Adding another mapping
 

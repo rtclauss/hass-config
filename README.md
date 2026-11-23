@@ -150,10 +150,23 @@ If you need to discover a station URI from Home Assistant, use Music Assistant s
 ### Validation
 
 After changing media scripts, validate the config the same way CI does
-(`.github/workflows/validate-config.yml` is the source of truth for the image tag):
+(`.github/workflows/validate-config.yml` is the source of truth for the image tag).
+
+Render the private packages with the values that fit the checkout:
+
+- **Live Home Assistant checkout:** use the real values
+  (`.private-runtime-config/values.json`, the renderer's default). Never render
+  `examples/private_values.example.json` here, because it replaces every
+  rendered package with synthetic identities and a reload would load them.
+- **Disposable worktree or clone:** the synthetic example values are fine
+  there, and that is what CI does.
 
 ```bash
-python scripts/render_private_config.py --values examples/private_values.example.json
+# Live checkout: real values
+python scripts/render_private_config.py
+# Disposable checkout only: synthetic values, as CI does
+# python scripts/render_private_config.py --values examples/private_values.example.json
+
 yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
   configuration.yaml blueprints esphome packages zigbee2mqtt examples
 

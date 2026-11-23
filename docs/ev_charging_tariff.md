@@ -73,10 +73,9 @@ Tariffs:
 - `mid_peak`
 - `on_peak`
 
-Known gap: `switch_ev_charging_tariff` sets the hourly, daily, and monthly
-tariff selects but not `select.weekly_ev_charging`. The weekly meter therefore
-stays on whatever tariff it last had, so the weekly per-tariff split and
-`sensor.weekly_ev_charging_cost` can be wrong.
+`switch_ev_charging_tariff` switches the hourly, daily, weekly, and monthly
+tariff selects together. `tests/test_utility_meter_tariff_switching.py` fails if
+a tariffed meter's select is left out.
 
 ### Derived EV totals
 
@@ -129,10 +128,13 @@ The built-in Energy panel preferences are not tracked in this repository, so the
 
 ## Validation
 
-Recommended validation after EV tariff changes:
+Recommended validation after EV tariff changes. In the live Home Assistant
+checkout, render with the real values (the renderer's default). Render the
+synthetic `examples/private_values.example.json` only in a disposable worktree
+or clone, because it overwrites every rendered package.
 
 ```bash
-python scripts/render_private_config.py --values examples/private_values.example.json
+python scripts/render_private_config.py   # live checkout: real values
 uv run --with pytest --with pyyaml --with jinja2 pytest
 
 # Same image CI uses (see HOME_ASSISTANT_CHECK_CONFIG_IMAGE in
