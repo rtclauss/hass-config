@@ -156,6 +156,10 @@ This is the explicit max-range override surfaced on the Tesla dashboard.
 
 When it is on, the planner pins the charge limit to `100%`.
 
+At `home` the planner is the **only** writer of the charge limit. `automation.set_charging_rate` (the override's dashboard/notification plumbing) used to write a hardcoded `100%`/`80%` as well. Turning the override off then started both automations at once: the planner set the alarm-tier target (for example `85%`), and a second later `set_charging_rate` overwrote it with `80%`. Now `set_charging_rate` only toggles the boolean from the `MAX_RANGE`/`NORMAL_RANGE` notification actions, and writes the limit directly only when `device_tracker.<private_vehicle_tracker>` is **not** `home`. The planner never runs away from home, so that path keeps the override working on a trip.
+
+The override does not turn itself off when a trip ends. Its only automatic clear is the night-arrival path in `packages/zone.yaml`. Otherwise it stays on, and every nightly `21:35` planner run re-pins `100%` until someone turns it off.
+
 ## Outputs
 
 ### Charge limit
