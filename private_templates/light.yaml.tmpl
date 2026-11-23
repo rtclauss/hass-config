@@ -293,6 +293,7 @@ homeassistant:
 automation:
   - id: basement_lights_auto_on
     alias: basement_lights_auto_on
+    description: "Light the basement in sequence when someone is on the basement landing (or basement playback stops while they are there), if nothing is playing, nobody is in bed, and the resident is home."
     trace:
       stored_traces: 10
     trigger:
@@ -355,6 +356,7 @@ automation:
 
   - id: cpap_on_lights_off
     alias: cpap_on_lights_off
+    description: "Turn off bedroom lights and run the goodnight integrity check when the CPAP starts drawing power at night, unless the wake-up alarm is firing."
     trace:
       stored_traces: 10
     trigger:
@@ -445,6 +447,7 @@ automation:
 
   - id: deck_light_auto_on
     alias: deck_light_auto_on
+    description: "Turn on the deck lights when a deck door opens from about two hours before sunset onward, if they are not already on."
     trace:
       stored_traces: 10
     trigger:
@@ -473,6 +476,7 @@ automation:
 
   - id: front_door_light_auto_toggle
     alias: front_door_light_auto_toggle
+    description: "Light the foyer and hall transition switches when the front door opens (20% at night or while someone is in bed, adaptive otherwise), and turn them off two minutes after the front path goes quiet if this automation turned them on."
     mode: restart
     trace:
       stored_traces: 10
@@ -572,6 +576,7 @@ automation:
 
   - id: front_lights_toggle
     alias: front_lights_toggle
+    description: "Run the exterior front and garage lights on a sun schedule: on 1h45m before sunset, dimmed to 25% at 02:00, back to full 45 minutes before sunrise, and off at sunrise."
     trace:
       stored_traces: 10
     trigger:
@@ -797,6 +802,7 @@ automation:
 
   - id: hallway_light_toggle_at_night
     alias: hallway_light_toggle_at_night
+    description: "At night while the resident is home, light the main and upstairs hallways on motion (dimmer when someone is in bed) and turn them off when motion clears."
     mode: restart
     trace:
       stored_traces: 50
@@ -1012,6 +1018,7 @@ automation:
 
   - id: in_bed_turn_off_other_lights
     alias: in_bed_turn_off_other_lights
+    description: "After someone has been in bed for 10 minutes at night, run the bedtime house transition and turn off all other lights (skipped in guest mode)."
     trace:
       stored_traces: 50
     trigger:
@@ -1181,6 +1188,7 @@ automation:
 
   - id: up_enable_owner_bedroom_light_auto_off
     alias: up_enable_owner_bedroom_light_auto_off
+    description: "On workdays, mark the owner-suite bedroom lamps as auto-on when bathroom occupancy changes while the lamps are on and nobody is in bed, so they can auto-off later."
     trace:
       stored_traces: 50
     trigger:
@@ -1206,6 +1214,7 @@ automation:
 
   - id: owner_suite_bath_light_auto_off_in_bed
     alias: owner_suite_bath_light_auto_off_in_bed
+    description: "Turn off the owner-suite bathroom lights two minutes after someone gets into bed."
     trace:
       stored_traces: 50
     trigger:
@@ -1227,6 +1236,7 @@ automation:
 
   - id: owner_suite_bath_light_auto_toggle
     alias: owner_suite_bath_light_auto_toggle
+    description: "Turn the owner-suite bathroom lights on with adaptive brightness when the room becomes occupied and off after 25 minutes empty."
     mode: restart
     trace:
       stored_traces: 10
@@ -1275,6 +1285,7 @@ automation:
 
   - id: owner_suite_light_auto_off
     alias: owner_suite_light_auto_off
+    description: "Turn off the owner-suite lamps and fan when the bedroom empties and nobody is in bed, if the lamps were auto-on or it is morning."
     trace:
       stored_traces: 10
     trigger:
@@ -1480,6 +1491,7 @@ automation:
   #           - light.office_ceiling
 
   - alias: transition_on_lights_when_home_near_sunset
+    description: "Two hours before sunset, if the resident is home, slowly fade on the kitchen, hallway, stairway, and den lights over 90 minutes and switch Inovelli LEDs to night TV mode."
     id: transition_on_lights_when_home_near_sunset
     trace:
       stored_traces: 50
@@ -1517,6 +1529,7 @@ automation:
           transition: 5400
 
   - alias: transition_on_lights_early_when_cloudy_when_home_near_sunset
+    description: "On cloudy days (cloud cover above 20%), start the 90-minute fade-on of the kitchen, hallway, stairway, and den lights four hours before sunset if the resident is home."
     id: transition_on_lights_early_when_cloudy_when_home_near_sunset
     trace:
       stored_traces: 50
@@ -1546,6 +1559,7 @@ automation:
           transition: 5400
 
   - alias: turn_off_alarm_firing
+    description: "Daily safety reset that clears the wake-up-alarm-firing flag in the afternoon in case it was left on."
     id: turn_off_alarm_firing
     trace:
       stored_traces: 10
@@ -1560,6 +1574,7 @@ automation:
 
   # TODO figure out a way to avoid the: motion downstairs but upstairs has turned off so I'm going to turn off everything.
   - alias: toggle_hallway_day
+    description: "During daylight while the resident is home, light the main and upstairs hallways on motion and turn them off after 15 minutes without motion."
     id: toggle_hallway_day
     mode: restart
     trace:
@@ -1717,6 +1732,7 @@ automation:
   #           - light.hall_lights_all
 
   - alias: turn_off_sleep_mode
+    description: "At 08:00 turn off sleep mode, move the house mode from night to home if it is still set, and apply day-mode Inovelli LEDs (owner-suite bathroom on workdays, office/guest room unless guest mode is on)."
     id: turn_off_sleep_mode
     trace:
       stored_traces: 50
@@ -1845,6 +1861,7 @@ automation:
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
+    description: "Between 22:00 and 06:00, when the owner-suite lamps turn off with someone in bed and the CPAP not yet running, turn on sleep mode and run the goodnight integrity check (skipped in guest mode)."
     trace:
       stored_traces: 50
     trigger:
@@ -1900,6 +1917,7 @@ automation:
 
   - id: owner_suite_bed_strip_off_when_lamps_off
     alias: owner_suite_bed_strip_off_when_lamps_off
+    description: "Turn off the under-bed light strip whenever the owner-suite lamps turn off, and apply the dark owner-suite LED policy overnight (22:00–06:00)."
     trace:
       stored_traces: 50
     trigger:
@@ -1921,6 +1939,7 @@ automation:
 
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
+    description: "Turn on the under-bed light strip at adaptive brightness on bedroom motion while the owner-suite lamps are on, the CPAP is not running, and the resident is home."
     mode: restart
     trace:
       stored_traces: 50
@@ -1964,6 +1983,7 @@ automation:
 
   - id: toggle_on_under_bed_on_motion
     alias: toggle_on_under_bed_on_motion
+    description: "Light the under-bed strip as a dim night light when bedside presence zones or motion detect someone getting up, and turn it off after an hour without motion; only runs while the CPAP is not running."
     mode: restart
     trace:
       stored_traces: 50
@@ -2122,6 +2142,7 @@ automation:
 
   - id: turn_off_basement_light_when_dark_in_room
     alias: turn_off_basement_light_when_dark_in_room
+    description: "Turn off the basement stairway lights when basement motion clears before 23:30 while the resident is home, if they were turned on automatically."
     mode: restart
     trace:
       stored_traces: 10
@@ -2494,6 +2515,7 @@ scene:
 ########################
 script:
   reset_basement:
+    description: "Reset the basement lights to the default basement scene."
     trace:
       stored_traces: 50
     sequence:
@@ -2537,6 +2559,7 @@ script:
 
   tiki_room_solid:
     alias: "Tiki Room Solid"
+    description: "Set the tiki room LED strip to a solid color."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2550,6 +2573,7 @@ script:
 
   tiki_room_bpm:
     alias: "Tiki Room BPM"
+    description: "Run the BPM effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2563,6 +2587,7 @@ script:
 
   tiki_room_candy_cane:
     alias: "Tiki Room Candy Cane"
+    description: "Run the candy cane effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2576,6 +2601,7 @@ script:
 
   tiki_room_christmas:
     alias: "Tiki Room Christmas"
+    description: "Run the Christmas effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2589,6 +2615,7 @@ script:
 
   tiki_room_confetti:
     alias: "Tiki Room Confetti"
+    description: "Run the confetti effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2602,6 +2629,7 @@ script:
 
   tiki_room_cyclon_rainbow:
     alias: "Tiki Room Cyclon Rainbow"
+    description: "Run the cyclon rainbow effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2615,6 +2643,7 @@ script:
 
   tiki_room_dots:
     alias: "Tiki Room Dots"
+    description: "Run the dots effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2628,6 +2657,7 @@ script:
 
   tiki_room_fire:
     alias: "Tiki Room Fire"
+    description: "Run the fire effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2641,6 +2671,7 @@ script:
 
   tiki_room_glitter:
     alias: "Tiki Room Glitter"
+    description: "Run the glitter effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2654,6 +2685,7 @@ script:
 
   tiki_room_juggle:
     alias: "Tiki Room Juggle"
+    description: "Run the juggle effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2667,6 +2699,7 @@ script:
 
   tiki_room_lightning:
     alias: "Tiki Room Lightning"
+    description: "Run the lightning effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2680,6 +2713,7 @@ script:
 
   tiki_room_noise:
     alias: "Tiki Room Noise"
+    description: "Run the noise effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2693,6 +2727,7 @@ script:
 
   tiki_room_police_all:
     alias: "Tiki Room Police All"
+    description: "Run the all-segments police effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2706,6 +2741,7 @@ script:
 
   tiki_room_police_one:
     alias: "Tiki Room Police One"
+    description: "Run the single-segment police effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2719,6 +2755,7 @@ script:
 
   tiki_room_rainbow:
     alias: "Tiki Room Rainbow"
+    description: "Run the rainbow effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2732,6 +2769,7 @@ script:
 
   tiki_room_rainbow_with_glitter:
     alias: "Tiki Room Rainbow With Glitter"
+    description: "Run the rainbow-with-glitter effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2745,6 +2783,7 @@ script:
 
   tiki_room_ripple:
     alias: "Tiki Room Ripple"
+    description: "Run the ripple effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2758,6 +2797,7 @@ script:
 
   tiki_room_sinelon:
     alias: "Tiki Room Sinelon"
+    description: "Run the sinelon effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2771,6 +2811,7 @@ script:
 
   tiki_room_twinkle:
     alias: "Tiki Room Twinkle"
+    description: "Run the twinkle effect on the tiki room LED strip."
     icon: mdi:led-strip-variant
     mode: single
     trace:
@@ -2783,6 +2824,7 @@ script:
           effect: twinkle
 
   lights_off_except:
+    description: "Turn off every light that is on except the ones passed in exclude_lights, and log which lights were turned off."
     icon: mdi:home-lightbulb
     mode: queued
     trace:

@@ -204,6 +204,7 @@ homeassistant:
 ################################################
 automation:
   - alias: replay_inovelli_led_policy_on_recovery
+    description: "Replay the Inovelli LED policy when an Inovelli switch comes back from unavailable, so recovered switches pick up the current day/night LED state."
     id: replay_inovelli_led_policy_on_recovery
     mode: restart
     trace:
@@ -232,6 +233,7 @@ automation:
           entity_id: script.replay_inovelli_led_policy_after_recovery
 
   - alias: basement_bathroom_switch_actions
+    description: "Map the basement bathroom shower switch paddle: single up turns the shower light on, single down turns it off."
     id: basement_bathroom_switch_actions
     trace:
       stored_traces: 10
@@ -270,6 +272,7 @@ automation:
                   entity_id: light.basement_bathroom_shower_switch
 
   - alias: dining_room_switch_actions
+    description: "Map the dining room wall switch paddle: single tap for adaptive on/off, double tap to warm or cool the dining lights' color temperature."
     id: dining_room_switch_actions
     trace:
       stored_traces: 10
@@ -330,6 +333,7 @@ automation:
                     {{ state_attr("light.dining_room_all", "color_temp_kelvin") | int(4000) - 200 }}
 
   - alias: dining_room_table_switch_actions
+    description: "Map double taps on the dining room table switch to adaptive on and off for the kitchen lights."
     id: dining_room_table_switch_actions
     trace:
       stored_traces: 10
@@ -363,6 +367,7 @@ automation:
                   entity_id: light.kitchen_all
 
   - alias: side_of_bed_toggles
+    description: "Track each side of the bed from the bed-presence sensor and light that side's lamp dimly when someone gets up at night, turning it off when they return."
     id: side_of_bed_toggles
     mode: queued
     trace:
@@ -621,6 +626,7 @@ automation:
                   entity_id: light.owner_suite_lamp_bulb_1
 
   - alias: in_bed_toggles
+    description: "Mark the bed occupied when either side is occupied (closing the owner-suite blinds and garage door) and clear the flag once both sides are empty."
     id: in_bed_toggles
     trace:
       stored_traces: 10
@@ -689,6 +695,7 @@ automation:
 
   - id: office_light_control_button
     alias: office_light_control_button
+    description: "Map the office light buttons: press toggles the office lights, brightness clicks step brightness up or down."
     trace:
       stored_traces: 10
     trigger:
@@ -781,6 +788,7 @@ automation:
 
   - id: reset_owner_suite_blinds
     alias: reset_owner_suite_blinds
+    description: "Every other day at 13:01, fully open the owner-suite blinds and then set them to 50% (skipped while the bed is occupied)."
     trace:
       stored_traces: 10
     trigger:
@@ -810,6 +818,7 @@ automation:
           position: 50
 
   - alias: guest_room_switch_actions
+    description: "Map the guest room switch paddle: single tap for light on/off, double tap to raise or lower fan speed."
     id: guest_room_switch_actions
     trace:
       stored_traces: 10
@@ -939,6 +948,7 @@ automation:
                   transition: 3
 
   - alias: kitchen_overhead_switch_actions
+    description: "Map the kitchen overhead switch paddle: single tap for adaptive on/off, hold up/down to step kitchen brightness."
     id: kitchen_overhead_switch_actions
     mode: restart
     trace:
@@ -1170,6 +1180,7 @@ automation:
                         below: 1
 
   - alias: office_switch_actions
+    description: "Map the office switch paddle: single tap for light on/off, double tap to raise or lower fan speed."
     id: office_switch_actions
     trace:
       stored_traces: 10
@@ -1222,6 +1233,7 @@ automation:
                   entity_id: fan.office_ceiling_fan
 
   - alias: owner_suite_switch_actions
+    description: "Map the owner-suite switch paddle: single tap for adaptive on/off, double tap to raise or lower fan speed."
     id: owner_suite_switch_actions
     trace:
       stored_traces: 10
@@ -1285,6 +1297,7 @@ automation:
 
   - id: reset_inovelli_config
     alias: reset_inovelli_config
+    description: "Reapply the standard Inovelli switch configuration when the reset button helper is pressed."
     trace:
       stored_traces: 10
     trigger:
@@ -1368,6 +1381,7 @@ automation:
 
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
+    description: "At startup, reload the Valetudo MQTT configuration for each available vacuum with bounded retries."
     # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
     # Main-level Valetudo reload is intentionally skipped until its current
     # endpoint is verified; the old .local hostname does not resolve from HA.
@@ -1523,6 +1537,7 @@ scene: []
 script:
   reload_valetudo_mqtt_with_retry:
     alias: Reload Valetudo MQTT config with bounded retry
+    description: "Call a Valetudo MQTT reload REST command with bounded retries and raise a persistent notification if all attempts fail."
     # Issue #1100: the Valetudo API is not always ready one minute after HA
     # starts, and its readiness window varies. Instead of guessing a longer
     # fixed delay, retry the PUT until the API accepts it (2xx response) or
@@ -1604,6 +1619,7 @@ script:
               notification_id: "{{ notification_id }}"
   reset_z2m_bindings_and_groups:
     alias: Reset Zigbee Bindings & Groups (Zigbee2MQTT)
+    description: "Ask Zigbee2MQTT to rebuild bindings and group memberships for router devices, logging any sleepy end devices it skipped."
     mode: single
     trace:
       stored_traces: 10
@@ -1693,6 +1709,7 @@ script:
             - delay: "00:00:01"
 
   night_tv_mode_switches:
+    description: "Apply night TV mode to Inovelli switch LEDs: dim, low-intensity colors so the switch bars do not light up the room."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -1762,6 +1779,7 @@ script:
           value: "0"
 
   day_mode_switches:
+    description: "Apply day mode to all Inovelli switches, including office/guest room and the owner-suite policy."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -1777,6 +1795,7 @@ script:
           policy: day
 
   day_mode_switches_general:
+    description: "Apply day-mode LED colors, intensities, and default local/remote levels to the general (non-owner-suite) Inovelli switches."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -1910,6 +1929,7 @@ script:
           value: "254"
 
   day_mode_switches_owner_suite_bedroom:
+    description: "Apply day-mode LEDs to the owner-suite bedroom Inovelli switches."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -1919,6 +1939,7 @@ script:
           scope: bedroom
 
   day_mode_switches_owner_suite_bathroom:
+    description: "Apply day-mode LEDs to the owner-suite bathroom Inovelli switches."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -1928,6 +1949,7 @@ script:
           scope: bathroom
 
   day_mode_switches_owner_suite_scope:
+    description: "Apply day-mode LED settings to the owner-suite Inovelli switches for the requested scope (bedroom or bathroom)."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -2026,6 +2048,7 @@ script:
           value: "170"
 
   apply_owner_suite_inovelli_led_policy:
+    description: "Apply the requested owner-suite Inovelli LED policy (day, night red, or off) to the requested scope, choosing from current state when no policy is given."
     icon: mdi:light-switch
     mode: queued
     max: 10
@@ -2081,6 +2104,7 @@ script:
               - action: script.turn_off_owner_suite_inovelli_switch_leds
 
   night_mode_switches_owner_suite:
+    description: "Apply night-mode (dim red) LED settings to the owner-suite Inovelli switches."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -2147,6 +2171,7 @@ script:
           value: "0"
 
   day_mode_switches_office_guest_room:
+    description: "Apply day-mode LED settings to the office and guest room Inovelli switches."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -2217,6 +2242,7 @@ script:
           value: "170"
 
   reset_inovelli_switches:
+    description: "Reset every Inovelli switch to the standard configuration (report rates, paddle behavior, double-tap levels) and show the aurora LED effect if nobody is in bed."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -2771,6 +2797,7 @@ script:
             fan control modes, group memberships, and bindings for switches and bulbs/groups.
 
   turn_off_all_inovelli_switch_leds:
+    description: "Turn off the LED bars on every Inovelli switch and clear any active LED effects."
     icon: mdi:light-switch-off
     trace:
       stored_traces: 10
@@ -2811,6 +2838,7 @@ script:
       - action: script.inovelli_led_clear_all_effects
 
   restore_inovelli_switch_leds_from_trip:
+    description: "After a trip ends, restore Inovelli switch LEDs to the night or day policy that matches the current sleep mode and room state."
     icon: mdi:light-switch
     trace:
       stored_traces: 10
@@ -2916,6 +2944,7 @@ script:
                   policy: dark
 
   turn_off_owner_suite_inovelli_switch_leds:
+    description: "Turn off the LED bars on the owner-suite Inovelli switches, with retries for flaky Zigbee writes."
     icon: mdi:light-switch
     trace:
       stored_traces: 10

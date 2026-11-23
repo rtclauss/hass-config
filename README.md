@@ -149,31 +149,70 @@ If you need to discover a station URI from Home Assistant, use Music Assistant s
 
 ### Validation
 
-After changing media scripts, validate the config the same way CI does:
+After changing media scripts, validate the config the same way CI does
+(`.github/workflows/validate-config.yml` is the source of truth for the image tag):
 
 ```bash
+python scripts/render_private_config.py --values examples/private_values.example.json
 yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
-  configuration.yaml automations.yaml blueprints packages zigbee2mqtt
+  configuration.yaml blueprints esphome packages zigbee2mqtt examples
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.8.3 \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.10.4 \
   python -m homeassistant --config /config --script check_config
 ```
 
 ## Feature Docs
 
-- [Available Device Inventory](inventory.md)
+Start with the [Automations and Scripts Catalog](docs/automations_and_scripts.md).
+It is generated from the YAML and lists every automation and script with its
+`description:`. The topic docs below explain the behavior in more depth. The
+Allium specs in `specs/` are the source of truth for alarm/wake-up, bedtime, and
+diffuser behavior.
+
+House modes, presence, and travel
 - [House Transition Framework](docs/house_transition_framework.md)
-- [Home Assistant Label Model](docs/ha_labels.md)
-- [Home Assistant Name Reconciliation](docs/ha_name_reconciliation.md)
-- [Inovelli Scene Action Map](docs/inovelli_scene_actions.md)
+- [Trip Mode Orchestration](docs/trip_mode_orchestration.md)
+- [Travel Detection Regression Matrix](docs/travel_detection_regression_matrix.md)
+- [Room Confidence Occupancy](docs/room_confidence_occupancy.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
-- [Built-In Security Dashboard](docs/security_dashboard.md)
+
+Lighting, switches, and notifications
+- [Inovelli Scene Action Map](docs/inovelli_scene_actions.md)
+- [Inovelli House-State Notifications](docs/inovelli_house_state_notifications.md)
+- [Notification Policy](docs/notification_policy.md)
+- [Notification Audit](docs/notification_audit.md)
+- [Holiday Calendar Coverage](docs/holiday_calendar_coverage.md)
+
+Media, displays, and dashboards
+- [Music Assistant & Sonos](docs/music_assistant.md)
 - [Inky E-Ink Displays](docs/inky_displays.md)
-- [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
-- [EV Charging Tariff](docs/ev_charging_tariff.md)
+- [Built-In Security Dashboard](docs/security_dashboard.md)
+- [Calm Contextual Dashboard](docs/calm_dashboard.md)
+- [Dashboard Design Guide](docs/dashboard_design.md)
+
+Car, energy, and utilities
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
+- [EV Charging Tariff](docs/ev_charging_tariff.md)
+- [RTL-SDR / Gas Meter Watchdog](docs/rtlsdr_watchdog.md)
+- [Fermentor Reboot Control](docs/fermentor_reboot.md)
+
+Devices and integrations
+- [Available Device Inventory](inventory.md)
+- [Robot Cleaning](docs/vacuum_cleaning.md)
+- [Uplift Desk](docs/uplift_desk.md)
+- [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
+- [custom_components and HACS](docs/custom_components.md)
+- [Local Ollama Home Analyst](docs/home_analyst.md)
+
+Repo operations
+- [Private Runtime Configuration](docs/private_runtime_config.md)
+- [AppDaemon Sync](docs/appdaemon_sync.md)
+- [Home Assistant Label Model](docs/ha_labels.md)
+- [Home Assistant Name Reconciliation](docs/ha_name_reconciliation.md)
+- [Legacy Template Refactor Targets](docs/legacy_template_refactor_targets.md)
+- [Memory Pressure Investigation](docs/memory_pressure_probe.md)
 
 ## E-Ink Display Capability
 

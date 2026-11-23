@@ -91,6 +91,7 @@ alarm_control_panel:
 automation:
   - id: water_leak_detected
     alias: water_leak_detected
+    description: "Notify everyone (persistent notification plus push) when any moisture sensor detects water, and clear the alert when the sensor dries out."
     trace:
       stored_traces: 10
     # Area targets follow replacement leak sensors without stale entity IDs.
@@ -164,6 +165,7 @@ automation:
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
+    description: "While the alarm is armed away, treat an egress door/window opening or office occupancy as an intrusion: trigger the alarm and notify everyone."
     mode: restart
     trace:
       stored_traces: 10
@@ -282,6 +284,7 @@ automation:
           data: "{{ notify_data }}"
 
   - alias: send_pic_from_camera
+    description: "Push a live camera stream link to the owner's phone when tiki room or living room camera motion persists for five seconds."
     id: send_pic_from_camera
     # Sends a mobile notification with a camera snapshot when motion is detected.
     # Triggers on basement or living room motion sensors held for 5 seconds.
@@ -316,6 +319,7 @@ automation:
                  else 'camera.livingroomcamera' }}
 
   - alias: arm_alarm
+    description: "Arm the alarm away, enable indoor camera motion detection, and mark the house unoccupied when the resident leaves home (skipped in guest mode)."
     id: arm_alarm
     trace:
       stored_traces: 10
@@ -351,6 +355,7 @@ automation:
             - input_boolean.house_unoccupied
 
   - alias: disarm_alarm
+    description: "Disarm the alarm, disable indoor camera motion detection, and clear the house-unoccupied flag when the resident returns home."
     id: disarm_alarm
     trace:
       stored_traces: 10

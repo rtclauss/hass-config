@@ -45,16 +45,30 @@ Common optional fields:
 
 ## Current Delegates
 
+Private packages are rendered from `private_templates/*.tmpl`. Edit the
+template, not the rendered package.
+
 - `packages/zone.yaml`
-  `cloudy_home_arrival`, `default_arrive_home`,
-  `turn_on_lights_at_night_when_i_get_home`,
-  `turn_on_bedroom_lights_at_night_when_i_get_home`,
-  `run_verified_departure`
+  - Arrivals: `cloudy_home_arrival`, `default_arrive_home`,
+    `turn_on_lights_at_night_when_i_get_home`, and
+    `turn_on_bedroom_lights_at_night_when_i_get_home` call
+    `script.contextual_arrival_transition`. That script applies
+    absence-tiered arrival lighting and climate, then calls
+    `script.house_transition` with `mode: home` or `mode: night`.
+  - Departure: `run_verified_departure` calls `script.departure_integrity`,
+    which calls `script.house_transition` with `mode: away`.
 - `packages/guest.yaml`
-  guest-mode enable/disable and guest climate refresh automations
+  `apply_guest_mode_policy_on_change`, `climate_guest_mode_day`, and
+  `climate_guest_mode_night`
 - `packages/trips.yaml`
-  trip-mode manager enable/disable paths, startup reconciliation, and the
-  one-hour home watchdog
+  Only `trip_mode_manager` calls the script. Startup reconciliation and the
+  one-hour home watchdog fire `trip_mode_resolution_requested` events, and the
+  manager handles them.
+- `packages/light.yaml`
+  `in_bed_turn_off_other_lights` (bedtime night transition) and
+  `turn_off_sleep_mode` (08:00 day transition)
+- `packages/workday.yaml`
+  `script.owner_suite_morning_transition`, which the wake-up tasks call
 
 ## Trip Mode
 

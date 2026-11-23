@@ -12,6 +12,7 @@
 automation:
   - id: refresh_z2m_lifecycle_inventory
     alias: refresh_z2m_lifecycle_inventory
+    description: "Request a fresh Zigbee2MQTT device inventory at startup, every 30 minutes, and after bridge state changes or device removals."
     mode: single
     trace:
       stored_traces: 10
@@ -39,6 +40,7 @@ automation:
 
   - id: sync_z2m_decommission_options
     alias: sync_z2m_decommission_options
+    description: "Keep the Z2M decommission dropdown's options in sync with the current lifecycle-issue device list."
     mode: restart
     trace:
       stored_traces: 10
@@ -72,6 +74,7 @@ automation:
 
   - id: notify_z2m_lifecycle_issues
     alias: notify_z2m_lifecycle_issues
+    description: "Raise or dismiss the Zigbee2MQTT lifecycle-issues persistent notification and notify everyone when the issue summary changes."
     mode: restart
     trace:
       stored_traces: 10
@@ -133,6 +136,7 @@ automation:
 
   - id: handle_z2m_device_remove_response
     alias: handle_z2m_device_remove_response
+    description: "Report the result of a Zigbee2MQTT device-remove request and refresh the inventory after a successful removal."
     mode: queued
     max: 10
     trace:
@@ -337,6 +341,7 @@ automation:
   # leaves the network or drops right after joining.
   - id: shutdown_proxmox_z2m_unavailable
     alias: shutdown_proxmox_z2m_unavailable
+    description: "Escalate bridge-wide Zigbee2MQTT outages while the host watchdog is armed: notify, restart the Z2M app (up to 3 times, not during OTA updates), then shut down the Proxmox host as a last resort."
     mode: single
     max_exceeded: silent
     trace:
@@ -639,6 +644,7 @@ input_select:
 script:
   z2m_reset_reboot_counter:
     alias: Z2M - Reset Reboot Counter
+    description: "Reset the Zigbee2MQTT watchdog reboot counter."
     mode: single
     trace:
       stored_traces: 10
@@ -649,6 +655,7 @@ script:
 
   z2m_decommission_selected_device:
     alias: Z2M - Decommission Selected Device
+    description: "Decommission the device selected in the Z2M decommission dropdown."
     mode: single
     trace:
       stored_traces: 10
@@ -659,6 +666,7 @@ script:
 
   z2m_force_decommission_selected_device:
     alias: Z2M - Force Decommission Selected Device
+    description: "Force-remove the device selected in the Z2M decommission dropdown, even if it is not responding."
     mode: single
     trace:
       stored_traces: 10
@@ -669,6 +677,7 @@ script:
 
   z2m_decommission_device:
     alias: Z2M - Decommission Device
+    description: "Send a Zigbee2MQTT remove request for the selected device (optionally forced) and post a persistent notification about the request."
     mode: single
     trace:
       stored_traces: 10
