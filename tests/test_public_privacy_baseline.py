@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_private_location_slug_is_rendered_for_travel_logic() -> None:
     templates = {
         "car.yaml.tmpl": {"zone_05_slug": 2, "zone_08_slug": 2},
-        "curling.yaml.tmpl": {"zone_05_slug": 6, "zone_08_slug": 8},
+        "curling.yaml.tmpl": {"zone_05_slug": 7, "zone_08_slug": 8},
         "tiles_tesla_charging.yaml.tmpl": {"zone_05_slug": 2, "zone_08_slug": 2},
     }
     for name, counts in templates.items():
