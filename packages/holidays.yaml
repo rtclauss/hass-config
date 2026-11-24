@@ -1204,8 +1204,12 @@ script:
 ########################
 template:
   - binary_sensor:
+      # unique_id must stay `christmas_season`: it re-claims the original
+      # registry entry. Without it HA creates binary_sensor.christmas_season_2
+      # and every consumer of binary_sensor.christmas_season reads unavailable.
       - default_entity_id: binary_sensor.christmas_season
-        state: '{{ now().strftime("%m") |int in [12] }}'
+        unique_id: christmas_season
+        state: "{{ now().month == 12 }}"
         name: christmas_season
 
       - name: st_andrews_day
