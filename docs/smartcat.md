@@ -169,12 +169,9 @@ Rollback: delete the Smart Cat integration entry, remove
 `lovelace/dashboards/cats.yaml` and `custom_components/smartcat/`, then
 restart. `/config/smartcat.db` stays; delete it to drop the history.
 
-Observed on the live account (both robots are Litter-Robot 4): the activity
-query returned only about four days of history on first install, and the
-backfill windows before that came back empty, so history builds up from
-install onward. Whisker appears to limit activity history without a Whisker+
-subscription; this is not confirmed. Insights show "Learning" until a week of
-visits exists.
+Both robots are Litter-Robot 4s and arrived on 2026-11-20, so the activity
+history (and the backfill) starts there. Insights show "Learning" until a week
+of visits exists.
 
 The LR5 `PET_VISIT` parsing (undocumented field names, parsed tolerantly)
 is unused here and still unverified against a real LR5.
