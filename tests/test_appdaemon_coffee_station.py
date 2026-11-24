@@ -1205,3 +1205,31 @@ def test_published_attributes_survive_appdaemon_falsy_filtering(monkeypatch, tmp
     assert attrs["fault_reason"] == "none"
     assert attrs["home"] == "true"
     assert isinstance(attrs["issues"], list)
+
+
+def test_heating_pulse_at_startup_deadline_still_faults():
+    """Codex P1 on #1257: a pulse crossing the threshold just before the
+    startup deadline and dropping before confirmation must not leave the
+    station supervised only by the 12-minute limit."""
+    sim = armed_evening()
+    sim.request("brew_now")
+    sim.power(2.0)
+    sim.advance(29)
+    sim.power(BREW_W)  # heating pulse starts at 29 s
+    sim.advance(2)  # startup deadline (30 s) passes while confirming
+    assert sim.state == cs.STARTING
+    sim.power(2.0)  # pulse ends before the 10 s confirmation
+    sim.advance(15)
+    assert sim.state == cs.FAULT
+    assert sim.core.fault_reason == "failed_to_start"
+    assert sim.core.plug == "off"
+
+
+def test_heating_confirmed_just_after_startup_deadline_brews():
+    sim = armed_evening()
+    sim.request("brew_now")
+    sim.power(2.0)
+    sim.advance(25)
+    sim.heat(20)  # crosses at 25 s, confirmed at 35 s
+    assert sim.state == cs.BREWING
+    assert not sim.core.timer_active("startup")

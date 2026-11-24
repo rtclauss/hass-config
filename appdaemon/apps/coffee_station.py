@@ -1180,10 +1180,17 @@ class CoffeeCore:
         return None
 
     def _timer_startup(self, now: datetime) -> None:
-        if self.state == STARTING and self.brew is not None and self.brew.heat_above_since is None:
-            self._fault("failed_to_start",
-                        f"The coffee maker did not start heating within {self.cfg.startup_timeout_s:.0f} s "
-                        "(check the brewer's own switch and the plug). The plug was switched off.", now)
+        if self.state != STARTING or self.brew is None:
+            return
+        if self.brew.heat_above_since is not None:
+            # Heating began near the deadline and is still being confirmed.
+            # Re-arm the startup check for one confirmation interval instead of
+            # consuming it, so a pulse that fails confirmation still faults.
+            self._schedule("startup", self.cfg.heating_confirm_s + 1)
+            return
+        self._fault("failed_to_start",
+                    f"The coffee maker did not start heating within {self.cfg.startup_timeout_s:.0f} s "
+                    "(check the brewer's own switch and the plug). The plug was switched off.", now)
 
     def _timer_heat_confirm(self, now: datetime) -> None:
         brew = self.brew
