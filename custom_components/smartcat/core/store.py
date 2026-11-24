@@ -107,8 +107,10 @@ class Store:
     def upsert_visits(self, visits: Iterable[Visit]) -> list[Visit]:
         """Insert new visits, fill in missing details of known ones.
 
-        Returns the visits that were new. An existing duration is kept: a later,
-        partial re-fetch of the same window can only estimate it worse.
+        Returns the visits that were new. Of two duration estimates the longer
+        one wins: an estimate from a fetch that saw only part of the visit (its
+        first detection fell before the fetch window) starts too late, so it
+        is shorter, never longer. The raw details follow the winning estimate.
         """
         new: list[Visit] = []
         with self._lock, self._conn:
@@ -120,11 +122,19 @@ class Store:
                 if exists:
                     self._conn.execute(
                         "UPDATE visits SET "
-                        "weight = COALESCE(weight, ?), "
-                        "duration = COALESCE(duration, ?), "
-                        "whisker_pet_id = COALESCE(whisker_pet_id, ?), "
-                        "raw = COALESCE(raw, ?) WHERE key = ?",
-                        (visit.weight_lbs, visit.duration_s, visit.whisker_pet_id, raw, visit.key),
+                        "weight = COALESCE(weight, :weight), "
+                        "raw = CASE WHEN :duration > COALESCE(duration, -1) THEN COALESCE(:raw, raw) "
+                        "ELSE COALESCE(raw, :raw) END, "
+                        "duration = MAX(COALESCE(duration, :duration), "
+                        "COALESCE(:duration, duration)), "
+                        "whisker_pet_id = COALESCE(whisker_pet_id, :pet) WHERE key = :key",
+                        {
+                            "weight": visit.weight_lbs,
+                            "duration": visit.duration_s,
+                            "raw": raw,
+                            "pet": visit.whisker_pet_id,
+                            "key": visit.key,
+                        },
                     )
                     continue
                 self._conn.execute(

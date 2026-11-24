@@ -152,18 +152,27 @@ async def _lr4_window(robot: Any, start: datetime, end: datetime) -> list[dict[s
     return rows if isinstance(rows, list) else []
 
 
-async def fetch_lr5_records(robot: Any, since: datetime) -> list[dict[str, Any]]:
-    """Fetch LR5 activity records newer than `since` (newest first, paged)."""
+async def fetch_lr5_records(
+    robot: Any, since: datetime, offset: int = 0
+) -> tuple[list[dict[str, Any]], int, bool]:
+    """Fetch LR5 activity records (newest first) from `offset` back to `since`.
+
+    Reads at most LR5_MAX_PAGES_PER_REFRESH pages. Returns the records, the
+    offset to continue from, and whether fetching reached `since` or the end
+    of the feed. When it did not, the caller continues from the returned
+    offset on a later refresh.
+    """
     records: list[dict[str, Any]] = []
-    for page in range(LR5_MAX_PAGES_PER_REFRESH):
-        batch = await robot.get_activities(limit=LR5_PAGE_SIZE, offset=page * LR5_PAGE_SIZE)
+    for _ in range(LR5_MAX_PAGES_PER_REFRESH):
+        batch = await robot.get_activities(limit=LR5_PAGE_SIZE, offset=offset)
         if not batch:
-            break
+            return records, offset, True
         records.extend(batch)
+        offset += len(batch)
         times = [t for r in batch if (t := lr5_record_time(r)) is not None]
         if len(batch) < LR5_PAGE_SIZE or (times and min(times) < since):
-            break
-    return records
+            return records, offset, True
+    return records, offset, False
 
 
 def robot_levels(robot: Any) -> tuple[float | None, float | None, int | None, bool]:

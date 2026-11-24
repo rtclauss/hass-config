@@ -119,9 +119,17 @@ def lr4_visits(
     """Reconstruct LR4 visits from normalised events.
 
     Events are split into segments by clean cycles. Inside a segment every
-    weigh-in is one visit; a segment with detections but no weigh-in becomes one
-    visit without a weight. Only the last visit of a closed segment gets a
-    duration, since only its exit time can be inferred from the cycle start.
+    weigh-in is one visit; a closed segment with detections but no weigh-in
+    becomes one visit without a weight. Only the last visit of a closed segment
+    gets a duration, since only its exit time can be inferred from the cycle
+    start.
+
+    The trailing segment is still open (no clean cycle yet). Its weigh-ins are
+    returned, keyed by their own timestamps, so a later fetch updates them in
+    place. A detection there without a weigh-in is not returned yet: the
+    weight may still arrive, and that visit would be keyed by the weigh-in, not
+    the detection, so returning it now would count one trip twice. Callers
+    re-fetch from `lr4_open_since` so the segment is seen again once it closes.
     """
     wait = timedelta(minutes=wait_minutes)
     ordered = sorted(events, key=lambda e: (e.timestamp, e.kind != DETECT))
@@ -143,7 +151,7 @@ def lr4_visits(
                 exit_at = max(candidate, last_event)
 
         if not weights:
-            if detects:
+            if detects and cycle_at is not None:
                 start = detects[0].timestamp
                 visits.append(
                     Visit(
@@ -188,6 +196,17 @@ def lr4_visits(
             segment.append(event)
     close(None)
     return visits
+
+
+def lr4_open_since(events: Iterable[LR4Event]) -> datetime | None:
+    """Return when the trailing, not yet cycled segment began, if there is one."""
+    open_since: datetime | None = None
+    for event in sorted(events, key=lambda e: (e.timestamp, e.kind != DETECT)):
+        if event.kind == CYCLE:
+            open_since = None
+        elif open_since is None:
+            open_since = event.timestamp
+    return open_since
 
 
 def _duration(start: datetime, exit_at: datetime | None) -> float | None:

@@ -21,14 +21,16 @@ from homeassistant.components.recorder.models import (
     StatisticMeanType,
     StatisticMetaData,
 )
+from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.const import UnitOfMass, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
 from .core.models import Assignment, Cat, Visit
 
 TRUSTED_METHODS = ("matched", "pet_id")
+KINDS = ("visits", "weight", "visit_duration")
 
 
 def statistic_id(cat_id: str, kind: str) -> str:
@@ -120,14 +122,32 @@ def _metadata(cat: Cat, kind: str) -> StatisticMetaData:
     )
 
 
+@callback
+def async_clear_cat_statistics(hass: HomeAssistant, cat_id: str) -> None:
+    """Delete every statistic of one cat (rows and metadata)."""
+    get_instance(hass).async_clear_statistics([statistic_id(cat_id, kind) for kind in KINDS])
+
+
+@callback
 def async_publish_cat_statistics(
     hass: HomeAssistant,
     cat: Cat,
     visits: Sequence[Visit],
     assignments: dict[str, Assignment],
     since: datetime | None,
+    *,
+    rebuild: bool = False,
 ) -> int:
-    """Queue statistics rows for one cat. Returns the number of rows queued."""
+    """Queue statistics rows for one cat. Returns the number of rows queued.
+
+    Importing only adds or updates hours, so an hour that lost all its visits
+    (a visit moved to another cat) would keep its old row. `rebuild` clears
+    the cat's statistics first and re-imports all of them; the recorder runs
+    both tasks in order.
+    """
+    if rebuild:
+        async_clear_cat_statistics(hass, cat.cat_id)
+        since = None
     rows = build_cat_statistics(visits, assignments, cat.cat_id, since)
     queued = 0
     for kind, data in rows.items():

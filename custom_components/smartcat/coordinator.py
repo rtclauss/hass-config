@@ -30,6 +30,8 @@ from .const import (
     EVENT_VISIT,
     FETCH_OVERLAP,
     INITIAL_LIVE_WINDOW,
+    LR4_OPEN_SEGMENT_HOLD,
+    LR5_PAGE_SIZE,
     NEW_VISIT_EVENT_WINDOW,
     PUSH_REFRESH_DELAY,
     UPDATE_INTERVAL,
@@ -38,9 +40,9 @@ from .core.analytics import CatInsights, cat_insights
 from .core.forecast import LevelForecast, cycles_per_day, forecast_level
 from .core.identify import Identifier, identify_all
 from .core.models import Assignment, Cat, LevelReading, NewCatCandidate, Visit
-from .core.parse import lr4_visits, lr5_visits
+from .core.parse import lr4_open_since, lr4_visits, lr5_record_time, lr5_visits
 from .core.store import Store
-from .statistics import async_publish_cat_statistics
+from .statistics import async_clear_cat_statistics, async_publish_cat_statistics
 from .whisker import (
     fetch_lr4_events,
     fetch_lr4_events_backward,
@@ -110,7 +112,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         self.assignments: dict[str, Assignment] = {}
         self.identifier: Identifier | None = None
         self.visits: list[Visit] = []
-        self._published: dict[str, dict[str, str | None]] = {}
+        self._published: dict[str, dict[str, tuple[str, float | None, float | None]]] = {}
         self._started = dt_util.utcnow()
         self._unsubs: list[Callable[[], None]] = []
         self._last_status: dict[str, str | None] = {}
@@ -198,38 +200,79 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         override = await self._run(self.store.get_meta, "backfill_days")
         target = now - timedelta(days=int(override or self.backfill_days))
         cursor = await self._run(self.store.get_meta, live_key)
-        if cursor:
-            since = datetime.fromisoformat(cursor) - FETCH_OVERLAP
+        previous_cursor = datetime.fromisoformat(cursor) if cursor else None
+        if previous_cursor is not None:
+            since = previous_cursor - FETCH_OVERLAP
         else:
             since = max(target, now - INITIAL_LIVE_WINDOW)
-            await self._run(self.store.set_meta, back_key, since.isoformat())
 
         visits: list[Visit]
         if kind == "lr4":
+            if previous_cursor is None:
+                await self._run(self.store.set_meta, back_key, since.isoformat())
             wait = robot.clean_cycle_wait_time_minutes
             events, reached = await fetch_lr4_events(robot, since, now)
             visits = lr4_visits(robot.serial, events, wait)
             new_cursor = reached
+            open_since = lr4_open_since(events)
+            if open_since is not None and reached - open_since < LR4_OPEN_SEGMENT_HOLD:
+                # Fetch the unfinished visit again next time, so it is rebuilt
+                # whole once its clean cycle arrives.
+                new_cursor = min(reached, open_since)
             frontier_text = await self._run(self.store.get_meta, back_key)
             frontier = datetime.fromisoformat(frontier_text) if frontier_text else target
             if frontier > target:
-                old_events, frontier = await fetch_lr4_events_backward(robot, frontier, target)
+                # Overlap the newer history so a visit cut by the previous
+                # batch boundary is seen whole, with its clean cycle.
+                old_events, frontier = await fetch_lr4_events_backward(
+                    robot, frontier + FETCH_OVERLAP, target
+                )
                 visits += lr4_visits(robot.serial, old_events, wait)
                 await self._run(self.store.set_meta, back_key, frontier.isoformat())
             done = frontier <= target
         else:
-            # LR5 pages newest first, so a deep first fetch is still recent-first.
-            if not cursor:
-                since = target
-            records = await fetch_lr5_records(robot, since)
-            visits = [v for v in lr5_visits(robot.serial, records) if v.timestamp >= since]
-            new_cursor = lr5_cursor_from(records, since + FETCH_OVERLAP)
-            done = True
+            visits, new_cursor, done = await self._sync_lr5(
+                robot, since if previous_cursor else target, previous_cursor, target, back_key
+            )
         inserted = await self._run(self.store.upsert_visits, visits)
         await self._run(self.store.set_meta, live_key, new_cursor.isoformat())
         if inserted:
             _LOGGER.debug("%s: %s new visits", robot.name, len(inserted))
         return inserted, done
+
+    async def _sync_lr5(
+        self,
+        robot: Any,
+        since: datetime,
+        previous_cursor: datetime | None,
+        target: datetime,
+        back_key: str,
+    ) -> tuple[list[Visit], datetime, bool]:
+        """Fetch LR5 records. Returns (visits, live cursor, backfill done).
+
+        The feed pages newest first by offset. The live fetch reads from the
+        top down to the cursor. When a fetch stops at the page limit before
+        reaching the backfill depth, the offset it stopped at is kept as the
+        backfill frontier and continued on later refreshes. New records push
+        older ones to higher offsets, so the frontier is shifted by the number
+        of records newer than the previous cursor, less one page of overlap.
+        """
+        records, offset, reached = await fetch_lr5_records(robot, since)
+        new_cursor = lr5_cursor_from(records, previous_cursor or since)
+        frontier = await self._run(self.store.get_meta, back_key)
+        if previous_cursor is None and not reached:
+            frontier = str(offset)
+        elif frontier is not None:
+            newer = sum(
+                1 for r in records if (t := lr5_record_time(r)) is not None and t > previous_cursor
+            )
+            start = max(0, int(frontier) + newer - LR5_PAGE_SIZE)
+            older, offset, reached = await fetch_lr5_records(robot, target, start)
+            records += older
+            frontier = None if reached else str(offset)
+        await self._run(self.store.set_meta, back_key, frontier)
+        visits = [v for v in lr5_visits(robot.serial, records) if v.timestamp >= target]
+        return visits, new_cursor, frontier is None
 
     async def _record_levels(self, robot: Any, now: datetime) -> None:
         waste, litter, cycles, busy = robot_levels(robot)
@@ -351,22 +394,38 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
     def _publish_statistics(
         self, cats: list[Cat], visits: list[Visit], assignments: dict[str, Assignment]
     ) -> None:
-        """Import statistics from the earliest hour whose attribution changed."""
+        """Import statistics for what changed since the last publish.
+
+        New visits and filled-in details only add data, so importing from the
+        earliest changed hour is enough. A visit that left a cat (another cat
+        was added, a cat was removed) or changed how it was matched can empty
+        an hour, and importing cannot remove rows, so that cat is rebuilt. The
+        first publish after startup also rebuilds: what was published before
+        is unknown.
+        """
+        for cat_id in set(self._published) - {cat.cat_id for cat in cats}:
+            async_clear_cat_statistics(self.hass, cat_id)
+            del self._published[cat_id]
         for cat in cats:
             current = {
-                v.key: f"{assignments[v.key].method}:{v.weight_lbs}:{v.duration_s}"
+                v.key: (assignments[v.key].method, v.weight_lbs, v.duration_s)
                 for v in visits
                 if assignments[v.key].cat_id == cat.cat_id
             }
             previous = self._published.get(cat.cat_id)
-            if previous is None:
-                since = None  # first run: publish everything
-            else:
-                changed = {k for k in current.keys() | previous.keys() if current.get(k) != previous.get(k)}
+            rebuild = previous is None or any(
+                key not in current or current[key][0] != value[0]
+                for key, value in previous.items()
+            )
+            since: datetime | None = None
+            if not rebuild:
+                changed = [key for key, value in current.items() if previous.get(key) != value]
                 if not changed:
                     continue
                 since = min(datetime.fromtimestamp(int(k.rsplit(":", 1)[1]), UTC) for k in changed)
-            async_publish_cat_statistics(self.hass, cat, visits, assignments, since)
+            async_publish_cat_statistics(
+                self.hass, cat, visits, assignments, since, rebuild=rebuild
+            )
             self._published[cat.cat_id] = current
 
     # --- push ---------------------------------------------------------------

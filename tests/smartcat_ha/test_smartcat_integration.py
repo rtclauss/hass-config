@@ -23,6 +23,8 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components.smartcat.const import DOMAIN, EVENT_VISIT
+from custom_components.smartcat.core.identify import identify_all
+from custom_components.smartcat.core.models import Assignment
 
 NOW = datetime(2026, 11, 23, 20, 0, tzinfo=UTC)
 
@@ -278,3 +280,118 @@ async def test_new_cat_detected(
     data = entry.runtime_data.data
     assert data.candidate is None
     assert data.insights["kitten"].total_visits == 16
+
+
+async def test_refresh_between_detection_and_weigh_in_counts_one_visit(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(NOW)
+    entry = await setup_smartcat(hass, tmp_path)
+    coordinator = entry.runtime_data
+    events = async_capture_events(hass, EVENT_VISIT)
+    lr4 = whisker.robots[0]
+    start = NOW + timedelta(minutes=10)
+
+    # A refresh lands after the cat was detected but before it was weighed.
+    lr4.rows.append({"timestamp": api_ts(start), "value": "robotStatusCatDetect", "actionValue": ""})
+    freezer.move_to(start + timedelta(seconds=30))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert events == []
+
+    # The weigh-in and clean cycle arrive; the next refresh sees the whole visit.
+    lr4.rows += [
+        {"timestamp": api_ts(start + timedelta(minutes=1)), "value": "catWeight", "actionValue": "13.12"},
+        {"timestamp": api_ts(start + timedelta(minutes=9)), "value": "robotCycleStatusDump", "actionValue": ""},
+    ]
+    freezer.move_to(start + timedelta(minutes=20))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    stored = await hass.async_add_executor_job(coordinator.store.visits, NOW)
+    assert [(v.weight_lbs, v.duration_s) for v in stored if v.robot_serial == lr4.serial] == [
+        (13.12, pytest.approx(120))
+    ]
+    assert len(events) == 1
+
+
+async def test_lr5_backfill_continues_past_the_page_limit(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    lr5 = whisker.robots[1]
+    lr5.records = [
+        {
+            "type": "PET_VISIT",
+            "timestamp": (NOW - timedelta(days=d, hours=3)).isoformat(),
+            "petId": "PET-SPLASHY",
+            "weight": 1095,
+            "duration": 80,
+        }
+        for d in range(40, 0, -1)
+    ]
+    freezer.move_to(NOW)
+    # Two pages of five per refresh: 40 records need several refreshes.
+    with (
+        patch("custom_components.smartcat.whisker.LR5_PAGE_SIZE", 5),
+        patch("custom_components.smartcat.whisker.LR5_MAX_PAGES_PER_REFRESH", 2),
+        patch("custom_components.smartcat.coordinator.LR5_PAGE_SIZE", 5),
+    ):
+        entry = await setup_smartcat(hass, tmp_path)
+        coordinator = entry.runtime_data
+        assert not coordinator.data.backfill_complete
+        for step in range(12):
+            # New visits keep arriving, shifting older records to higher offsets.
+            lr5.records.append(
+                {
+                    "type": "PET_VISIT",
+                    "timestamp": (NOW + timedelta(minutes=10 * step + 5)).isoformat(),
+                    "petId": "PET-SPLASHY",
+                    "weight": 1095,
+                    "duration": 80,
+                }
+            )
+            freezer.move_to(NOW + timedelta(minutes=10 * step + 6))
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
+
+    stored = await hass.async_add_executor_job(coordinator.store.visits)
+    assert len([v for v in stored if v.robot_serial == lr5.serial]) == 40 + 12
+
+
+async def test_statistics_drop_hours_whose_visits_moved_to_another_cat(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(NOW)
+    entry = await setup_smartcat(hass, tmp_path)
+    coordinator = entry.runtime_data
+    store = coordinator.store
+    cats = await hass.async_add_executor_job(store.cats)
+    visits = await hass.async_add_executor_job(store.visits)
+    assignments, _ = identify_all(cats, visits)
+    moved = next(v for v in visits if v.robot_serial == "LR4SERIAL")
+    hour = moved.timestamp.replace(minute=0, second=0, microsecond=0)
+
+    async def splashy_hours() -> set[datetime]:
+        await async_wait_recording_done(hass)
+        stats = await recorder_mock.async_add_executor_job(
+            statistics_during_period,
+            hass,
+            hour - timedelta(hours=1),
+            hour + timedelta(hours=2),
+            {"smartcat:splashy_visits"},
+            "hour",
+            None,
+            {"state"},
+        )
+        return {
+            datetime.fromtimestamp(row["start"], UTC)
+            for row in stats.get("smartcat:splashy_visits", [])
+            if row["state"]
+        }
+
+    assert hour in await splashy_hours()
+
+    # The visit now belongs to another cat: Splashy's row for that hour goes.
+    assignments[moved.key] = Assignment("kitten", 0.9, "matched")
+    coordinator._publish_statistics(cats, visits, assignments)
+    assert hour not in await splashy_hours()

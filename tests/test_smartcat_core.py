@@ -34,6 +34,7 @@ from custom_components.smartcat.core.identify import identify_all
 from custom_components.smartcat.core.models import Cat, LevelReading, Visit
 from custom_components.smartcat.core.parse import (
     lr4_event,
+    lr4_open_since,
     lr4_raw_event,
     lr4_visits,
     lr5_visits,
@@ -119,6 +120,35 @@ def test_lr4_detect_without_weight_and_open_segment() -> None:
     no_weight, open_visit = lr4_visits("LR4X", events, wait_minutes=7)
     assert no_weight.weight_lbs is None and no_weight.duration_s == 120
     assert open_visit.weight_lbs == 11.2 and open_visit.duration_s is None
+
+
+def test_lr4_unfinished_detection_waits_for_its_weigh_in() -> None:
+    detected = [lr4_event(t("2026-11-21T10:00:00"), Status.CAT_DETECTED)]
+    # Not weighed and not cycled yet: nothing to store, and the caller should
+    # fetch again from the detection.
+    assert lr4_visits("LR4X", detected, wait_minutes=7) == []
+    assert lr4_open_since(detected) == t("2026-11-21T10:00:00")
+
+    finished = detected + [
+        lr4_event(t("2026-11-21T10:01:00"), "Pet Weight Recorded: 11.2 lbs"),
+        lr4_event(t("2026-11-21T10:09:00"), Status.CLEAN_CYCLE),
+    ]
+    (visit,) = lr4_visits("LR4X", finished, wait_minutes=7)
+    assert visit.timestamp == t("2026-11-21T10:01:00") and visit.duration_s == 120
+    assert lr4_open_since(finished) is None
+
+
+def test_store_keeps_the_longer_duration_estimate(tmp_path) -> None:
+    store = Store(tmp_path / "smartcat.db")
+    ts = t("2026-11-21T10:01:00")
+    # A fetch that missed the detection estimates the visit too short.
+    store.upsert_visits([Visit("LR4X", ts, 11.2, 60.0, "lr4", raw={"start": "late"})])
+    store.upsert_visits([Visit("LR4X", ts, 11.2, 120.0, "lr4", raw={"start": "early"})])
+    store.upsert_visits([Visit("LR4X", ts, 11.2, None, "lr4")])
+    store.upsert_visits([Visit("LR4X", ts, 11.2, 90.0, "lr4", raw={"start": "mid"})])
+    (visit,) = store.visits()
+    assert visit.duration_s == 120
+    assert visit.raw == {"start": "early"}
 
 
 def test_lr4_cycle_too_late_gives_no_duration() -> None:
@@ -406,11 +436,9 @@ def test_store_roundtrip(tmp_path) -> None:
     store = Store(tmp_path / "smartcat.db")
     v = Visit("MAIN", t("2026-11-21T12:25:07"), 6.49, None, "lr4", raw={"start": "x"})
     assert store.upsert_visits([v]) == [v]
-    # Re-fetch fills in the duration, but never overwrites one.
+    # A re-fetch fills in the duration (see also the longer-estimate test).
     v2 = Visit("MAIN", v.timestamp, 6.49, 315.0, "lr4")
     assert store.upsert_visits([v2]) == []
-    v3 = Visit("MAIN", v.timestamp, 6.49, 999.0, "lr4")
-    store.upsert_visits([v3])
     (loaded,) = store.visits()
     assert loaded.duration_s == 315.0 and loaded.raw == {"start": "x"}
 

@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import SmartCatCoordinator, slugify_cat
 from .core.models import Cat
+from .statistics import async_clear_cat_statistics
 
 SERVICE_ADD_CAT = "add_cat"
 SERVICE_RENAME_CAT = "rename_cat"
@@ -99,6 +100,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = _coordinator(hass)
         if not await hass.async_add_executor_job(coordinator.store.delete_cat, call.data["cat_id"]):
             raise ServiceValidationError(f"Unknown cat_id {call.data['cat_id']}")
+        async_clear_cat_statistics(hass, call.data["cat_id"])
         hass.config_entries.async_schedule_reload(coordinator.config_entry.entry_id)
 
     async def backfill(call: ServiceCall) -> None:

@@ -30,6 +30,9 @@ INITIAL_LIVE_WINDOW: Final = timedelta(days=30)
 LR4_WINDOW_LIMIT: Final = 1000
 # Spread a multi-year backfill over several refreshes.
 LR4_MAX_WINDOWS_PER_REFRESH: Final = 26
+# Re-fetch an unfinished LR4 visit (no clean cycle yet) until it closes, but
+# not forever if a robot never cycles.
+LR4_OPEN_SEGMENT_HOLD: Final = timedelta(days=1)
 LR5_PAGE_SIZE: Final = 100
 LR5_MAX_PAGES_PER_REFRESH: Final = 50
 # Only announce visits this recent (not backfilled history).
