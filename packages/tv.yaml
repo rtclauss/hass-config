@@ -117,6 +117,7 @@ homeassistant:
 automation:
   - id: tv_off
     alias: tv_off
+    description: "Reset the basement lighting scene and turn off the TV bias light when the basement LG TV turns off or drops offline."
     trace:
       stored_traces: 50
     trigger:
@@ -146,6 +147,7 @@ automation:
 
   - id: tv_on
     alias: tv_on
+    description: "Turn on the basement TV bias light and pause whole-home audio when the basement TV has been on for 10 seconds and nobody is in bed."
     trace:
       stored_traces: 50
     trigger:
@@ -170,6 +172,7 @@ automation:
 
   - id: tv_off_at_night_bed_prep
     alias: tv_off_at_night_bed_prep
+    description: "From 20:00 to 04:00, when the basement TV or Apple TV turns off or the hall button is pressed, start bedtime prep: set bedroom/bathroom volumes, apply the bedroom prep scene, start bedtime audio, and turn off sleep mode (skipped in guest mode or when someone is already in bed)."
     trace:
       stored_traces: 50
     # Several TV/player transitions arrive together at bedtime; one run is
@@ -261,6 +264,7 @@ automation:
 
   - id: tv_paused
     alias: tv_paused
+    description: "Apply the TV-paused lighting scene when basement playback pauses in the evening (skipped in guest mode)."
     initial_state: true
     trace:
       stored_traces: 50
@@ -301,6 +305,7 @@ automation:
 
   - id: tv_watching_scotland
     alias: tv_watching_scotland
+    description: "Turn the basement TV bias light magenta while a title containing Scotland is playing on the basement Apple TV or Plex."
     initial_state: true
     trace:
       stored_traces: 50
@@ -340,6 +345,7 @@ automation:
 
   - id: tv_resumed
     alias: tv_resumed
+    description: "When basement playback starts or resumes in the evening, pause other room audio, apply the TV-resumed scene, and set night TV switch modes (skipped in guest mode)."
     initial_state: true
     trace:
       stored_traces: 50
@@ -419,6 +425,7 @@ scene:
 script:
   wait_for_basement_media_player_ready:
     alias: "Wait for Basement Media Player"
+    description: "Wait until the basement Apple TV is ready (not off or unavailable) before callers send it commands."
     mode: parallel
     trace:
       stored_traces: 50
@@ -448,6 +455,7 @@ script:
 
   wait_for_basement_plex_client_ready:
     alias: "Wait for Basement Plex Client"
+    description: "Wait until the basement Plex client is discoverable and ready before callers start Plex playback."
     mode: parallel
     trace:
       stored_traces: 50
@@ -487,6 +495,7 @@ script:
   # then switch the LG TV to HDMI 3. Called by all watch_* scripts.
   watch_basement_tv_startup:
     alias: "Basement TV Startup"
+    description: "Shared startup for basement watch scripts: power on the Apple TV, wait for it, and switch the LG TV to the Apple TV input."
     mode: parallel
     trace:
       stored_traces: 50
@@ -507,6 +516,7 @@ script:
   # for the Apple TV Plex client, then plays the requested show shuffled.
   watch_plex_show:
     alias: "Watch Plex Show"
+    description: "Start the basement TV, open Plex, find the Apple TV Plex client, and play the requested show shuffled while pausing house audio."
     mode: parallel
     trace:
       stored_traces: 50
@@ -543,6 +553,7 @@ script:
 
   watch_tv:
     alias: "Watch TV"
+    description: "Start the basement TV on the live TV app."
     trace:
       stored_traces: 50
     sequence:
@@ -555,6 +566,7 @@ script:
 
   watch_youtube:
     alias: "Watch YouTube"
+    description: "Start the basement TV on YouTube."
     trace:
       stored_traces: 50
     sequence:
@@ -567,6 +579,7 @@ script:
 
   watch_netflix:
     alias: "Watch Netflix"
+    description: "Start the basement TV on Netflix and pause house audio."
     trace:
       stored_traces: 50
     sequence:
@@ -583,6 +596,7 @@ script:
 
   watch_plex:
     alias: "Watch Plex"
+    description: "Start the basement TV on Plex and pause house audio."
     trace:
       stored_traces: 50
     sequence:
@@ -599,6 +613,7 @@ script:
 
   watch_f1:
     alias: "Watch F1"
+    description: "Start the basement TV on the F1 app and pause house audio."
     trace:
       stored_traces: 50
     sequence:
@@ -615,6 +630,7 @@ script:
 
   watch_letterkenny:
     alias: "Watch Letterkenny"
+    description: "Shuffle Letterkenny on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -624,6 +640,7 @@ script:
 
   watch_the_simpsons:
     alias: "Watch The Simpsons"
+    description: "Shuffle The Simpsons on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -633,6 +650,7 @@ script:
 
   watch_american_dad:
     alias: "Watch American Dad"
+    description: "Shuffle American Dad on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -642,6 +660,7 @@ script:
 
   watch_aqua_teen:
     alias: "Watch Aqua Teen"
+    description: "Shuffle Aqua Teen Hunger Force on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -651,6 +670,7 @@ script:
 
   watch_bobs_burgers:
     alias: "Watch Bobs Burgers"
+    description: "Shuffle Bob's Burgers on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -660,6 +680,7 @@ script:
 
   watch_ds9:
     alias: "Watch DS9"
+    description: "Shuffle Star Trek: Deep Space Nine on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -669,6 +690,7 @@ script:
 
   watch_rick_and_morty:
     alias: "Watch Rick and Morty"
+    description: "Shuffle Rick and Morty on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:
@@ -678,6 +700,7 @@ script:
 
   watch_tng:
     alias: "Watch TNG"
+    description: "Shuffle Star Trek: The Next Generation on the basement TV via Plex."
     trace:
       stored_traces: 50
     sequence:

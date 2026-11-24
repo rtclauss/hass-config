@@ -174,6 +174,7 @@ homeassistant:
 automation:
   - id: goodnight_scene_seasonal_shutdown
     alias: Goodnight scene seasonal shutdown
+    description: "Turn off the Christmas lights whenever the goodnight scene is activated."
     trace:
       stored_traces: 10
     trigger:
@@ -249,6 +250,7 @@ automation:
 
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
+    description: "On arrival under heavy cloud cover, run the contextual arrival transition for a cloudy-day welcome."
     trace:
       stored_traces: 10
     trigger:
@@ -279,6 +281,7 @@ automation:
 
   - id: default_arrive_home
     alias: default_arrive_home
+    description: "Default arrival handler: run the contextual arrival transition when the resident drives home and nobody is in bed."
     trace:
       stored_traces: 10
     trigger:
@@ -309,6 +312,7 @@ automation:
       #       Arriving home with wethop activity {{ states('sensor.wethop_activity') }}
 
   - alias: input_boolean_tracker_on
+    description: "Mirror the Bayesian resident-home sensor into its input_boolean when the resident arrives."
     id: input_boolean_tracker_on
     trace:
       stored_traces: 10
@@ -322,6 +326,7 @@ automation:
           entity_id: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
 
   - alias: input_boolean_tracker_off
+    description: "Clear the resident-home boolean and record the empty-house time when a Bayesian departure is signalled."
     id: input_boolean_tracker_off
     trace:
       stored_traces: 10
@@ -349,6 +354,7 @@ automation:
 
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
+    description: "Start arrival music and notify everyone when the resident drives home and nobody is in bed (skipped in guest mode)."
     trace:
       stored_traces: 10
     trigger:
@@ -383,6 +389,7 @@ automation:
 
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
+    description: "At night, run the contextual arrival lighting transition, send vacuums back to base, and clear long-range travel when the resident arrives."
     trace:
       stored_traces: 50
     trigger:
@@ -421,6 +428,7 @@ automation:
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
+    description: "Late at night, run the bedroom-prep arrival transition when the resident arrives and nobody is in bed."
     trace:
       stored_traces: 50
     trigger:
@@ -482,6 +490,7 @@ automation:
   # TODO change implementation
   - id: return_home_from_specific_location
     alias: return_home_from_specific_location
+    description: "Resume the thermostat program and notify everyone when the resident leaves one of the configured distant locations to head home."
     trace:
       stored_traces: 10
     trigger:
@@ -639,6 +648,7 @@ automation:
 
   - id: update_trip_origin
     alias: update_trip_origin
+    description: "Record the resident's current zone as the trip origin when they enter a zone, or after 20 hours away."
     trace:
       stored_traces: 10
     trigger:
@@ -689,6 +699,7 @@ automation:
 
   - id: vacuum_return_home
     alias: vacuum_return_home
+    description: "On arrival, send the vacuums back to base and turn off indoor camera motion detection and the tiki room camera."
     trace:
       stored_traces: 10
     trigger:

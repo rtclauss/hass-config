@@ -14,14 +14,32 @@ This note tracks the first-pass cleanup for issue #119 and the highest-value rem
 - `packages/zigbee_zwave.yaml`
   - Replaced representative `data_template` usage in the Inovelli day/night/reset scripts with standard `data`, keeping the existing templated entity expansion.
 
+## Status (audited 2026-11-22)
+
+- `data_template`: no live uses remain in `packages/` or `private_templates/`.
+  The only matches are in commented-out legacy blocks (alerts, car, trips,
+  curling, zone, light), which can be deleted rather than converted.
+- `wait_template`: live uses remain in these sources:
+  - `private_templates/xiaomi_robot_vacuum.yaml.tmpl` (11)
+  - `private_templates/media_player.yaml.tmpl` (9)
+  - `private_templates/trips.yaml.tmpl` (3)
+  - `private_templates/zone.yaml.tmpl` (1)
+
+  Before converting one to `wait_for_trigger`, check whether the wait has to
+  pass straight through when the state is already true. `wait_for_trigger`
+  only fires on a change, so that case needs a guard like the one the basement
+  readiness helpers use.
+
 ## Next targets
 
-1. `packages/weather.yaml`
-   - Several alert actions still use legacy `data_template`, and the alert automations also have template-heavy conditions that could move to more native condition blocks.
-2. `packages/holidays.yaml`, `packages/curling.yaml`, and `custom_components/birdbuddy/blueprints/collect_postcard.yaml` (HACS-managed; no longer tracked in git)
-   - These still contain older `data_template` patterns that are mostly mechanical conversions.
-3. `packages/trips.yaml`, `packages/car.yaml`, and `packages/weather.yaml`
-   - These files contain the highest concentration of `value_template`-driven branching and timing logic that should be reviewed for native conditions, `choose`, helpers, or trigger IDs.
+1. The `wait_template` sites above, starting with the vacuum package.
+2. `private_templates/trips.yaml.tmpl`, `private_templates/car.yaml.tmpl`, and `private_templates/weather.yaml.tmpl`
+   - These files have the most `value_template`-driven branching and timing
+     logic. Review them for native conditions, `choose`, helpers, or trigger IDs.
+
+Private packages (`packages/{media_player,workday,trips,car,weather,...}.yaml`)
+are rendered from `private_templates/*.tmpl`. Edit the template, not the
+rendered package.
 
 ## Behavioral notes
 

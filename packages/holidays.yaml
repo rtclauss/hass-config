@@ -99,6 +99,7 @@ homeassistant:
 automation:
   - id: christmas_lights_off
     alias: christmas_lights_off
+    description: "Turn off the Christmas tree lights at midnight or when the owner-suite lamps turn off during the Christmas season."
     trace:
       stored_traces: 10
     trigger:
@@ -134,6 +135,7 @@ automation:
 
   - id: reset_after_holiday
     alias: reset_after_holiday
+    description: "Restore the normal front-porch lighting scene at sunrise after holiday light displays."
     trace:
       stored_traces: 10
     trigger:
@@ -152,6 +154,7 @@ automation:
 
   - id: outdoor_holiday_light_loop
     alias: outdoor_holiday_light_loop
+    description: "Run the outdoor holiday light display from just before sunset until sunrise on active holidays, rotating the holiday scene every minute and powering the Christmas tree in season."
     trace:
       stored_traces: 10
     trigger:
@@ -454,6 +457,7 @@ script:
   # keep going if one call fails.
   set_christmas_tree_power:
     alias: Set Christmas tree power
+    description: "Turn the seasonal Christmas tree and light string on or off, acting only on entities Home Assistant currently reports and continuing past failures."
     mode: queued
     max: 5
     trace:
@@ -483,6 +487,7 @@ script:
                 entity_id: "{{ repeat.item.entity_id }}"
 
   turn_off_christmas_lights:
+    description: "Turn off the Christmas tree lights."
     trace:
       stored_traces: 10
     sequence:
@@ -491,6 +496,7 @@ script:
           power: "off"
 
   apply_outdoor_holiday_scene:
+    description: "Apply the outdoor light scene for the given holiday key."
     mode: queued
     trace:
       stored_traces: 10

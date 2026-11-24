@@ -1,6 +1,7 @@
 # EV Charging Tariff
 
-This document describes the EV-specific charging tariff added in `packages/utilities.yaml`.
+This document describes the EV-specific charging tariff in `packages/utilities.yaml`
+(rendered from `private_templates/utilities.yaml.tmpl`; edit the template).
 
 ## Purpose
 
@@ -63,6 +64,7 @@ The `switch_ev_charging_tariff` automation keeps those entities aligned to the s
 
 - `sensor.hourly_ev_charging_*`
 - `sensor.daily_ev_charging_*`
+- `sensor.weekly_ev_charging_*`
 - `sensor.monthly_ev_charging_*`
 
 Tariffs:
@@ -71,12 +73,21 @@ Tariffs:
 - `mid_peak`
 - `on_peak`
 
+`switch_ev_charging_tariff` switches the hourly, daily, weekly, and monthly
+tariff selects together. `tests/test_utility_meter_tariff_switching.py` fails if
+a tariffed meter's select is left out.
+
 ### Derived EV totals
 
 - `sensor.daily_ev_charging_energy`
 - `sensor.monthly_ev_charging_energy`
 - `sensor.daily_ev_charging_cost`
+- `sensor.weekly_ev_charging_cost`
+- `sensor.average_daily_ev_charging_cost` (weekly cost divided by days elapsed this week)
 - `sensor.monthly_ev_charging_cost`
+
+The weekly energy summary automation in the same package also reads the
+weekly EV meters' `last_period` values.
 
 ## UI
 
@@ -117,12 +128,17 @@ The built-in Energy panel preferences are not tracked in this repository, so the
 
 ## Validation
 
-Recommended validation after EV tariff changes:
+Recommended validation after EV tariff changes. In the live Home Assistant
+checkout, render with the real values (the renderer's default). Render the
+synthetic `examples/private_values.example.json` only in a disposable worktree
+or clone, because it overwrites every rendered package.
 
 ```bash
-yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
-  configuration.yaml automations.yaml blueprints packages zigbee2mqtt lovelace
+python scripts/render_private_config.py   # live checkout: real values
+uv run --with pytest --with pyyaml --with jinja2 pytest
 
-uv run --python 3.14.2 --with homeassistant==2026.3.3 \
-  python -m homeassistant --config "$PWD" --script check_config
+# Same image CI uses (see HOME_ASSISTANT_CHECK_CONFIG_IMAGE in
+# .github/workflows/validate-config.yml)
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.10.4 \
+  python -m homeassistant --config /config --script check_config
 ```

@@ -111,6 +111,7 @@ alarm_control_panel: []
 automation:
   - id: bedroom_music_volume
     alias: bedroom_music_volume
+    description: "Set the bedroom Music Assistant player volume from the owner-suite Aqara cube rotation angle."
     trace:
       stored_traces: 50
     trigger:
@@ -145,6 +146,7 @@ automation:
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
+    description: "Toggle play/pause on the bedroom Music Assistant player when the owner-suite cube is tapped."
     trace:
       stored_traces: 50
     trigger:
@@ -163,6 +165,7 @@ automation:
 
   - id: bed_without_prep
     alias: bed_without_prep
+    description: "Between 22:00 and 06:00, if someone gets into bed while bedroom audio is still playing, set night TV switch modes, start the bedtime volume ramp-down, and apply the dark owner-suite LED policy."
     # Trigger on the DEBOUNCED bed signal (binary_sensor.bed_occupied_debounced,
     # a 45s-delay_off view of binary_sensor.bayesian_bed_occupancy) rather than
     # the raw Bayesian sensor, which blips off for ~2s on every weight shift.
@@ -211,6 +214,7 @@ automation:
 
   - id: bedroom_music_select_playlist
     alias: bedroom_music_select_playlist
+    description: "Play the bedroom playlist preset matching the side the owner-suite cube is flipped to."
     trace:
       stored_traces: 50
     trigger:
@@ -253,6 +257,7 @@ automation:
 
   - id: bedroom_music_skip_track
     alias: bedroom_music_skip_track
+    description: "Skip to the next track on the bedroom Music Assistant player when the owner-suite cube is slid."
     trace:
       stored_traces: 50
     trigger:
@@ -271,6 +276,7 @@ automation:
 
   - id: bedroom_music_shuffle
     alias: bedroom_music_shuffle
+    description: "Toggle shuffle on the bedroom Music Assistant player when the owner-suite cube is shaken."
     trace:
       stored_traces: 50
     trigger:
@@ -292,6 +298,7 @@ automation:
 
   - id: den_sonos_control_actions
     alias: den_sonos_control_actions
+    description: "Map the den Sonos remote's buttons to play/pause, next/previous track, and volume on the den Music Assistant player."
     trace:
       stored_traces: 50
     trigger:
@@ -388,6 +395,7 @@ automation:
 
   - id: play_music_in_bathroom_via_nfc_tap
     alias: play_music_in_bathroom_via_nfc_tap
+    description: "Join the bathroom speaker to the bedroom Music Assistant player when the bathroom NFC tag is tapped."
     trace:
       stored_traces: 50
     trigger:
@@ -406,6 +414,7 @@ automation:
 
   - id: play_music_in_bathroom_when_up
     alias: play_music_in_bathroom_when_up
+    description: "Start the morning routine and wake-up music when the owner-suite bathroom becomes occupied during the real alarm wake window and nobody is in bed, then settle group volumes."
     trace:
       stored_traces: 50
     mode: single
@@ -595,6 +604,7 @@ automation:
 
   - id: recover_stuck_morning_audio_scripts
     alias: recover_stuck_morning_audio_scripts
+    description: "Recover morning audio that is stuck: stop wake-up and group-prep scripts that have run too long and clear the morning-routine flag."
     trace:
       stored_traces: 50
     mode: single
@@ -845,6 +855,7 @@ shell_command:
 script:
   music_assistant_pause_house_audio:
     alias: "Pause whole-home MA audio"
+    description: "Pause Music Assistant playback in every room."
     trace:
       stored_traces: 50
     sequence:
@@ -860,6 +871,7 @@ script:
 
   music_assistant_sync_group_migration_stub:
     alias: "Log disabled Music Assistant sync-group migration helper"
+    description: "Log a call to the retired Music Assistant sync-group migration helper so callers are traceable without changing grouping."
     trace:
       stored_traces: 50
     fields:
@@ -874,6 +886,7 @@ script:
 
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
+    description: "Compatibility stub for the retired bedroom group-prep step; only logs via the migration stub."
     mode: restart
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
@@ -886,6 +899,7 @@ script:
 
   music_assistant_try_join_bedroom_group_after_play:
     alias: "Try joining bedroom Music Assistant followers after playback"
+    description: "Compatibility stub for the retired post-play bedroom follower join; only logs via the migration stub."
     mode: restart
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
@@ -898,6 +912,7 @@ script:
 
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
+    description: "Compatibility stub for the retired arrival group-prep step; only logs via the migration stub."
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     trace:
@@ -909,6 +924,7 @@ script:
 
   music_assistant_prepare_house_party_group:
     alias: "Prepare house party Music Assistant group"
+    description: "Compatibility stub for the retired house-party group-prep step; only logs via the migration stub."
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     trace:
@@ -920,6 +936,7 @@ script:
 
   music_assistant_play_item:
     alias: "Play Music Assistant item"
+    description: "Play a Music Assistant media item on the given player, with optional media type and enqueue mode."
     trace:
       stored_traces: 50
     fields:
@@ -963,6 +980,7 @@ script:
 
   music_assistant_play_spotify_uri:
     alias: "Play Spotify item via Music Assistant"
+    description: "Play a bare spotify: URI through Music Assistant on the given player, letting MA route to the live Spotify provider."
     trace:
       stored_traces: 50
     fields:
@@ -990,6 +1008,7 @@ script:
 
   music_assistant_play_bedroom_playlist_choice:
     alias: "Play bedroom playlist choice via Music Assistant"
+    description: "Play one of the bedroom playlist presets through Music Assistant and log which one was chosen."
     trace:
       stored_traces: 50
     fields:
@@ -1012,6 +1031,7 @@ script:
 
   music_assistant_play_random_lofi_playlist:
     alias: "Play random LoFi playlist via Music Assistant"
+    description: "Play a randomly chosen LoFi playlist through Music Assistant on the given player."
     trace:
       stored_traces: 50
     fields:
@@ -1055,6 +1075,7 @@ script:
 
   music_assistant_search_music:
     alias: "Search Music Assistant"
+    description: "Search Music Assistant for the dashboard query and load the results and provider filter into the search dropdowns; direct URIs are passed through."
     trace:
       stored_traces: 50
     sequence:
@@ -1197,6 +1218,7 @@ script:
 
   music_assistant_play_selected_search_result:
     alias: "Play selected Music Assistant search result"
+    description: "Play the search result currently selected in the Music Assistant search dropdown."
     trace:
       stored_traces: 50
     fields:
@@ -1227,6 +1249,7 @@ script:
 
   music_assistant_add_selected_search_result_to_playlist:
     alias: "Add selected Music Assistant search result to playlist"
+    description: "Append the selected Music Assistant search result to a bedroom playlist preset script and reload scripts."
     trace:
       stored_traces: 50
     fields:
@@ -1307,6 +1330,7 @@ script:
 
   music_assistant_prime_wake_group:
     alias: "Prime exact wake-up MA Sonos group"
+    description: "Build the exact wake-up Sonos group: unjoin stray members, set starting volumes, and join the requested members to the bedroom player."
     trace:
       stored_traces: 10
     mode: queued
@@ -1353,6 +1377,7 @@ script:
 
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
+    description: "Play a radio stream as the wake-up source through Music Assistant with an optional initial delay, verified playback with fallback and retry, and a stepped volume ramp per room."
     trace:
       stored_traces: 50
     fields:
@@ -1621,6 +1646,7 @@ script:
 
   bedroom_playlist_0:
     alias: "Play LoFi"
+    description: "Bedroom preset 0: play a random LoFi playlist."
     trace:
       stored_traces: 50
     sequence:
@@ -1632,6 +1658,7 @@ script:
 
   bedroom_playlist_1:
 @@PRIVATE:music_label_1618@@
+    description: "Bedroom preset 1: play music preset one."
     trace:
       stored_traces: 50
     sequence:
@@ -1670,6 +1697,7 @@ script:
 
   bedroom_playlist_2:
 @@PRIVATE:music_label_1656@@
+    description: "Bedroom preset 2: play music preset two."
     trace:
       stored_traces: 50
     sequence:
@@ -1695,6 +1723,7 @@ script:
 
   bedroom_playlist_3:
 @@PRIVATE:music_label_1681@@
+    description: "Bedroom preset 3: play music preset three."
     trace:
       stored_traces: 50
     sequence:
@@ -1720,6 +1749,7 @@ script:
 
   bedroom_playlist_4:
 @@PRIVATE:music_label_1706@@
+    description: "Bedroom preset 4: play music preset four."
     trace:
       stored_traces: 50
     sequence:
@@ -1758,6 +1788,7 @@ script:
 
   bedroom_playlist_5:
     alias: "Play LoFi Legacy Delegate"
+    description: "Bedroom preset 5: legacy alias that delegates to the LoFi preset."
     trace:
       stored_traces: 50
     sequence:
@@ -1765,6 +1796,7 @@ script:
 
   play_video_games:
     alias: "Play Video Games"
+    description: "Set up the basement for video games: wake the Apple TV, switch the TV input, and pause whole-home audio."
     trace:
       stored_traces: 50
     sequence:
@@ -1790,6 +1822,7 @@ script:
 
   spotify_arrival:
     alias: "Spotify Arrive Home"
+    description: "Play the arrival-home Spotify playlist through Music Assistant at arrival volume, verifying playback and notifying on failure."
     trace:
       stored_traces: 50
     variables:
@@ -1982,6 +2015,7 @@ script:
 
   spotify_bedtime:
     alias: "Spotify Bedtime"
+    description: "Start bedtime audio in the bedroom and bathroom through Music Assistant with shuffle/repeat and verified playback, falling back to LoFi, then start the volume ramp-down."
     trace:
       stored_traces: 50
     sequence:
@@ -2295,6 +2329,7 @@ script:
 
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"
+    description: "Gradually ramp bedtime audio volume down in each room, skipping guest-sensitive rooms while guest mode is on."
     trace:
       stored_traces: 50
     sequence:

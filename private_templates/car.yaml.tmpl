@@ -111,6 +111,7 @@ alarm_control_panel: []
 automation:
   - id: hydrate_home_address_input_text
     alias: hydrate_home_address_input_text
+    description: "Seed the home address text helper from private config at startup so travel-time and departure templates have an origin."
     trace:
       stored_traces: 10
     trigger:
@@ -132,6 +133,7 @@ automation:
   # run; this only keeps the UI truthful.
   - id: hydrate_tesla_calibration_helpers
     alias: hydrate_tesla_calibration_helpers
+    description: "At startup, fill unset Tesla calibration helpers (usable range, degraded travel minutes) with their defaults so the dashboard shows real values instead of 0."
     trace:
       stored_traces: 10
     trigger:
@@ -161,6 +163,7 @@ automation:
 
   - id: tesla_departure_planner_apply
     alias: tesla_departure_planner_apply
+    description: "Apply the Tesla departure planner nightly, early morning, at startup, and when trip details change: set the charge limit and program or clear the preconditioning departure while the car is parked at home."
     mode: restart
     trace:
       stored_traces: 10
@@ -553,6 +556,7 @@ automation:
 
   - id: tesla_departure_cancel_when_home_context_ends
     alias: tesla_departure_cancel_when_home_context_ends
+    description: "Cancel a planner-managed Tesla departure schedule when the resident or car leaves home, or when the car's own schedule no longer matches the managed one."
     mode: restart
     trace:
       stored_traces: 10
@@ -622,6 +626,7 @@ automation:
 
   - id: tesla_departure_schedule_cleanup
     alias: tesla_departure_schedule_cleanup
+    description: "Clear the planner-managed Tesla departure schedule once its departure time has passed (and reconcile at startup) so stale schedules do not re-fire."
     mode: single
     trace:
       stored_traces: 10
@@ -677,6 +682,7 @@ automation:
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
+    description: "Restart the garage door opener ESP nightly at 04:00 as a preventive reliability reboot."
     # Restarts the garage door ESPHome device daily at 04:00 to keep its
     # MQTT connection fresh.
     # Fixed: added continue_on_error: true so that a timeout (e.g. when the
@@ -703,6 +709,7 @@ automation:
   # running" while the notification run is still active.
   - id: set_charging_rate
     alias: set_charging_rate
+    description: "Max-range override plumbing: phone notification actions toggle the long-range-travel helper, and helper changes set the Tesla charge limit to 100%/80% only while the car is away (at home the departure planner owns the limit)."
     mode: queued
     max: 5
     trace:
@@ -815,6 +822,7 @@ automation:
 
   - id: garage_door_reminder
     alias: Close forgotten garage door
+    description: "Warn everyone when the garage door is opened late at night (after 23:30) so a forgotten open door gets closed."
     trace:
       stored_traces: 10
     trigger:
@@ -1098,6 +1106,7 @@ scene: []
 script:
   tesla_set_precondition_schedule_time:
     alias: Tesla Set Precondition Schedule Time
+    description: "Program, update, or safely clear the Tesla scheduled-departure preconditioning time via the Tesla API, logging the reason and raising a persistent notification on failure."
     mode: restart
     trace:
       stored_traces: 10
