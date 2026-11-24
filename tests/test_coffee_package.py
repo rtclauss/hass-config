@@ -77,11 +77,28 @@ def test_emergency_stop_covers_remote_dashboard_and_notification_and_confirms():
     assert set(buttons["entity_id"]) == {"input_button.coffee_stop", "input_button.coffee_acknowledge_fault"}
     event = next(t for t in triggers if t["trigger"] == "event")
     assert event["event_data"]["action"] == "COFFEE_STOP"
+    # The OFF is inline (never depends on a script); confirmation is shared.
     assert auto["action"][0] == {"continue_on_error": True, "action": "switch.turn_off",
                                  "target": {"entity_id": PLUG}}
-    assert "wait_template" in auto["action"][1]
-    assert auto["action"][2]["then"][0]["action"] == "script.coffee_unplug_alert"
+    assert auto["action"][1]["action"] == "script.coffee_confirm_off"
+    assert "unconfirmed_message" in auto["action"][1]["data"]
     assert auto["mode"] == "queued"
+
+
+def test_confirm_off_script_waits_then_alerts_or_notifies():
+    seq = _package()["script"]["coffee_confirm_off"]["sequence"]
+    assert seq[0]["timeout"] == "00:00:30" and seq[0]["continue_on_timeout"] is True
+    branch = seq[1]
+    assert branch["if"][0] == {"condition": "state", "entity_id": PLUG, "state": "off"}
+    assert branch["then"][0]["then"][0]["action"] == "script.coffee_fault_notice"
+    assert branch["else"][0]["action"] == "script.coffee_unplug_alert"
+
+
+def test_fault_notice_is_time_sensitive_with_dashboard_link():
+    data = _package()["script"]["coffee_fault_notice"]["sequence"][0]["data"]["data"]
+    assert data["push"]["interruption-level"] == "time-sensitive"
+    assert data["tag"] == "coffee_station_fault"
+    assert data["url"] == data["clickAction"] == "/db-coffee/coffee"
 
 
 def test_watchdog_covers_runtime_dropout_and_phantom_power():
@@ -98,7 +115,8 @@ def test_watchdog_covers_runtime_dropout_and_phantom_power():
     assert "is_state('switch.coffee_maker', 'on')" in phantom["value_template"]
     branches = {b["conditions"][0]["id"]: b["sequence"] for b in auto["action"][0]["choose"]}
     assert branches["max_on"][0]["action"] == "switch.turn_off"
-    assert branches["max_on"][2]["else"][0]["action"] == "script.coffee_unplug_alert"
+    assert branches["max_on"][1]["action"] == "script.coffee_confirm_off"
+    assert branches["max_on"][1]["data"]["confirmed_message"]
     assert branches["dropped_while_on"][0]["action"] == "script.coffee_unplug_alert"
     assert [s["action"] for s in branches["power_while_off"]] == ["switch.turn_off", "script.coffee_unplug_alert"]
 
@@ -118,8 +136,8 @@ def test_startup_shutoff_waits_confirms_and_reports_timeout():
     assert auto["action"][0]["continue_on_timeout"] is True
     on_branch, unknown_branch = auto["action"][1]["choose"]
     assert on_branch["sequence"][0]["action"] == "switch.turn_off"
-    assert on_branch["sequence"][2]["else"][0]["action"] == "script.coffee_unplug_alert"
-    assert unknown_branch["sequence"][0]["action"] == "notify.all"
+    assert on_branch["sequence"][1]["action"] == "script.coffee_confirm_off"
+    assert unknown_branch["sequence"][0]["action"] == "script.coffee_fault_notice"
 
 
 def test_helpers_exist_for_every_app_reference():
