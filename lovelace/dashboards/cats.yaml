@@ -45,36 +45,33 @@ views:
           - type: heading
             heading: Patterns
             icon: mdi:chart-bar
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Time of visits (last 30 days)
-            chart_type: line
-            graph_span: 24h
-            span:
-              start: day
-            series:
-              - entity: sensor.splashy_daily_visits
-                name: Visits
-                type: column
-                data_generator: |
-                  const hist = entity.attributes.hourly_histogram_30d || [];
-                  const day = new Date(); day.setHours(0, 0, 0, 0);
-                  return hist.map((n, h) => [day.getTime() + h * 3600000, n]);
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Visits per day (14 days)
-            graph_span: 14d
-            span:
-              end: day
-            series:
-              - entity: sensor.splashy_daily_visits
-                name: Visits
-                type: column
-                data_generator: |
-                  return Object.entries(entity.attributes.daily_counts || {})
-                    .map(([d, n]) => [new Date(d + "T12:00:00").getTime(), n]);
+          # Native cards only: apexcharts-card overflowed the section on
+          # phones and drew the hourly counts as a smoothed line (#1254).
+          - type: markdown
+            title: Time of visits (last 30 days)
+            content: |-
+              {% set hist = state_attr('sensor.splashy_daily_visits', 'hourly_histogram_30d') or [] %}
+              {% if hist | length != 24 or hist | sum == 0 %}
+              No visits recorded yet.
+              {% else %}
+              {% set labels = ['12–3a', '3–6a', '6–9a', '9a–12p', '12–3p', '3–6p', '6–9p', '9p–12a'] %}
+              {% set ns = namespace(bins=[]) %}
+              {% for i in range(8) %}{% set ns.bins = ns.bins + [hist[i * 3:(i + 1) * 3] | sum] %}{% endfor %}
+              {% set top = ns.bins | max %}
+              ```
+              {% for n in ns.bins -%}
+              {{ '%-6s' | format(labels[loop.index0]) }} {{ ('█' * ((n * 14 / top) | round(0, 'ceil') | int)) if n else '·' }} {{ n }}
+              {% endfor -%}
+              ```
+              {% endif %}
+          - type: statistics-graph
+            title: Visits per day (14 days)
+            entities:
+              - smartcat:splashy_visits
+            stat_types: [change]
+            period: day
+            days_to_show: 14
+            chart_type: bar
           - type: statistics-graph
             title: Visits per week
             entities:

@@ -154,3 +154,41 @@ def test_dashboard_avoids_whisker_pet_sensor_ids():
     assert "sensor.splashy_visits_today" not in text
     assert "sensor.splashy_typical_weight" in text
     assert "sensor.splashy_daily_visits" in text
+
+
+def _time_of_visits_card():
+    dashboard = yaml.safe_load(DASHBOARD.read_text())
+    cards = [c for v in dashboard["views"] for sec in v.get("sections", []) for c in sec["cards"]]
+    return next(c for c in cards if c.get("title") == "Time of visits (last 30 days)")
+
+
+@pytest.mark.parametrize(
+    "hist,expected",
+    [
+        (None, ["No visits recorded yet."]),
+        ([0] * 24, ["No visits recorded yet."]),
+        (
+            [0, 0, 0, 0, 0, 3, 2, 1, 0, 1, 3, 0, 2, 1, 0, 0, 2, 0, 1, 0, 1, 2, 0, 0],
+            ["12–3a  · 0", "9a–12p " + "█" * 14 + " 4", "3–6p   " + "█" * 7 + " 2"],
+        ),
+    ],
+)
+def test_time_of_visits_is_a_native_text_histogram(hist, expected):
+    # Native cards only on this dashboard: apexcharts-card overflowed the
+    # section on phones (#1254).
+    card = _time_of_visits_card()
+    assert card["type"] == "markdown"
+    env = jinja2.Environment()
+    rendered = env.from_string(card["content"]).render(state_attr=lambda *_: hist)
+    for line in expected:
+        assert line in rendered
+    assert "apexcharts" not in yaml.safe_load(DASHBOARD.read_text()).__repr__()
+
+
+def test_visits_per_day_is_a_daily_statistics_graph():
+    dashboard = yaml.safe_load(DASHBOARD.read_text())
+    cards = [c for v in dashboard["views"] for sec in v.get("sections", []) for c in sec["cards"]]
+    daily = next(c for c in cards if c.get("title") == "Visits per day (14 days)")
+    assert daily["type"] == "statistics-graph"
+    assert (daily["period"], daily["days_to_show"], daily["stat_types"]) == ("day", 14, ["change"])
+    assert daily["entities"] == ["smartcat:splashy_visits"]
