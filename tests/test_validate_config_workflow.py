@@ -97,3 +97,14 @@ def test_workflow_jobs_pin_runner_image_with_python_builds() -> None:
         for job_name, job in workflow["jobs"].items():
             runs_on = job.get("runs-on")
             assert runs_on == "ubuntu-24.04", f"{path.name}:{job_name} runs-on is {runs_on!r}"
+
+
+def test_smartcat_integration_tests_run_in_their_own_job() -> None:
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["smartcat-integration"]
+    run = next(step["run"] for step in job["steps"] if step.get("name") == "Run Smart Cat integration tests")
+
+    assert "pytest-homeassistant-custom-component==" in run
+    assert "tests/smartcat_ha" in run
+    # The main suite skips these tests when the plugin is not installed.
+    assert "--with pytest-homeassistant-custom-component" not in workflow["jobs"]["pytest"]["steps"][-1]["run"]

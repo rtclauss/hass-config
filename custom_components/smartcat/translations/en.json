@@ -1,0 +1,108 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Smart Cat is already set up.",
+      "whisker_missing": "Set up the Whisker (Litter-Robot) integration first. Smart Cat uses its login."
+    },
+    "step": {
+      "user": {
+        "title": "Smart Cat",
+        "description": "Cat insights computed locally from your Litter-Robot activity. Cats are created from your Whisker pet profiles and learned from weigh-ins.",
+        "data": {
+          "waste_full_threshold": "Waste drawer full at",
+          "litter_low_threshold": "Litter needs refill at",
+          "backfill_days": "Backfill history",
+          "retention_days": "Keep history (0 = forever)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Cat options",
+        "data": {
+          "waste_full_threshold": "Waste drawer full at",
+          "litter_low_threshold": "Litter needs refill at",
+          "backfill_days": "Backfill history",
+          "retention_days": "Keep history (0 = forever)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "attention": { "name": "Needs attention" },
+      "new_cat_suspected": { "name": "New cat suspected" }
+    },
+    "sensor": {
+      "visits_today": { "name": "Visits today" },
+      "last_visit": { "name": "Last visit" },
+      "last_visit_duration": { "name": "Last visit duration" },
+      "average_visit_duration": { "name": "Average visit duration" },
+      "weight": { "name": "Weight" },
+      "weight_trend": { "name": "Weight trend" },
+      "insight": {
+        "name": "Insight",
+        "state": {
+          "normal": "Normal",
+          "insufficient_data": "Learning",
+          "no_recent_visits": "No recent visits",
+          "frequency_high": "More visits than usual",
+          "weight_loss": "Losing weight",
+          "long_visit": "Long visit",
+          "frequency_low": "Fewer visits than usual",
+          "weight_gain": "Gaining weight"
+        }
+      },
+      "waste_drawer_full_forecast": { "name": "Waste drawer full forecast" },
+      "litter_refill_forecast": { "name": "Litter refill forecast" },
+      "cycles_per_day": { "name": "Cycles per day" },
+      "robot_visits_today": { "name": "Visits today" },
+      "unassigned_visits": { "name": "Unassigned visits (7 days)" }
+    }
+  },
+  "services": {
+    "add_cat": {
+      "name": "Add cat",
+      "description": "Add a cat profile. Leave the weight empty to adopt the suspected new cat.",
+      "fields": {
+        "name": { "name": "Name", "description": "The cat's name." },
+        "weight_lbs": { "name": "Weight", "description": "Approximate weight in pounds." },
+        "active_from": { "name": "Arrived", "description": "Visits before this time are never attributed to this cat." }
+      }
+    },
+    "rename_cat": {
+      "name": "Rename cat",
+      "description": "Rename a cat profile.",
+      "fields": {
+        "cat_id": { "name": "Cat ID", "description": "The cat's id (e.g. splashy)." },
+        "name": { "name": "Name", "description": "The new name." }
+      }
+    },
+    "remove_cat": {
+      "name": "Remove cat",
+      "description": "Remove a cat profile. Its visits are re-attributed to the remaining cats.",
+      "fields": {
+        "cat_id": { "name": "Cat ID", "description": "The cat's id." }
+      }
+    },
+    "backfill": {
+      "name": "Backfill history",
+      "description": "Re-fetch activity history from the Whisker cloud. Existing visits are kept.",
+      "fields": {
+        "days": { "name": "Days", "description": "How many days back to fetch." }
+      }
+    },
+    "get_visits": {
+      "name": "Get visits",
+      "description": "Return recorded visits, newest first.",
+      "fields": {
+        "cat_id": { "name": "Cat ID", "description": "Only this cat's visits." },
+        "start": { "name": "Start", "description": "Only visits at or after this time." },
+        "end": { "name": "End", "description": "Only visits at or before this time." },
+        "limit": { "name": "Limit", "description": "Maximum number of visits." }
+      }
+    }
+  }
+}

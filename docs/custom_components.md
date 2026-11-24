@@ -7,13 +7,16 @@ so the tracked copy drifted into a half-updated snapshot that could not import i
 
 ## What is tracked
 
-Only `custom_components/mass_queue/services.yaml`, which `tests/test_mass_queue_services_present.py`
-reads for the Music Assistant dashboard. It mirrors the upstream Music Assistant Queue Actions
-integration's `services.yaml`, so if that integration is ever installed through HACS it will
-modify this tracked file and make the host dirty. If that happens, or if nothing uses the
-integration, drop the file and its test and ignore the whole directory. Everything else under
-`custom_components/` is ignored, including the small `services.yaml`-only copies that used to be
-tracked: HACS rewrites them on every update, so tracking them would keep the host dirty.
+- `custom_components/smartcat/`, the Smart Cat integration ([smartcat.md](smartcat.md)). It is
+  written for this house, not installed from HACS, so git is its only source; HACS never touches
+  it. This is the "own hand-written integrations" exception described below.
+- `custom_components/mass_queue/services.yaml`, which `tests/test_mass_queue_services_present.py`
+  reads for the Music Assistant dashboard. It mirrors the upstream Music Assistant Queue Actions
+  integration's `services.yaml`, so if that integration is ever installed through HACS it will
+  modify this tracked file and make the host dirty. If that happens, or if nothing uses the
+  integration, drop the file and its test and ignore the whole directory. Everything else under
+  `custom_components/` is ignored, including the small `services.yaml`-only copies that used to be
+  tracked: HACS rewrites them on every update, so tracking them would keep the host dirty.
 
 ## Restoring a host
 

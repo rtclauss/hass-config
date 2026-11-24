@@ -3,18 +3,50 @@
 Smart Cat is a custom integration (`smartcat`) that recreates the useful parts
 of Whisker+ locally: per-cat visits, visit duration, a time-of-visit pattern,
 multi-year history, outlier and trend detection, and forecasts for when each
-Litter-Robot's waste drawer fills and its litter needs topping up. This repo
-holds only the Home Assistant side: the notifications package
-(`packages/smartcat.yaml`), the Cats dashboard (`lovelace/dashboards/cats.yaml`),
-and their tests. The integration code lives in its own repository and is
-installed through HACS like every other custom integration; git does not track
-it (see [custom_components.md](custom_components.md)).
+Litter-Robot's waste drawer fills and its litter needs topping up. It is
+written for this house, so unlike the HACS integrations it is tracked here
+(#1248, see [custom_components.md](custom_components.md)):
+
+- `custom_components/smartcat/`: the integration. `core/` is plain Python
+  (parsing, cat identification, analytics, forecasts, SQLite store) with no
+  Home Assistant imports; the rest is the HA glue.
+- `packages/smartcat.yaml`: notifications.
+- `lovelace/dashboards/cats.yaml`: the Cats dashboard.
+- `tests/test_smartcat_core.py`, `tests/test_smartcat_package.py`: run in the
+  normal suite.
+- `tests/smartcat_ha/`: Home Assistant integration tests with fake robots (see
+  [Validation](#validation-and-rollback)).
 
 Smart Cat is not a diagnostic tool and does not replace veterinary care.
 
+## How it works
+
+- **No extra login.** Smart Cat borrows the session of the core Whisker
+  (`litterrobot`) integration.
+- **Visits.** Main Level (LR4): rebuilt from the activity feed (cat detected,
+  weight recorded, clean cycle); the cat left at cycle start minus the
+  clean-cycle wait time, which gives the duration. Basement (LR5): native
+  `PET_VISIT` records.
+- **Which cat.** Each cat learns a robust weight band (median/MAD) per robot.
+  Partial weigh-ins are attributed but never learned from. LR5 pet ids are used
+  when present.
+- **A second cat.** Weigh-ins no cat explains are pooled; a tight, persistent
+  group outside every band, or one that appeared suddenly, turns on
+  `binary_sensor.smart_cat_new_cat_suspected`.
+- **Insights.** Today vs. a 28-day baseline, 30-day time-of-day histogram,
+  7-day weight median, Theil-Sen weight trend, 30-day weight change.
+- **Forecasts.** Per-cycle drawer/litter rate within the current fill period
+  (reset when the drawer is emptied or litter added) times recent cycles per
+  day; falls back to earlier periods, then level vs. time.
+
+Actions: `smartcat.add_cat` (`name`, optional `weight_lbs`, `active_from`),
+`smartcat.rename_cat`, `smartcat.remove_cat`, `smartcat.backfill` (`days`),
+`smartcat.get_visits` (returns visits). Events: `smartcat_visit` per new visit
+and `smartcat_new_cat_suspected`.
+
 ## Install
 
-1. Install Smart Cat from HACS (custom repository), then restart.
+1. Pull the change onto the host (see [Deploy](#deploy)), then restart.
 2. Settings → Devices & services → Add integration → **Smart Cat**. The core
    **Whisker** integration must already be set up: Smart Cat reuses its login,
    so no credentials are entered.
@@ -73,16 +105,42 @@ After `smartcat.add_cat`, add `binary_sensor.<cat>_needs_attention` to the
 trigger list of `smartcat_cat_needs_attention`, copy the Splashy section of
 the Cats dashboard, and extend `tests/test_smartcat_package.py`.
 
+## Deploy
+
+The host checkout at `/config` picks up `custom_components/smartcat/` with the
+normal pull. Use the backup-pull-restore steps in
+[custom_components.md](custom_components.md#deploy-warning-read-before-pulling-this-change-onto-a-host)
+so HACS-modified files do not block it, then restart Home Assistant (a new
+integration needs a restart, not a reload) and add Smart Cat. Code changes
+later need a restart too.
+
 ## Validation and rollback
 
-Run `uv run --with pytest pytest`. `tests/test_smartcat_package.py` covers the
-push decision matrix (new, added, replaced, drifted, reordered, partially
-resolved, recovered), startup/reload suppression, tag-based clearing, link
-rendering, and dashboard registration.
+Run `uv run --with pytest pytest`. `tests/test_smartcat_core.py` covers
+parsing, identification (including Splashy's real weigh-ins, the per-robot
+offset, partial weigh-ins and a second cat appearing), analytics, forecasts
+and the store. `tests/test_smartcat_package.py` covers the push decision matrix
+(new, added, replaced, drifted, reordered, partially resolved, recovered),
+startup/reload suppression, tag-based clearing, link rendering, and dashboard
+registration.
 
-Rollback: remove `packages/smartcat.yaml`, the `db-cats` dashboard entry and
-`lovelace/dashboards/cats.yaml`, then reload. Removing the integration
-leaves `/config/smartcat.db`; delete it to drop the history.
+The integration tests in `tests/smartcat_ha/` need Home Assistant's test
+harness, which disables sockets for every test it loads, so the main suite
+skips them and CI runs them in the `Smart Cat integration tests` job:
+
+```sh
+uv run --no-project --python 3.14.10 \
+  --with pytest-homeassistant-custom-component==0.13.375 --with pylitterbot==2025.6.5 \
+  pytest -o asyncio_mode=auto -p no:cacheprovider tests/smartcat_ha
+```
+
+Use Python 3.14.4 or newer: 3.14.3's `unittest.mock` cannot autospec the
+recorder. Bump the plugin with the HA version in the config-check job.
+
+Rollback: delete the Smart Cat integration entry, remove
+`packages/smartcat.yaml`, the `db-cats` dashboard entry,
+`lovelace/dashboards/cats.yaml` and `custom_components/smartcat/`, then
+restart. `/config/smartcat.db` stays; delete it to drop the history.
 
 Unverified until it runs against the live Whisker account: the Basement
 (LR5) `PET_VISIT` field names, which are undocumented, so the integration

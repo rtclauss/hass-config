@@ -7,7 +7,7 @@ Every Home Assistant automation and script defined in this repo, with the
 `private_templates/*.tmpl` source and rendered with the synthetic example
 values, so placeholder names such as `example_zone_05` stand in for private ones.
 
-Totals: **257 automations** and **162 scripts** across 49 files.
+Totals: **259 automations** and **162 scripts** across 50 files.
 
 To keep this current, add a `description:` to every new automation or script
 and regenerate:
@@ -56,6 +56,7 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 - [`packages/parasoll_fix.yaml`](#packagesparasoll_fixyaml)
 - [`private_templates/plants.yaml.tmpl`](#private_templatesplantsyamltmpl)
 - [`packages/sleep_quality.yaml`](#packagessleep_qualityyaml)
+- [`packages/smartcat.yaml`](#packagessmartcatyaml)
 - [`packages/themes.yaml`](#packagesthemesyaml)
 - [`packages/tiki_time.yaml`](#packagestiki_timeyaml)
 - [`private_templates/trips.yaml.tmpl`](#private_templatestripsyamltmpl)
@@ -629,6 +630,16 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | --- | --- | --- | --- |
 | `script.sleep_quality_rearm_cpap_resume` | Sleep quality - re-arm CPAP resume | single | Bank the interruption that just ended into accumulated active time, start a fresh segment at resume_timestamp, and clear the stop latch. Routed through this single mode: single script so the live cpap_resume trigger (in sleep_quality_track_active_session) and the periodic reconciliation re-arm (in sleep_quality_reconcile_cpap_stop_after_restart) can't both observe sleep_session_cpap_stopped as "on" and independently bank the same interruption — mode: single means a concurrent second call is dropped outright while the first is still running, and the internal state check below still protects a call that starts only after the first has already finished (Codex P2 follow-up on #373: serialize concurrent CPAP resume recovery). |
 | `script.finalize_sleep_quality_session` | Finalize sleep quality session | single | Persist the latest owner-suite bed/CPAP durations and bounded continuity heuristic after both CPAP and bed occupancy have stopped. |
+
+
+## `packages/smartcat.yaml`
+
+### Automations
+
+| ID | Alias | Mode | Description |
+| --- | --- | --- | --- |
+| `smartcat_cat_needs_attention` | Smart Cat — Cat needs attention | queued | Push once per new kind of pattern change for a cat; remove the notification silently when the cat is back to normal. |
+| `smartcat_new_cat_suspected` | Smart Cat — New cat suspected | queued | Push once when weigh-ins show a cat Smart Cat does not know; remove the notification silently once the cat is added. |
 
 
 ## `packages/themes.yaml`
