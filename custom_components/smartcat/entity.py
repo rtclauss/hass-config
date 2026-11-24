@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -39,6 +41,16 @@ class CatEntity(SmartCatEntity):
         return super().available and self.cat_id in self.coordinator.data.insights
 
 
+def robot_device(hass: HomeAssistant, serial: str) -> dr.DeviceEntry | None:
+    """Return the core Whisker integration's device for a robot, if any."""
+    registry = dr.async_get(hass)
+    for entry in hass.config_entries.async_entries(LITTERROBOT_DOMAIN):
+        device = registry.async_get_device_by_identifier((LITTERROBOT_DOMAIN, serial), entry.entry_id)
+        if device is not None:
+            return device
+    return None
+
+
 class RobotEntity(SmartCatEntity):
     """An entity attached to the core Whisker integration's robot device."""
 
@@ -48,9 +60,19 @@ class RobotEntity(SmartCatEntity):
         self.serial = serial
         self._attr_translation_key = key
         self._attr_unique_id = f"robot_{serial}_{key}"
-        # Same identifier as the core integration, so these show up on the
-        # existing Litter-Robot device page.
-        self._attr_device_info = DeviceInfo(identifiers={(LITTERROBOT_DOMAIN, serial)})
+        # Show up on the core Whisker integration's robot device. Device
+        # identifiers are scoped per config entry, so identifier-only device
+        # info would create a second device named after this config entry
+        # ("Smart Cat"); attach to the existing device entry instead.
+        if (device := robot_device(coordinator.hass, serial)) is not None:
+            self.device_entry = device
+        else:
+            robot = coordinator.data.robots.get(serial)
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"robot_{serial}")},
+                name=robot.name if robot else serial,
+                manufacturer="Whisker",
+            )
 
     @property
     def available(self) -> bool:

@@ -109,7 +109,7 @@ def test_recovery_clears_the_same_tag_silently():
     (button, weight) = notify["data"]["data"]["actions"]
     trigger = {"from_state": {"entity_id": "binary_sensor.splashy_needs_attention"}}
     assert _render(button["uri"], trigger=trigger) == "/?more-info-entity-id=sensor.splashy_insight"
-    assert _render(weight["uri"], trigger=trigger) == "/?more-info-entity-id=sensor.splashy_weight"
+    assert _render(weight["uri"], trigger=trigger) == "/?more-info-entity-id=sensor.splashy_typical_weight"
 
 
 def test_new_cat_push_and_silent_clear():
@@ -142,3 +142,14 @@ def test_dashboard_is_registered_and_uses_smartcat_entities():
         "smartcat:splashy_visits",
     ):
         assert entity in text
+
+
+def test_dashboard_avoids_whisker_pet_sensor_ids():
+    # The core Whisker integration owns sensor.<pet>_weight and
+    # sensor.<pet>_visits_today; Smart Cat's own sensors are named so they
+    # never collide (and get a _2 suffix) with those.
+    text = DASHBOARD.read_text() + PACKAGE.read_text()
+    assert "sensor.splashy_weight\n" not in text
+    assert "sensor.splashy_visits_today" not in text
+    assert "sensor.splashy_typical_weight" in text
+    assert "sensor.splashy_daily_visits" in text

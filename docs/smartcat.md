@@ -74,12 +74,22 @@ Cats come from the Whisker pet profiles; today that is Splashy (`splashy`).
 | --- | --- |
 | `sensor.splashy_insight` | `normal`, `insufficient_data` (first week), or the most important change; `summary` attribute is a one-line daily summary |
 | `binary_sensor.splashy_needs_attention` | On while any change is active; `kinds` and `messages` attributes |
-| `sensor.splashy_visits_today` | Visits today; `daily_counts` (14 d), `hourly_histogram_30d`, `baseline_mean` |
+| `sensor.splashy_daily_visits` | Visits today; `daily_counts` (14 d), `hourly_histogram_30d`, `baseline_mean` |
 | `sensor.splashy_last_visit`, `_last_visit_duration`, `_average_visit_duration` | Visit timing |
-| `sensor.splashy_weight`, `_weight_trend` | 7-day median of trusted weigh-ins; Theil-Sen lb/week |
+| `sensor.splashy_typical_weight`, `sensor.splashy_weight_trend` | 7-day median of trusted weigh-ins; Theil-Sen lb/week |
 | `sensor.<robot>_waste_drawer_full_forecast`, `_litter_refill_forecast` | Timestamps; attributes hold rate per cycle, cycles/day, days remaining, method |
 | `sensor.<robot>_cycles_per_day`, `sensor.<robot>_visits_today` | Robot activity (on the existing Litter-Robot devices) |
+
+Robot entities attach to the core integration's device entry itself. Device
+identifiers are scoped per config entry since HA 2026.10, so identifier-only
+device info would instead create a second device named "Smart Cat" and give
+the entities `sensor.smart_cat_*` ids.
 | `binary_sensor.smart_cat_new_cat_suspected` | Weigh-ins that match no known cat |
+
+The core Whisker integration already owns `sensor.splashy_weight` (last raw
+weigh-in) and `sensor.splashy_visits_today` for each pet profile, so Smart
+Cat's sensors are named "Typical weight" and "Daily visits" to avoid taking
+`_2` entity ids.
 
 Observed while building it: the Main Level robot weighs Splashy about 2 lb
 heavier than the Basement one (≈13.1 vs ≈11 lb), and partial weigh-ins (paw on

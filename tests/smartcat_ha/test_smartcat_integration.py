@@ -123,6 +123,16 @@ async def whisker(hass: HomeAssistant) -> FakeAccount:
         dev_reg.async_get_or_create(
             config_entry_id=entry.entry_id, identifiers={("litterrobot", robot.serial)}, name=robot.name
         )
+    # The core integration's own pet sensors, which hold these entity ids.
+    ent_reg = er.async_get(hass)
+    for key in ("weight", "visits_today"):
+        ent_reg.async_get_or_create(
+            "sensor",
+            "litterrobot",
+            f"PET-SPLASHY-{key}",
+            config_entry=entry,
+            suggested_object_id=f"splashy_{key}",
+        )
     return account
 
 
@@ -164,7 +174,23 @@ async def test_full_setup(
     # Splashy was created from the Whisker pet profile.
     ent_reg = er.async_get(hass)
     weight_id = ent_reg.async_get_entity_id("sensor", DOMAIN, "cat_splashy_weight")
-    assert weight_id
+    # Not sensor.splashy_weight(_2): the core Whisker pet sensors own those.
+    assert weight_id == "sensor.splashy_typical_weight"
+    assert (
+        ent_reg.async_get_entity_id("sensor", DOMAIN, "cat_splashy_visits_today")
+        == "sensor.splashy_daily_visits"
+    )
+    for entity_id in (
+        "sensor.splashy_insight",
+        "binary_sensor.splashy_needs_attention",
+        "sensor.main_level_waste_drawer_full_forecast",
+        "binary_sensor.smart_cat_new_cat_suspected",
+        "sensor.smart_cat_unassigned_visits_7_days",
+    ):
+        assert hass.states.get(entity_id) is not None, (
+            entity_id,
+            sorted(e.entity_id for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id)),
+        )
     weight = hass.states.get(weight_id)
     # LR4 reads ~13.1, LR5 (pet id) ~10.95: the 7 day median mixes both robots.
     assert 10.5 < float(weight.state) < 13.5
@@ -183,7 +209,15 @@ async def test_full_setup(
     # Forecast sensors land on the core integration's robot devices.
     fc_id = ent_reg.async_get_entity_id("sensor", DOMAIN, "robot_LR4SERIAL_waste_drawer_full_forecast")
     device = dr.async_get(hass).async_get(ent_reg.async_get(fc_id).device_id)
-    assert ("litterrobot", "LR4SERIAL") in device.identifiers
+    # The core integration's device itself (same config entry, same name),
+    # not a look-alike device created for Smart Cat.
+    whisker_entry = hass.config_entries.async_entries("litterrobot")[0]
+    assert device.config_entry_id == whisker_entry.entry_id
+    assert device.name == "Main Level"
+    assert fc_id == "sensor.main_level_waste_drawer_full_forecast"
+    assert ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, "robot_LR5SERIAL_litter_refill_forecast"
+    ) == "sensor.basement_litter_refill_forecast"
     assert hass.states.get(fc_id).attributes["current_pct"] == 24.0
 
     assert hass.states.get(ent_reg.async_get_entity_id("binary_sensor", DOMAIN, "cat_splashy_attention")).state == "off"
