@@ -34,9 +34,10 @@ from .const import (
     LR5_PAGE_SIZE,
     NEW_VISIT_EVENT_WINDOW,
     PUSH_REFRESH_DELAY,
+    SYNC_STALE_AFTER,
     UPDATE_INTERVAL,
 )
-from .core.analytics import CatInsights, cat_insights
+from .core.analytics import ABSENCE_ANOMALIES, CatInsights, cat_insights
 from .core.forecast import LevelForecast, cycles_per_day, forecast_level
 from .core.identify import Identifier, identify_all
 from .core.models import Assignment, Cat, LevelReading, NewCatCandidate, Visit
@@ -82,6 +83,8 @@ class SmartCatData:
     unassigned_7d: int = 0
     backfill_complete: bool = False
     total_visits: int = 0
+    # Robots whose activity could not be fetched recently.
+    stale_robots: list[str] = field(default_factory=list)
 
 
 def removed_pet_key(pet_id: str) -> str:
@@ -122,6 +125,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         self._unsubs: list[Callable[[], None]] = []
         self._last_status: dict[str, str | None] = {}
         self._candidate_announced: datetime | None = None
+        self._synced_at: dict[str, datetime] = {}
 
     # --- options ------------------------------------------------------------
 
@@ -146,7 +150,10 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             raise UpdateFailed("The Whisker (litterrobot) integration is not loaded")
 
         now = dt_util.utcnow()
-        await self._sync_cats(account)
+        if await self._sync_cats(account) and self.data is not None:
+            # Entities are created per cat at setup; a cat imported from a new
+            # Whisker pet profile needs a reload to get its sensors.
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
         new_visits: list[Visit] = []
         robots: dict[str, tuple[str, str]] = {}
         backfill_complete = True
@@ -161,17 +168,32 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             except Exception as err:  # noqa: BLE001 - one robot must not block others
                 _LOGGER.warning("Could not sync activity for %s: %s", robot.name, err)
                 continue
+            self._synced_at[robot.serial] = now
             new_visits.extend(inserted)
             backfill_complete &= done
             await self._record_levels(robot, now)
 
+        if robots and not any(self._synced_at.get(serial) == now for serial in robots):
+            # Nothing could be fetched: report the failure (entities become
+            # unavailable) instead of analysing stale history.
+            raise UpdateFailed("Could not sync activity for any Litter-Robot")
+        stale = sorted(
+            name
+            for serial, (name, _) in robots.items()
+            if serial not in self._synced_at or now - self._synced_at[serial] > SYNC_STALE_AFTER
+        )
+
         if retention := int(self._opt(CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS)):
             await self._run(self.store.delete_visits_before, now - timedelta(days=retention))
 
-        return await self._analyse(now, robots, new_visits, backfill_complete)
+        return await self._analyse(now, robots, new_visits, backfill_complete, stale)
 
-    async def _sync_cats(self, account: Any) -> None:
-        """Create cat profiles for Whisker pet profiles we have not seen."""
+    async def _sync_cats(self, account: Any) -> bool:
+        """Create cat profiles for Whisker pet profiles we have not seen.
+
+        Returns whether a new profile was created.
+        """
+        created = False
         cats = await self._run(self.store.cats)
         known = {c.whisker_pet_id for c in cats if c.whisker_pet_id}
         taken = {c.cat_id for c in cats}
@@ -195,6 +217,8 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             taken.add(cat.cat_id)
             await self._run(self.store.save_cat, cat)
             _LOGGER.info("Created cat profile %s from Whisker pet profile", cat.name)
+            created = True
+        return created
 
     async def _sync_robot(self, robot: Any, kind: str, now: datetime) -> tuple[list[Visit], bool]:
         """Fetch new activity for one robot. Returns (new visits, backfill done).
@@ -309,6 +333,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         robots: dict[str, tuple[str, str]],
         new_visits: list[Visit],
         backfill_complete: bool,
+        stale_robots: list[str] | None = None,
     ) -> SmartCatData:
         cats = await self._run(self.store.cats)
         visits = await self._run(self.store.visits)
@@ -318,6 +343,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             cats={c.cat_id: c for c in cats},
             backfill_complete=backfill_complete,
             total_visits=len(visits),
+            stale_robots=stale_robots or [],
         )
 
         by_cat: dict[str, list[Visit]] = {c.cat_id: [] for c in cats}
@@ -329,9 +355,15 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             elif visit.timestamp >= week_ago:
                 data.unassigned_7d += 1
         for cat in cats:
-            data.insights[cat.cat_id] = await self._run(
+            insights = await self._run(
                 cat_insights, cat.cat_id, by_cat[cat.cat_id], assignments, now, tz
             )
+            if data.stale_robots:
+                # The cat may be using a robot we cannot read: absence is unknown.
+                insights.anomalies = [
+                    a for a in insights.anomalies if a.kind not in ABSENCE_ANOMALIES
+                ]
+            data.insights[cat.cat_id] = insights
         data.candidate = identifier.new_cat_candidate(now)
 
         waste_at = float(self._opt(CONF_WASTE_THRESHOLD, DEFAULT_WASTE_THRESHOLD))

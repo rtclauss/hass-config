@@ -101,12 +101,18 @@ Per the [notification policy](notification_policy.md):
   The notification clears by tag (`smartcat_new_cat`).
 - Transitions from or to `unavailable`/`unknown` (startup, integration reload)
   never push.
+- If no robot's activity can be fetched, the update fails and the entities go
+  unavailable. If only one robot cannot be fetched for 30 minutes, "fewer
+  visits" changes (`no_recent_visits`, `frequency_low`) are held back, since
+  the cat may be using that robot; `stale_robots` on the coordinator data
+  names it.
 - Forecasts are dashboard-only. The `litter_robot` package still owns the
   replace-bag and add-litter tasks.
 
 ## Adding a cat
 
-After `smartcat.add_cat`, add `binary_sensor.<cat>_needs_attention` to the
+A new Whisker pet profile is imported on the next refresh, and Smart Cat
+reloads itself to add the cat's entities. After that or `smartcat.add_cat`, add `binary_sensor.<cat>_needs_attention` to the
 trigger list of `smartcat_cat_needs_attention`, copy the Splashy section of
 the Cats dashboard, and extend `tests/test_smartcat_package.py`.
 

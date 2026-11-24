@@ -45,6 +45,9 @@ ANOMALY_ORDER = (
     "frequency_low",
     "weight_gain",
 )
+# Anomalies that mean "fewer visits than usual". They are only meaningful
+# while every robot's activity is being fetched.
+ABSENCE_ANOMALIES = frozenset({"no_recent_visits", "frequency_low"})
 
 
 @dataclass(slots=True)

@@ -462,3 +462,56 @@ async def test_raising_the_backfill_depth_resumes_lr5_history(
             await entry.runtime_data.async_refresh()
         assert entry.runtime_data.data.backfill_complete
         assert await lr5_visits() == 90
+
+
+async def test_failed_syncs_do_not_report_a_missing_cat(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(NOW)
+    entry = await setup_smartcat(hass, tmp_path)
+    coordinator = entry.runtime_data
+    lr4, lr5 = whisker.robots
+
+    async def broken(*_args, **_kwargs):
+        raise ConnectionError("Whisker API unavailable")
+
+    # Both robots work and the cat really stopped visiting: reported.
+    freezer.move_to(NOW + timedelta(days=2))
+    await coordinator.async_refresh()
+    kinds = {a.kind for a in coordinator.data.insights["splashy"].anomalies}
+    assert "no_recent_visits" in kinds
+
+    # One robot cannot be read: the cat may be using it, so absence is unknown.
+    lr5.get_activities = broken
+    freezer.move_to(NOW + timedelta(days=2, hours=1))
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert coordinator.data.stale_robots == ["Basement"]
+    kinds = {a.kind for a in coordinator.data.insights["splashy"].anomalies}
+    assert not kinds & {"no_recent_visits", "frequency_low"}
+
+    # Neither robot can be read: the update fails and entities go unavailable.
+    lr4._post = broken
+    freezer.move_to(NOW + timedelta(days=2, hours=2))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert not coordinator.last_update_success
+    ent_reg = er.async_get(hass)
+    attention = ent_reg.async_get_entity_id("binary_sensor", DOMAIN, "cat_splashy_attention")
+    assert hass.states.get(attention).state == "unavailable"
+
+
+async def test_cat_imported_later_gets_entities(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(NOW)
+    entry = await setup_smartcat(hass, tmp_path)
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "cat_mochi_weight") is None
+
+    # A second pet profile is added in the Whisker app while Smart Cat runs.
+    whisker.pets.append(FakePet("PET-MOCHI", "Mochi", 7.5))
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "cat_mochi_weight")
+    assert ent_reg.async_get_entity_id("binary_sensor", DOMAIN, "cat_mochi_attention")

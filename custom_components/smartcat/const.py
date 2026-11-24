@@ -19,6 +19,9 @@ DEFAULT_LITTER_THRESHOLD: Final = 70
 DEFAULT_RETENTION_DAYS: Final = 0  # keep forever
 
 UPDATE_INTERVAL: Final = timedelta(minutes=5)
+# A robot whose activity has not been fetched for this long makes "fewer
+# visits than usual" unknowable, so those insights are held back.
+SYNC_STALE_AFTER: Final = timedelta(minutes=30)
 # Wait for the cloud to record the activity after a clean cycle starts.
 PUSH_REFRESH_DELAY: Final = 90
 # Re-read this much already-fetched activity, so visits split across two
