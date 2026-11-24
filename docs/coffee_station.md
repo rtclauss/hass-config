@@ -247,7 +247,8 @@ going unavailable, and manual plug activation.
 | Immediate shutdown on fault + confirmation | Every fault requests OFF and confirms it, with a retry and a critical escalation. |
 | Device-local max-on timer | **Not available.** The HA Matter integration exposes no on-with-timed-off or auto-off for this plug. Eve app schedules/auto-off over Matter are unverified. |
 | HA watchdog | `coffee_max_on_watchdog`, independent of AppDaemon. If the plug is ON for 15 min, it switches it OFF, confirms, and sends a critical alert if it is still on. If the plug goes **unavailable while ON** for 2 min, it sends a critical "unplug" alert. If it draws **>50 W for 2 min while the switch is not ON** (possible stuck relay), it switches OFF and sends a critical alert. |
-| Stop path confirmation | `coffee_emergency_stop` waits up to 30 s for the plug to report off, then sends a critical "unplug" alert (`script.coffee_unplug_alert`). |
+| Stop path confirmation | `coffee_emergency_stop` waits up to 30 s for the plug to report off, then sends a critical "unplug" alert (`script.coffee_unplug_alert`). Every YAML OFF step uses `continue_on_error`, so a failed Matter call still reaches the confirmation and alert. |
+| Stuck relay | The YAML watchdog's trigger is one sustained combined condition (power >50 W **and** switch not ON for 2 min), so a switch flipping to off while power stays high still starts it. The app re-sends OFF whenever power >50 W while the switch reports off, and escalates to a critical alert if the power does not drop. |
 | Never infer water/grounds/carafe from power | Arming is your explicit confirmation of all of them. Power proves heating only. |
 | OFF stops in every state | Handled by the app and, independently, by `coffee_emergency_stop`. |
 

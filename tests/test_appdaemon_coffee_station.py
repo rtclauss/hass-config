@@ -131,6 +131,10 @@ class Sim:
         self._process()
 
     def power(self, watts):
+        # A working plug that reports off draws nothing; only a test that
+        # simulates a misbehaving plug (plug_follows=False) can say otherwise.
+        if self.plug_follows and self.core.plug == "off" and watts:
+            watts = 0.0
         self.core.on_power(watts, self.now)
         self._process()
 
@@ -1176,3 +1180,15 @@ def test_adapter_stale_timer_callback_keeps_the_new_handle(monkeypatch, tmp_path
     app._on_timer({"timer_name": "arming_expiry", "token": token - 1000})
     assert app._handles["arming_expiry"] == (handle, token)
     assert app.core.state == cs.ARMED
+
+
+def test_power_drawn_while_plug_reports_off_escalates():
+    """Stuck relay: the switch says off but the brewer still draws power."""
+    sim = drained()
+    sim.plug_follows = False
+    sim.power(BREW_W)  # switch already reports off
+    assert sim.plug_commands[-1] == "off"
+    assert sim.core.shutdown is not None
+    sim.advance(60)  # retries exhausted with power still high
+    assert sim.core.fault_reason == "shutdown_unconfirmed"
+    assert sim.notifications[-1]["level"] == "critical"

@@ -77,7 +77,8 @@ def test_emergency_stop_covers_remote_dashboard_and_notification_and_confirms():
     assert set(buttons["entity_id"]) == {"input_button.coffee_stop", "input_button.coffee_acknowledge_fault"}
     event = next(t for t in triggers if t["trigger"] == "event")
     assert event["event_data"]["action"] == "COFFEE_STOP"
-    assert auto["action"][0] == {"action": "switch.turn_off", "target": {"entity_id": PLUG}}
+    assert auto["action"][0] == {"continue_on_error": True, "action": "switch.turn_off",
+                                 "target": {"entity_id": PLUG}}
     assert "wait_template" in auto["action"][1]
     assert auto["action"][2]["then"][0]["action"] == "script.coffee_unplug_alert"
     assert auto["mode"] == "queued"
@@ -89,12 +90,26 @@ def test_watchdog_covers_runtime_dropout_and_phantom_power():
     assert by_id["max_on"]["for"] == "00:15:00"
     assert _app_block()["max_energized_s"] < 15 * 60
     assert by_id["dropped_while_on"]["from"] == "on" and by_id["dropped_while_on"]["to"] == "unavailable"
-    assert by_id["power_while_off"]["entity_id"] == "sensor.coffee_maker_power"
+    # Combined condition (power high AND switch not on) sustained, so a switch
+    # flipping to off while power is already high still starts the timer.
+    phantom = by_id["power_while_off"]
+    assert phantom["trigger"] == "template" and phantom["for"] == "00:02:00"
+    assert "sensor.coffee_maker_power" in phantom["value_template"]
+    assert "is_state('switch.coffee_maker', 'on')" in phantom["value_template"]
     branches = {b["conditions"][0]["id"]: b["sequence"] for b in auto["action"][0]["choose"]}
     assert branches["max_on"][0]["action"] == "switch.turn_off"
     assert branches["max_on"][2]["else"][0]["action"] == "script.coffee_unplug_alert"
     assert branches["dropped_while_on"][0]["action"] == "script.coffee_unplug_alert"
     assert [s["action"] for s in branches["power_while_off"]] == ["switch.turn_off", "script.coffee_unplug_alert"]
+
+
+def test_every_yaml_off_step_continues_to_confirmation_on_error():
+    """A failed OFF service call (e.g. Matter timeout) must not abort the
+    confirmation and the critical unplug alert that follow it."""
+    pkg = _package()
+    offs = [n for n in _walk(pkg["automation"]) if n.get("action") == "switch.turn_off"]
+    assert len(offs) == 4
+    assert all(n.get("continue_on_error") is True for n in offs)
 
 
 def test_startup_shutoff_waits_confirms_and_reports_timeout():

@@ -135,6 +135,10 @@ BINARY_ICONS: dict[str, tuple[str, str]] = {
     "binary_sensor.coffee_maintenance_due": ("mdi:water-alert", "mdi:water-check"),
 }
 
+# Power above this while the switch reports OFF means a possible stuck relay
+# (same threshold as the YAML watchdog in packages/coffee.yaml).
+STUCK_RELAY_W = 50.0
+
 TAG_LIFECYCLE = "coffee_station"
 TAG_FAULT = "coffee_station_fault"
 TAG_MAINTENANCE = "coffee_station_maintenance"
@@ -1126,6 +1130,12 @@ class CoffeeCore:
                 brew.below_since = None
                 brew.interruptions += 1
                 self._cancel("completion")
+        if self.plug == "off" and self.shutdown is None and watts > STUCK_RELAY_W:
+            # Drawing real power while the switch says off: possible stuck
+            # relay. Re-send OFF; the confirmation path escalates to a critical
+            # "unplug" alert if the power does not drop.
+            self._log(f"{watts:.0f} W while the plug reports off", "WARNING")
+            self.request_shutdown("power drawn while the plug reports off", now)
         self._check_shutdown(now)
         self._recover_or_degrade(now)
 
