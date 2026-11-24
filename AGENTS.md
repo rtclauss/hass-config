@@ -72,6 +72,11 @@
 - Buttons and tap targets open relevant status (`url` for Apple, `clickAction` for Android); do not link a safety alert to a control whose dialog makes the wrong action one tap away.
 - Test with `uv run --with pytest pytest tests/test_actionable_notifications.py`.
 
+## Coffee Station
+- Use `docs/coffee_station.md` as the source of truth before changing `appdaemon/apps/coffee_station.py`, its `apps.yaml` block, `packages/coffee.yaml`, or `lovelace/dashboards/coffee.yaml`.
+- The AppDaemon app is the only thing that may turn the coffee maker ON; YAML automations may only switch it off. Never persist arming across restarts.
+- Do not energize the real appliance from tests or automation runs. Test with `uv run --with pytest pytest tests/test_appdaemon_coffee_station.py tests/test_coffee_package.py`.
+
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
 - Do not commit `AGENTS.local.md` unless explicitly asked.

@@ -7,7 +7,7 @@ Every Home Assistant automation and script defined in this repo, with the
 `private_templates/*.tmpl` source and rendered with the synthetic example
 values, so placeholder names such as `example_zone_05` stand in for private ones.
 
-Totals: **259 automations** and **162 scripts** across 50 files.
+Totals: **262 automations** and **163 scripts** across 51 files.
 
 To keep this current, add a `description:` to every new automation or script
 and regenerate:
@@ -32,6 +32,7 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 - [`private_templates/car.yaml.tmpl`](#private_templatescaryamltmpl)
 - [`packages/cleaning.yaml`](#packagescleaningyaml)
 - [`private_templates/climate.yaml.tmpl`](#private_templatesclimateyamltmpl)
+- [`packages/coffee.yaml`](#packagescoffeeyaml)
 - [`private_templates/curling.yaml.tmpl`](#private_templatescurlingyamltmpl)
 - [`private_templates/desk.yaml.tmpl`](#private_templatesdeskyamltmpl)
 - [`packages/diffusers.yaml`](#packagesdiffusersyaml)
@@ -216,6 +217,23 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | `window_climate_action_handler` | window_climate_action_handler | queued | Handle phone notification actions for the open-window climate prompts: pause or resume the thermostat, or ignore/keep paused. |
 | `window_climate_open_prompt` | window_climate_open_prompt | single | Prompt the resident to pause the thermostat after a window has been open for 5 minutes (with a 2-hour follow-up) while home and the thermostat is running. |
 | `window_climate_resume_prompt` | window_climate_resume_prompt | single | Prompt the resident to resume the thermostat after all windows have been closed for an hour (with a 4-hour follow-up) when climate was paused for windows. |
+
+
+## `packages/coffee.yaml`
+
+### Automations
+
+| ID | Alias | Mode | Description |
+| --- | --- | --- | --- |
+| `coffee_emergency_stop` | coffee_emergency_stop | queued | Switch the coffee maker plug off from the RODRET OFF button (short or long press), the dashboard Stop/Acknowledge buttons, or a Stop coffee notification action, without depending on AppDaemon; confirm it reports off within 30 s and raise a critical unplug alert when it does not. AppDaemon also handles the same inputs to update its state machine. |
+| `coffee_max_on_watchdog` | coffee_max_on_watchdog | queued | Defense in depth behind AppDaemon: switch the coffee maker plug off and confirm it after 15 minutes on; raise a critical unplug alert when the plug drops offline while on, when it cannot be confirmed off, or when it draws power while its switch does not report on. |
+| `coffee_startup_shutoff` | coffee_startup_shutoff | single | After a Home Assistant start, switch the coffee maker plug off if it is on (brewing is never resumed or started by a restart) and confirm it; if the Matter plug has not reported within 2 minutes, say so. |
+
+### Scripts
+
+| Script | Alias | Mode | Description |
+| --- | --- | --- | --- |
+| `script.coffee_unplug_alert` | Coffee Unplug Alert | queued | Critical "unplug the coffee maker" alert from the AppDaemon-independent safety layer, sent to the phones (critical on iOS, alarm stream on Android) and kept as a local persistent notification. |
 
 
 ## `private_templates/curling.yaml.tmpl`

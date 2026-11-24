@@ -1,0 +1,451 @@
+# Home Assistant package for the kitchen coffee station (Moccamaster on a
+# power-monitoring smart plug, IKEA RODRET remote).
+#
+# The brewing logic lives in ONE place: the AppDaemon app
+# appdaemon/apps/coffee_station.py (state machine, wake-up detection, power
+# monitoring, notifications). This package only provides:
+#   * helpers the app reads/writes (dashboard buttons, counters, last-brew
+#     metrics that must survive restarts),
+#   * rolling averages over the stored brew metrics, and
+#   * an INDEPENDENT safety layer that does not depend on AppDaemon: the stop
+#     path, a maximum-on watchdog, and a start-up shutoff. None of these ever
+#     turns the coffee maker ON.
+#
+# Entity IDs assume the commissioning renames in docs/coffee_station.md
+# (switch.coffee_maker, sensor.coffee_maker_power, sensor.coffee_station_remote_action).
+
+################################################################
+## Packages / Coffee
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "coffee"
+
+    # No fixed icon: a customized icon would never change. The outlet device
+    # class makes HA show power-plug / power-plug-off as the plug switches;
+    # sensor.coffee_state carries the coffee-maker icon for each brew state.
+    switch.coffee_maker:
+      <<: *customize
+      friendly_name: "Coffee maker"
+      device_class: outlet
+
+    automation.coffee_emergency_stop:
+      <<: *customize
+      friendly_name: "Coffee maker emergency stop"
+      icon: mdi:power-plug-off
+
+    automation.coffee_max_on_watchdog:
+      <<: *customize
+      friendly_name: "Coffee maker max-on watchdog"
+      icon: mdi:timer-alert
+
+    automation.coffee_startup_shutoff:
+      <<: *customize
+      friendly_name: "Coffee maker start-up shutoff"
+      icon: mdi:restart-alert
+
+################################################
+## Input Buttons (dashboard controls; handled by AppDaemon)
+################################################
+input_button:
+  coffee_arm:
+    name: Arm coffee
+    icon: mdi:coffee-maker-check
+  coffee_brew_now:
+    name: Brew coffee now
+    icon: mdi:coffee-to-go
+  # Also handled directly by coffee_emergency_stop below.
+  coffee_stop:
+    name: Stop coffee
+    icon: mdi:stop-circle
+  coffee_acknowledge_fault:
+    name: Acknowledge coffee fault
+    icon: mdi:alert-circle-check
+  coffee_reset_maintenance:
+    name: Reset coffee descale counter
+    icon: mdi:water-sync
+
+################################################
+## Counters (restored across restarts)
+################################################
+counter:
+  coffee_total_brews:
+    name: Coffee brews (total)
+    icon: mdi:counter
+    restore: true
+  coffee_brews_since_descale:
+    name: Coffee brews since descale
+    icon: mdi:water-sync
+    restore: true
+  coffee_failed_brews:
+    name: Coffee failed or interrupted brews
+    icon: mdi:alert-circle-outline
+    restore: true
+
+################################################
+## Last-brew metrics (written by AppDaemon; restored across restarts)
+################################################
+input_number:
+  coffee_last_brew_duration:
+    name: Coffee last brew heating time
+    icon: mdi:timer-outline
+    unit_of_measurement: s
+    min: 0
+    max: 3600
+    step: 1
+    mode: box
+  coffee_last_brew_energy:
+    name: Coffee last brew energy
+    icon: mdi:lightning-bolt
+    unit_of_measurement: Wh
+    min: 0
+    max: 2000
+    step: 0.1
+    mode: box
+  coffee_last_brew_peak_power:
+    name: Coffee last brew peak power
+    icon: mdi:flash
+    unit_of_measurement: W
+    min: 0
+    max: 3000
+    step: 0.1
+    mode: box
+
+input_datetime:
+  coffee_last_brew:
+    name: Coffee last brew
+    has_date: true
+    has_time: true
+  coffee_last_descale:
+    name: Coffee maker last descaled
+    has_date: true
+    has_time: true
+
+################################################
+## Rolling averages (Recorder-backed)
+################################################
+# Each successful brew writes the input_numbers above; these average the most
+# recent brews. Two consecutive brews with an identical value are one state
+# change and count once - acceptable for a trend indicator.
+sensor:
+  - platform: statistics
+    name: Coffee average brew heating time
+    unique_id: coffee_average_brew_heating_time
+    entity_id: input_number.coffee_last_brew_duration
+    state_characteristic: mean
+    sampling_size: 30
+    max_age:
+      days: 180
+    precision: 0
+  - platform: statistics
+    name: Coffee average brew energy
+    unique_id: coffee_average_brew_energy
+    entity_id: input_number.coffee_last_brew_energy
+    state_characteristic: mean
+    sampling_size: 30
+    max_age:
+      days: 180
+    precision: 1
+  - platform: statistics
+    name: Coffee average peak power
+    unique_id: coffee_average_peak_power
+    entity_id: input_number.coffee_last_brew_peak_power
+    state_characteristic: mean
+    sampling_size: 30
+    max_age:
+      days: 180
+    precision: 0
+
+################################################
+## Scripts
+################################################
+script:
+  coffee_unplug_alert:
+    alias: Coffee Unplug Alert
+    description: >-
+      Critical "unplug the coffee maker" alert from the AppDaemon-independent
+      safety layer, sent to the phones (critical on iOS, alarm stream on
+      Android) and kept as a local persistent notification.
+    mode: queued
+    icon: mdi:power-plug-off
+    fields:
+      message:
+        description: Why the coffee maker must be unplugged.
+        example: The coffee maker plug could not be confirmed off.
+        required: true
+        selector:
+          text:
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: persistent_notification.create
+        data:
+          notification_id: coffee_station_fault
+          title: Unplug the coffee maker
+          message: "{{ message }}"
+      - action: notify.all
+        data:
+          title: Unplug the coffee maker
+          message: "{{ message }}"
+          data:
+            tag: coffee_station_fault
+            url: /db-coffee/coffee
+            clickAction: /db-coffee/coffee
+            ttl: 0
+            priority: high
+            channel: alarm_stream
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            actions:
+              - action: URI
+                title: Coffee
+                uri: /db-coffee/coffee
+
+################################################
+## Automation (independent safety layer - never turns the plug on)
+################################################
+automation:
+  - id: coffee_emergency_stop
+    alias: coffee_emergency_stop
+    description: >-
+      Switch the coffee maker plug off from the RODRET OFF button (short or
+      long press), the dashboard Stop/Acknowledge buttons, or a Stop coffee
+      notification action, without depending on AppDaemon; confirm it reports
+      off within 30 s and raise a critical unplug alert when it does not.
+      AppDaemon also handles the same inputs to update its state machine.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: state
+        entity_id: sensor.coffee_station_remote_action
+        to:
+          - "off"
+          - "brightness_move_down"
+      # The raw Z2M message fires on every press, even when the HA action
+      # sensor would not change state (no "" reset, or the deprecated legacy
+      # action sensor removed in a future Z2M release).
+      - trigger: mqtt
+        topic: zigbee2mqtt/coffee_station_remote
+        value_template: "{{ value_json.action | default('') }}"
+        payload: "off"
+      - trigger: mqtt
+        topic: zigbee2mqtt/coffee_station_remote
+        value_template: "{{ value_json.action | default('') }}"
+        payload: "brightness_move_down"
+      - trigger: state
+        entity_id:
+          - input_button.coffee_stop
+          - input_button.coffee_acknowledge_fault
+        not_from: unavailable
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: COFFEE_STOP
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.coffee_maker
+      - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
+        timeout: "00:00:30"
+        continue_on_timeout: true
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: switch.coffee_maker
+                state: "off"
+        then:
+          - action: script.coffee_unplug_alert
+            data:
+              message: >-
+                Stop was pressed but the coffee maker plug did not report off
+                within 30 seconds (it reports {{ states('switch.coffee_maker') }}).
+                Unplug the coffee maker now.
+
+  - id: coffee_max_on_watchdog
+    alias: coffee_max_on_watchdog
+    description: >-
+      Defense in depth behind AppDaemon: switch the coffee maker plug off and
+      confirm it after 15 minutes on; raise a critical unplug alert when the
+      plug drops offline while on, when it cannot be confirmed off, or when it
+      draws power while its switch does not report on.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 50
+    trigger:
+      - trigger: state
+        entity_id: switch.coffee_maker
+        to: "on"
+        for: "00:15:00"
+        id: max_on
+      - trigger: state
+        entity_id: switch.coffee_maker
+        from: "on"
+        to: unavailable
+        for: "00:02:00"
+        id: dropped_while_on
+      - trigger: numeric_state
+        entity_id: sensor.coffee_maker_power
+        above: 50
+        for: "00:02:00"
+        id: power_while_off
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: max_on
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.coffee_maker
+              - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
+                timeout: "00:00:30"
+                continue_on_timeout: true
+              - if:
+                  - condition: state
+                    entity_id: switch.coffee_maker
+                    state: "off"
+                then:
+                  - action: notify.all
+                    data:
+                      title: Coffee maker switched off
+                      message: >-
+                        The coffee maker plug was on for 15 minutes and the
+                        Home Assistant watchdog switched it off. Check the
+                        Coffee station.
+                      data:
+                        tag: coffee_station_fault
+                        url: /db-coffee/coffee
+                        clickAction: /db-coffee/coffee
+                        push:
+                          interruption-level: time-sensitive
+                        actions:
+                          - action: URI
+                            title: Coffee
+                            uri: /db-coffee/coffee
+                else:
+                  - action: script.coffee_unplug_alert
+                    data:
+                      message: >-
+                        The coffee maker plug has been on for 15 minutes and
+                        could not be confirmed off. Unplug the coffee maker now.
+          - conditions:
+              - condition: trigger
+                id: dropped_while_on
+            sequence:
+              - action: script.coffee_unplug_alert
+                data:
+                  message: >-
+                    The coffee maker plug went offline while it was on, so
+                    nothing can switch it off or watch it. Unplug the coffee
+                    maker now.
+          - conditions:
+              - condition: trigger
+                id: power_while_off
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: switch.coffee_maker
+                    state: "on"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.coffee_maker
+              - action: script.coffee_unplug_alert
+                data:
+                  message: >-
+                    The coffee maker draws
+                    {{ states('sensor.coffee_maker_power') }} W while its plug
+                    reports {{ states('switch.coffee_maker') }} (possible stuck
+                    relay). Unplug the coffee maker now.
+
+  - id: coffee_startup_shutoff
+    alias: coffee_startup_shutoff
+    description: >-
+      After a Home Assistant start, switch the coffee maker plug off if it is
+      on (brewing is never resumed or started by a restart) and confirm it; if
+      the Matter plug has not reported within 2 minutes, say so.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - wait_template: "{{ states('switch.coffee_maker') in ['on', 'off'] }}"
+        timeout: "00:02:00"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: switch.coffee_maker
+                state: "on"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.coffee_maker
+              - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
+                timeout: "00:00:30"
+                continue_on_timeout: true
+              - if:
+                  - condition: state
+                    entity_id: switch.coffee_maker
+                    state: "off"
+                then:
+                  - action: notify.all
+                    data:
+                      title: Coffee maker switched off
+                      message: >-
+                        Home Assistant restarted while the coffee maker plug
+                        was on, so it was switched off. Arm again if you still
+                        want coffee.
+                      data:
+                        tag: coffee_station_fault
+                        url: /db-coffee/coffee
+                        clickAction: /db-coffee/coffee
+                        push:
+                          interruption-level: time-sensitive
+                else:
+                  - action: script.coffee_unplug_alert
+                    data:
+                      message: >-
+                        Home Assistant restarted while the coffee maker plug
+                        was on and it could not be confirmed off. Unplug the
+                        coffee maker now.
+          - conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: switch.coffee_maker
+                    state: "off"
+            sequence:
+              - action: notify.all
+                data:
+                  title: Coffee maker state unknown
+                  message: >-
+                    After a Home Assistant restart the coffee maker plug has
+                    not reported for 2 minutes ({{ states('switch.coffee_maker') }}).
+                    Check that it is off.
+                  data:
+                    tag: coffee_station_fault
+                    url: /db-coffee/coffee
+                    clickAction: /db-coffee/coffee
+                    push:
+                      interruption-level: time-sensitive

@@ -1,0 +1,218 @@
+# Coffee station dashboard (YAML mode), registered in configuration.yaml as
+# `db-coffee`. State comes from the AppDaemon coffee_station app
+# (docs/coffee_station.md); controls are input_buttons the app handles. Kept
+# separate from the storage-mode Calm dashboard, like the Cats dashboard.
+#
+# Controls are shown only when the state machine would accept them, except
+# Stop, which is always visible so it is never more than one tap away.
+title: Coffee
+views:
+  - title: Coffee
+    path: coffee
+    icon: mdi:coffee-maker
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Coffee station
+            icon: mdi:coffee-maker
+          - type: markdown
+            content: >-
+              {% set s = states('sensor.coffee_state') %}
+              {% set a = states.sensor.coffee_state.attributes if states.sensor.coffee_state else {} %}
+              {% if s in ['unknown', 'unavailable'] %}
+              **The coffee station app is not running.** Stop still works.
+              {% elif s == 'fault' %}
+              **Fault: {{ a.get('fault_reason') }}.** Check the brewer, then hold OFF on the remote (or press Acknowledge).
+              {% elif s == 'armed' %}
+              Armed. Coffee brews once you are up between
+              {{ as_timestamp(a.get('window_start')) | timestamp_custom('%a %H:%M') }} and
+              {{ as_timestamp(a.get('window_end')) | timestamp_custom('%H:%M') }}.
+              {% elif s == 'waiting_for_wakeup' %}
+              You are up - brewing starts after the vacancy check unless you get back into bed.
+              {% elif s in ['starting', 'brewing', 'draining'] %}
+              {{ s | capitalize }} ({{ states('sensor.coffee_brew_progress') }}%).
+              {% elif s == 'ready' %}
+              Coffee is ready.
+              {% elif s == 'unavailable' %}
+              Station unavailable: {{ (state_attr('binary_sensor.coffee_station_available', 'issues') or []) | join(', ') }}.
+              {% else %}
+              Idle. Prepare the brewer, then press ON on the remote to arm.
+              {% endif %}
+          - type: tile
+            entity: sensor.coffee_state
+            name: State
+          - type: tile
+            entity: binary_sensor.coffee_station_available
+            name: Available
+          - type: tile
+            entity: sensor.coffee_brew_progress
+            name: Progress
+            visibility:
+              - condition: state
+                entity: sensor.coffee_state
+                state:
+                  - starting
+                  - brewing
+                  - draining
+          - type: tile
+            entity: sensor.coffee_fault
+            name: Fault
+            color: red
+            visibility:
+              - condition: state
+                entity: sensor.coffee_state
+                state: fault
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Controls
+            icon: mdi:gesture-tap-button
+          - type: tile
+            entity: input_button.coffee_stop
+            name: Stop
+            color: red
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.coffee_stop
+          - type: tile
+            entity: input_button.coffee_arm
+            name: Arm (brewer prepared)
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.coffee_arm
+              confirmation:
+                text: >-
+                  Fresh water, filter and grounds in, basket seated, empty
+                  carafe in place, and the brewer switch ON?
+            visibility:
+              - condition: state
+                entity: sensor.coffee_state
+                state:
+                  - idle
+                  - ready
+                  - cancelled
+          - type: tile
+            entity: input_button.coffee_brew_now
+            name: Brew now
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.coffee_brew_now
+            visibility:
+              - condition: state
+                entity: sensor.coffee_state
+                state:
+                  - armed
+                  - waiting_for_wakeup
+          - type: tile
+            entity: input_button.coffee_acknowledge_fault
+            name: Acknowledge fault
+            color: amber
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.coffee_acknowledge_fault
+            visibility:
+              - condition: state
+                entity: sensor.coffee_state
+                state: fault
+          - type: tile
+            entity: sensor.coffee_armed_until
+            name: Armed until
+            visibility:
+              - condition: state
+                entity: binary_sensor.coffee_armed
+                state: "on"
+          - type: tile
+            entity: sensor.coffee_next_window
+            name: Next wake-up window
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Power
+            icon: mdi:flash
+          - type: tile
+            entity: sensor.coffee_maker_power
+            name: Power
+          - type: tile
+            entity: switch.coffee_maker
+            name: Plug
+            tap_action:
+              action: more-info
+          - type: history-graph
+            title: Power (last 2 h)
+            hours_to_show: 2
+            entities:
+              - entity: sensor.coffee_maker_power
+                name: Power
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Last brew
+            icon: mdi:coffee
+          - type: tile
+            entity: input_datetime.coffee_last_brew
+            name: Finished
+          - type: tile
+            entity: input_number.coffee_last_brew_duration
+            name: Heating time
+          - type: tile
+            entity: input_number.coffee_last_brew_energy
+            name: Energy
+          - type: tile
+            entity: input_number.coffee_last_brew_peak_power
+            name: Peak power
+          - type: tile
+            entity: sensor.coffee_average_brew_heating_time
+            name: Avg heating time
+          - type: tile
+            entity: sensor.coffee_average_brew_energy
+            name: Avg energy
+          - type: tile
+            entity: sensor.coffee_maker_energy
+            name: Lifetime energy
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Maintenance
+            icon: mdi:water-sync
+          - type: tile
+            entity: binary_sensor.coffee_maintenance_due
+            name: Descale due
+          - type: tile
+            entity: counter.coffee_brews_since_descale
+            name: Brews since descale
+          - type: tile
+            entity: input_datetime.coffee_last_descale
+            name: Last descaled
+          - type: tile
+            entity: counter.coffee_total_brews
+            name: Total brews
+          - type: tile
+            entity: counter.coffee_failed_brews
+            name: Failed / interrupted
+          - type: tile
+            entity: input_button.coffee_reset_maintenance
+            name: Reset after descaling
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.coffee_reset_maintenance
+              confirmation:
+                text: Descaled and rinsed with 2 full reservoirs of water?
+            hold_action:
+              action: none
