@@ -23,10 +23,10 @@ Smart Cat is not a diagnostic tool and does not replace veterinary care.
 
 - **No extra login.** Smart Cat borrows the session of the core Whisker
   (`litterrobot`) integration.
-- **Visits.** Main Level (LR4): rebuilt from the activity feed (cat detected,
-  weight recorded, clean cycle); the cat left at cycle start minus the
-  clean-cycle wait time, which gives the duration. Basement (LR5): native
-  `PET_VISIT` records.
+- **Visits.** Both robots are Litter-Robot 4s: visits are rebuilt from the
+  activity feed (cat detected, weight recorded, clean cycle); the cat left at
+  cycle start minus the clean-cycle wait time, which gives the duration. A
+  Litter-Robot 5 would use its native `PET_VISIT` records.
 - **Which cat.** Each cat learns a robust weight band (median/MAD) per robot.
   Partial weigh-ins are attributed to the cat but never learned from and never
   count as its weight (sensors, trend, alerts, statistics), even on a pet-id
@@ -77,8 +77,14 @@ Cats come from the Whisker pet profiles; today that is Splashy (`splashy`).
 | `sensor.splashy_daily_visits` | Visits today; `daily_counts` (14 d), `hourly_histogram_30d`, `baseline_mean` |
 | `sensor.splashy_last_visit`, `_last_visit_duration`, `_average_visit_duration` | Visit timing |
 | `sensor.splashy_typical_weight`, `sensor.splashy_weight_trend` | 7-day median of trusted weigh-ins; Theil-Sen lb/week |
-| `sensor.<robot>_waste_drawer_full_forecast`, `_litter_refill_forecast` | Timestamps; attributes hold rate per cycle, cycles/day, days remaining, method |
-| `sensor.<robot>_cycles_per_day`, `sensor.<robot>_visits_today` | Robot activity (on the existing Litter-Robot devices) |
+| `sensor.<area>_<robot>_waste_drawer_full_forecast`, `_litter_refill_forecast` | Timestamps; attributes hold rate per cycle, cycles/day, days remaining, method |
+| `sensor.<area>_<robot>_cycles_per_day`, `_visits_today` | Robot activity (on the existing Litter-Robot devices) |
+
+HA 2026.11 prefixes new entity ids with the device's area, so the robot
+entities are `sensor.laundry_room_main_level_*` and
+`sensor.basement_great_room_basement_*` (the core integration's older
+entities, such as `sensor.main_level_litter_level`, predate that). The Cats
+dashboard uses those ids.
 
 Robot entities attach to the core integration's device entry itself. Device
 identifiers are scoped per config entry since HA 2026.10, so identifier-only
@@ -163,7 +169,9 @@ Rollback: delete the Smart Cat integration entry, remove
 `lovelace/dashboards/cats.yaml` and `custom_components/smartcat/`, then
 restart. `/config/smartcat.db` stays; delete it to drop the history.
 
-Unverified until it runs against the live Whisker account: the Basement
-(LR5) `PET_VISIT` field names, which are undocumented, so the integration
-parses them tolerantly and keeps raw records; and the LR4 activity query's
-`endTimestamp` paging. Check the first refresh's log and the backfill progress.
+Both robots are Litter-Robot 4s and arrived on 2026-11-20, so the activity
+history (and the backfill) starts there. Insights show "Learning" until a week
+of visits exists.
+
+The LR5 `PET_VISIT` parsing (undocumented field names, parsed tolerantly)
+is unused here and still unverified against a real LR5.

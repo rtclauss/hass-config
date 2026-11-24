@@ -136,8 +136,9 @@ def test_dashboard_is_registered_and_uses_smartcat_entities():
     for entity in (
         "sensor.splashy_insight",
         "binary_sensor.splashy_needs_attention",
-        "sensor.main_level_waste_drawer_full_forecast",
-        "sensor.main_level_litter_refill_forecast",
+        "sensor.laundry_room_main_level_waste_drawer_full_forecast",
+        "sensor.laundry_room_main_level_litter_refill_forecast",
+        "sensor.basement_great_room_basement_waste_drawer_full_forecast",
         "binary_sensor.smart_cat_new_cat_suspected",
         "smartcat:splashy_visits",
     ):
