@@ -171,7 +171,7 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
   configuration.yaml blueprints esphome packages zigbee2mqtt examples
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.10.4 \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.11.3 \
   python -m homeassistant --config /config --script check_config
 ```
 
