@@ -8,6 +8,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MEDIA_PLAYER_PATH = ROOT / "packages" / "media_player.yaml"
 
+# The Smart Cat integration tests need Home Assistant's test harness, which
+# also disables sockets and changes the event loop for every test. They run in
+# their own CI job (pytest tests/smartcat_ha); skip them in the normal suite.
+try:
+    import pytest_homeassistant_custom_component  # noqa: F401
+except ImportError:
+    collect_ignore = ["smartcat_ha"]
+
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Materialize synthetic ignored YAML before test modules import it."""

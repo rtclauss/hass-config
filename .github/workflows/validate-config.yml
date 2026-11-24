@@ -48,6 +48,40 @@ jobs:
       - name: Run pytest
         run: uv run --with pytest --with pyyaml --with jinja2 pytest
 
+  smartcat-integration:
+    name: Smart Cat integration tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          # Not .python-version: 3.14.3's unittest.mock cannot autospec
+          # Home Assistant's recorder, which the test harness needs.
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Prepare public automation example
+        run: cp automations.example.yaml automations.yaml
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
+
+      # Kept apart from the main suite: the Home Assistant test harness disables
+      # sockets and replaces the event loop for every test it loads. Pinned to
+      # the plugin release for the HA version the config check uses, and the
+      # pylitterbot that version of the core Whisker integration requires.
+      - name: Run Smart Cat integration tests
+        run: >-
+          uv run --no-project --python "$(python -c 'import sys; print(sys.executable)')"
+          --with pytest-homeassistant-custom-component==0.13.375
+          --with pylitterbot==2025.6.5
+          pytest -o asyncio_mode=auto -p no:cacheprovider tests/smartcat_ha
+
   allium-weed:
     name: Allium Weed Check
     runs-on: ubuntu-24.04

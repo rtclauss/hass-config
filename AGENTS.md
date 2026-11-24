@@ -18,9 +18,10 @@
 - Re-check unresolved Codex threads after merge.
 
 ## Review guidelines
-- Skip `custom_components/**`. It is vendored third-party code refreshed from HACS, not authored here, so do not review it or leave comments on it.
-- If a PR touches only `custom_components/**`, say that it is a vendored-integration refresh and stop.
-- Spend review attention on our own config: `packages/`, `lovelace/`, `esphome/`, `appdaemon/`, `scripts/`, `tests/`, `docs/`, and `specs/`.
+- Skip `custom_components/**` except `custom_components/smartcat/`. The rest is vendored third-party code refreshed from HACS, not authored here, so do not review it or leave comments on it.
+- Review `custom_components/smartcat/` like our own config: it is authored here (see `docs/smartcat.md`).
+- If a PR touches only vendored `custom_components/**` (not `smartcat/`), say that it is a vendored-integration refresh and stop.
+- Spend review attention on our own config: `packages/`, `lovelace/`, `esphome/`, `appdaemon/`, `scripts/`, `tests/`, `docs/`, `specs/`, and `custom_components/smartcat/`.
 
 ## Room Intent
 - Use `docs/room_intent.yaml` as the source of truth for room purpose, guest privacy, and room-sensitive automation behavior.

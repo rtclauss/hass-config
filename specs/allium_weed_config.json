@@ -1279,7 +1279,9 @@
     },
     {
       "spec": "specs/private_runtime_config.allium",
-      "implementation_paths": ["private_templates/light.yaml.tmpl"],
+      "implementation_paths": [
+        "private_templates/light.yaml.tmpl"
+      ],
       "classification": "native light-group command deduplication",
       "reason": "Issue #923 (https://github.com/rtclauss/hass-config/issues/923): the live lights_off_except trace sent both native group targets and every group member. Remove only native groups whose direct members are already selected, preserving exclusions, retries, opaque groups and member coverage. No private markers, values, renderer, manifest, or deployment contract changes. The privacy spec remains unchanged; rendered-template coverage is in tests/test_lights_off_group_fanout.py."
     },
@@ -1415,6 +1417,20 @@
       ],
       "classification": "documentation-only description field",
       "reason": "PR #1235 (https://github.com/rtclauss/hass-config/pull/1235) adds a description: line to each automation and script so the generated catalog (docs/automations_and_scripts.md) can list it. Only added description lines are allowed; no trigger, condition, action, or private-marker changes. specs/diffusers.allium is intentionally not edited."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        ".gitignore"
+      ],
+      "allowed_changed_line_patterns": [
+        "+!custom_components/smartcat/*",
+        "+custom_components/smartcat/**/__pycache__/",
+        "+!tests/smartcat_ha/*",
+        "+# Smart Cat is written for this house*"
+      ],
+      "classification": "track hand-written Smart Cat code",
+      "reason": "PR #1249 (https://github.com/rtclauss/hass-config/pull/1249, issue #1248) re-includes the hand-written custom_components/smartcat/ integration and its tests/smartcat_ha/ tests. Only added Smart Cat allow lines and its bytecode ignore are allowed; no private file, rendered output, or secret pattern is un-ignored. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }
