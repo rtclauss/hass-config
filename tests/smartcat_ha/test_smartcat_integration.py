@@ -515,3 +515,42 @@ async def test_cat_imported_later_gets_entities(
     await hass.async_block_till_done()
     assert ent_reg.async_get_entity_id("sensor", DOMAIN, "cat_mochi_weight")
     assert ent_reg.async_get_entity_id("binary_sensor", DOMAIN, "cat_mochi_attention")
+
+
+async def test_lr5_capped_live_fetch_does_not_skip_records(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    lr5 = whisker.robots[1]
+    freezer.move_to(NOW)
+
+    def record(ts: datetime) -> dict[str, Any]:
+        return {"type": "PET_VISIT", "timestamp": ts.isoformat(), "petId": "PET-SPLASHY", "weight": 1095, "duration": 80}
+
+    async def lr5_frontier() -> str | None:
+        return await hass.async_add_executor_job(
+            entry.runtime_data.store.get_meta, f"backfill:{lr5.serial}"
+        )
+
+    async def lr5_visits() -> int:
+        stored = await hass.async_add_executor_job(entry.runtime_data.store.visits)
+        return len([v for v in stored if v.robot_serial == lr5.serial])
+
+    with (
+        patch("custom_components.smartcat.whisker.LR5_PAGE_SIZE", 5),
+        # 20 records per refresh: more than the 2 h overlap re-read (12).
+        patch("custom_components.smartcat.whisker.LR5_MAX_PAGES_PER_REFRESH", 4),
+        patch("custom_components.smartcat.coordinator.LR5_PAGE_SIZE", 5),
+    ):
+        entry = await setup_smartcat(hass, tmp_path)
+        for _ in range(3):
+            await entry.runtime_data.async_refresh()
+        assert await lr5_frontier() is None
+        assert await lr5_visits() == 10
+
+        # A long outage: 30 records arrive, more than one refresh reads (20).
+        lr5.records += [record(NOW + timedelta(minutes=10 * i)) for i in range(1, 31)]
+        for step in range(6):
+            freezer.move_to(NOW + timedelta(hours=6, minutes=step))
+            await entry.runtime_data.async_refresh()
+        assert await lr5_frontier() is None
+        assert await lr5_visits() == 40

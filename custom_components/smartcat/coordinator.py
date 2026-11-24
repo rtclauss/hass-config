@@ -286,7 +286,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
 
         The feed pages newest first by offset. The live fetch reads from the
         top down to the cursor. When a fetch stops at the page limit before
-        reaching the backfill depth, the offset it stopped at is kept as the
+        reaching the cursor or the backfill depth, the offset it stopped at is kept as the
         backfill frontier and continued on later refreshes. New records push
         older ones to higher offsets, so the frontier is shifted by the number
         of records newer than the previous cursor, less one page of overlap.
@@ -303,7 +303,10 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             depth = await self._run(self.store.get_meta, depth_key)
             if depth is None or target < datetime.fromisoformat(depth):
                 frontier = "0"
-        if previous_cursor is None and not reached:
+        if not reached:
+            # The live fetch stopped at the page limit (a first deep fetch, or
+            # a long outage): continue from there on later refreshes, so the
+            # unread records between it and the old cursor are not skipped.
             frontier = str(offset)
         elif frontier is not None:
             newer = sum(
