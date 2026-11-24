@@ -139,6 +139,6 @@ uv run --with pytest --with pyyaml --with jinja2 pytest
 
 # Same image CI uses (see HOME_ASSISTANT_CHECK_CONFIG_IMAGE in
 # .github/workflows/validate-config.yml)
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.10.4 \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.11.3 \
   python -m homeassistant --config /config --script check_config
 ```
