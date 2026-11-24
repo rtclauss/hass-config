@@ -169,11 +169,13 @@ class Identifier:
         if visit.whisker_pet_id:
             for model in eligible:
                 if model.cat.whisker_pet_id == visit.whisker_pet_id:
+                    trusted = False
                     if weight is not None:
                         score = self._score(model, visit.robot_serial, weight, True)
-                        if score.band == "core" and abs(score.raw_z) <= CORE_Z:
+                        trusted = score.band == "core" and abs(score.raw_z) <= CORE_Z
+                        if trusted:
                             model.learn(visit.robot_serial, weight)
-                    return Assignment(model.cat.cat_id, 1.0, "pet_id")
+                    return Assignment(model.cat.cat_id, 1.0, "pet_id", trusted)
 
         if weight is None:
             if len(eligible) == 1:
@@ -199,10 +201,12 @@ class Identifier:
         if best.band == "core":
             confidence = round(share, 3)
             # Learn only from symmetric core weigh-ins: the widened low side
-            # exists to attribute partial weigh-ins, not to learn from them.
-            if confidence >= LEARN_CONFIDENCE and abs(best.raw_z) <= CORE_Z:
+            # exists to attribute partial weigh-ins, not to learn from them,
+            # and for the same reason they are not trusted as weights.
+            trusted = abs(best.raw_z) <= CORE_Z
+            if confidence >= LEARN_CONFIDENCE and trusted:
                 best.model.learn(visit.robot_serial, weight)
-            return Assignment(best.model.cat.cat_id, confidence, "matched")
+            return Assignment(best.model.cat.cat_id, confidence, "matched", trusted)
 
         # A tail match is a plausible partial weigh-in, but it is also what a
         # new cat of similar size looks like at first.

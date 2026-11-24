@@ -53,6 +53,11 @@ class Assignment:
     # weigh-in), "pet_id" (robot supplied the pet), "assumed" (no weight, single
     # cat), "unknown" (no plausible cat).
     method: str
+    # The weigh-in is a full reading of this cat: inside its symmetric core
+    # band on that robot. Identity and weight quality are separate: a partial
+    # weigh-in (or a pet-id visit with an odd weight) can be the right cat but
+    # must not feed weight summaries, trends or alerts.
+    weight_trusted: bool = False
 
 
 @dataclass(slots=True)

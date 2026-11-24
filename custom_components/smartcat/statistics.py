@@ -29,7 +29,6 @@ from homeassistant.core import HomeAssistant, callback
 from .const import DOMAIN
 from .core.models import Assignment, Cat, Visit
 
-TRUSTED_METHODS = ("matched", "pet_id")
 KINDS = ("visits", "weight", "visit_duration")
 
 
@@ -58,7 +57,7 @@ def build_cat_statistics(
             continue
         hour = _hour(visit.timestamp)
         counts[hour] += 1
-        if visit.weight_lbs is not None and assignment.method in TRUSTED_METHODS:
+        if visit.weight_lbs is not None and assignment.weight_trusted:
             weights[hour].append(visit.weight_lbs)
         if visit.duration_s is not None:
             durations[hour].append(visit.duration_s)

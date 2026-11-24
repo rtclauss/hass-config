@@ -322,7 +322,12 @@ def test_insights_normal_then_frequency_spike() -> None:
 def test_insights_no_recent_visits_and_weight_loss() -> None:
     now = datetime(2026, 11, 23, 20, 0, tzinfo=TZ).astimezone(UTC)
     old = steady_history(60, 4, now - timedelta(days=30), weight=12.0)
-    recent = steady_history(30, 4, now - timedelta(days=2), weight=11.0)
+    # A real loss is gradual: 1.5 lb over four weeks. The cat's weight band
+    # follows it, so these stay trusted (unlike a jump to partial readings).
+    recent = [
+        Visit(v.robot_serial, v.timestamp, round(12.0 - 1.5 * i / 119, 3), v.duration_s, v.source)
+        for i, v in enumerate(steady_history(30, 4, now - timedelta(days=2)))
+    ]
     visits = old + recent
     cats = [Cat("splashy", "Splashy", 12.0)]
     assignments, _ = identify_all(cats, visits)
@@ -332,6 +337,20 @@ def test_insights_no_recent_visits_and_weight_loss() -> None:
     assert "weight_loss" in kinds
     assert insights.status == "no_recent_visits"
     assert insights.weight_trend_lbs_per_week < 0
+
+
+def test_partial_weigh_ins_are_not_weight_loss() -> None:
+    """Attributed to the cat, but not trusted as its weight."""
+    now = datetime(2026, 11, 23, 20, 0, tzinfo=TZ).astimezone(UTC)
+    full = steady_history(30, 4, now - timedelta(days=30), weight=13.1)
+    partial = steady_history(30, 4, now, weight=11.8)
+    visits = full + partial
+    assignments, _ = identify_all([Cat("splashy", "Splashy", 13.1)], visits)
+    assert all(assignments[v.key].cat_id == "splashy" for v in partial)
+    assert not any(assignments[v.key].weight_trusted for v in partial)
+    insights = cat_insights("splashy", visits, assignments, now, TZ)
+    assert not {"weight_loss", "weight_gain"} & {a.kind for a in insights.anomalies}
+    assert insights.weight_lbs == pytest.approx(13.1, abs=0.1)
 
 
 def test_switching_robots_is_not_a_weight_change() -> None:
@@ -346,7 +365,7 @@ def test_switching_robots_is_not_a_weight_change() -> None:
         ]
 
     def insights_for(visits: list[Visit]):
-        assignments = {v.key: Assignment("splashy", 0.95, "pet_id") for v in visits}
+        assignments = {v.key: Assignment("splashy", 0.95, "pet_id", weight_trusted=True) for v in visits}
         return cat_insights("splashy", visits, assignments, now, TZ)
 
     # Main Level for a month, then the Basement for a month: same cat, same weight.

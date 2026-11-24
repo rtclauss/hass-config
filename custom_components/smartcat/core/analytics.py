@@ -172,12 +172,13 @@ def cat_insights(
     if d := durations_since(now - timedelta(days=30)):
         out.median_duration_30d_s = round(median(d), 1)
 
-    # Weight: only weigh-ins that matched the core band (no partial weigh-ins).
+    # Weight: only full weigh-ins (inside the cat's symmetric core band), so
+    # partial weigh-ins attributed to the cat do not look like weight loss.
     trusted = [
         v
         for v in visits
         if v.weight_lbs is not None
-        and assignments[v.key].method in ("matched", "pet_id")
+        and assignments[v.key].weight_trusted
         and assignments[v.key].confidence >= 0.5
     ]
     recent = [v.weight_lbs for v in trusted if v.timestamp >= now - timedelta(days=WEIGHT_RECENT_DAYS)]

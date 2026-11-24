@@ -392,7 +392,7 @@ async def test_statistics_drop_hours_whose_visits_moved_to_another_cat(
     assert hour in await splashy_hours()
 
     # The visit now belongs to another cat: Splashy's row for that hour goes.
-    assignments[moved.key] = Assignment("kitten", 0.9, "matched")
+    assignments[moved.key] = Assignment("kitten", 0.9, "matched", weight_trusted=True)
     coordinator._publish_statistics(cats, visits, assignments)
     assert hour not in await splashy_hours()
 
@@ -418,3 +418,47 @@ async def test_removing_a_whisker_cat_is_not_undone(
     await hass.async_block_till_done()
     (cat,) = await hass.async_add_executor_job(entry.runtime_data.store.cats)
     assert cat.whisker_pet_id == "PET-SPLASHY"
+
+
+async def test_raising_the_backfill_depth_resumes_lr5_history(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    lr5 = whisker.robots[1]
+    lr5.records = [
+        {
+            "type": "PET_VISIT",
+            "timestamp": (NOW - timedelta(days=d, hours=3)).isoformat(),
+            "petId": "PET-SPLASHY",
+            "weight": 1095,
+            "duration": 80,
+        }
+        for d in range(90, 0, -1)
+    ]
+    freezer.move_to(NOW)
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(domain=DOMAIN, title="Smart Cat", data={}, options={"backfill_days": 30})
+    entry.add_to_hass(hass)
+
+    async def lr5_visits() -> int:
+        stored = await hass.async_add_executor_job(entry.runtime_data.store.visits)
+        return len([v for v in stored if v.robot_serial == lr5.serial])
+
+    # Pages of five, so the live fetch only reads the newest records.
+    with (
+        patch("custom_components.smartcat.whisker.LR5_PAGE_SIZE", 5),
+        patch("custom_components.smartcat.whisker.LR5_MAX_PAGES_PER_REFRESH", 4),
+        patch("custom_components.smartcat.coordinator.LR5_PAGE_SIZE", 5),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        for _ in range(3):
+            await entry.runtime_data.async_refresh()
+        assert entry.runtime_data.data.backfill_complete
+        assert await lr5_visits() == 29
+
+        hass.config_entries.async_update_entry(entry, options={**entry.options, "backfill_days": 120})
+        await hass.async_block_till_done()
+        for _ in range(6):
+            await entry.runtime_data.async_refresh()
+        assert entry.runtime_data.data.backfill_complete
+        assert await lr5_visits() == 90

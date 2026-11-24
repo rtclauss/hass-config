@@ -28,8 +28,10 @@ Smart Cat is not a diagnostic tool and does not replace veterinary care.
   clean-cycle wait time, which gives the duration. Basement (LR5): native
   `PET_VISIT` records.
 - **Which cat.** Each cat learns a robust weight band (median/MAD) per robot.
-  Partial weigh-ins are attributed but never learned from. LR5 pet ids are used
-  when present.
+  Partial weigh-ins are attributed to the cat but never learned from and never
+  count as its weight (sensors, trend, alerts, statistics), even on a pet-id
+  visit. The band follows gradual change, so real weight loss still counts.
+  LR5 pet ids are used when present.
 - **A second cat.** Weigh-ins no cat explains are pooled; a tight, persistent
   group outside every band, or one that appeared suddenly, turns on
   `binary_sensor.smart_cat_new_cat_suspected`.

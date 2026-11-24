@@ -117,7 +117,7 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         self.assignments: dict[str, Assignment] = {}
         self.identifier: Identifier | None = None
         self.visits: list[Visit] = []
-        self._published: dict[str, dict[str, tuple[str, float | None, float | None]]] = {}
+        self._published: dict[str, dict[str, tuple[str, bool, float | None, float | None]]] = {}
         self._started = dt_util.utcnow()
         self._unsubs: list[Callable[[], None]] = []
         self._last_status: dict[str, str | None] = {}
@@ -206,7 +206,9 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         """
         live_key, back_key = f"cursor:{robot.serial}", f"backfill:{robot.serial}"
         override = await self._run(self.store.get_meta, "backfill_days")
-        target = now - timedelta(days=int(override or self.backfill_days))
+        # The deeper of the option and a smartcat.backfill request, so raising
+        # the option still works after a backfill action.
+        target = now - timedelta(days=max(int(override or 0), self.backfill_days))
         cursor = await self._run(self.store.get_meta, live_key)
         previous_cursor = datetime.fromisoformat(cursor) if cursor else None
         if previous_cursor is not None:
@@ -264,10 +266,19 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         backfill frontier and continued on later refreshes. New records push
         older ones to higher offsets, so the frontier is shifted by the number
         of records newer than the previous cursor, less one page of overlap.
+
+        A finished backfill records how deep it went. If the backfill depth is
+        raised later, the walk starts again from the top (stored visits are
+        updated in place, not duplicated).
         """
+        depth_key = f"backfilled_to:{robot.serial}"
         records, offset, reached = await fetch_lr5_records(robot, since)
         new_cursor = lr5_cursor_from(records, previous_cursor or since)
         frontier = await self._run(self.store.get_meta, back_key)
+        if previous_cursor is not None and frontier is None:
+            depth = await self._run(self.store.get_meta, depth_key)
+            if depth is None or target < datetime.fromisoformat(depth):
+                frontier = "0"
         if previous_cursor is None and not reached:
             frontier = str(offset)
         elif frontier is not None:
@@ -279,6 +290,8 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             records += older
             frontier = None if reached else str(offset)
         await self._run(self.store.set_meta, back_key, frontier)
+        if frontier is None:
+            await self._run(self.store.set_meta, depth_key, target.isoformat())
         visits = [v for v in lr5_visits(robot.serial, records) if v.timestamp >= target]
         return visits, new_cursor, frontier is None
 
@@ -416,13 +429,18 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             del self._published[cat_id]
         for cat in cats:
             current = {
-                v.key: (assignments[v.key].method, v.weight_lbs, v.duration_s)
+                v.key: (
+                    assignments[v.key].method,
+                    assignments[v.key].weight_trusted,
+                    v.weight_lbs,
+                    v.duration_s,
+                )
                 for v in visits
                 if assignments[v.key].cat_id == cat.cat_id
             }
             previous = self._published.get(cat.cat_id)
             rebuild = previous is None or any(
-                key not in current or current[key][0] != value[0]
+                key not in current or current[key][:2] != value[:2]
                 for key, value in previous.items()
             )
             since: datetime | None = None
@@ -474,5 +492,6 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
         """Re-fetch history from `days` ago (missing visits are added)."""
         await self._run(self.store.clear_meta_prefix, "cursor:")
         await self._run(self.store.clear_meta_prefix, "backfill:")
+        await self._run(self.store.clear_meta_prefix, "backfilled_to:")
         await self._run(self.store.set_meta, "backfill_days", str(days))
         self._published.clear()
