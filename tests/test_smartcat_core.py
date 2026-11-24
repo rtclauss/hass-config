@@ -31,7 +31,7 @@ if _PACKAGE not in sys.modules:
 from custom_components.smartcat.core.analytics import cat_insights
 from custom_components.smartcat.core.forecast import cycles_per_day, forecast_level
 from custom_components.smartcat.core.identify import identify_all
-from custom_components.smartcat.core.models import Cat, LevelReading, Visit
+from custom_components.smartcat.core.models import Assignment, Cat, LevelReading, Visit
 from custom_components.smartcat.core.parse import (
     lr4_event,
     lr4_open_since,
@@ -332,6 +332,38 @@ def test_insights_no_recent_visits_and_weight_loss() -> None:
     assert "weight_loss" in kinds
     assert insights.status == "no_recent_visits"
     assert insights.weight_trend_lbs_per_week < 0
+
+
+def test_switching_robots_is_not_a_weight_change() -> None:
+    """Main Level reads Splashy ~13.1 lb, Basement ~11 lb (observed)."""
+    now = datetime(2026, 11, 23, 20, 0, tzinfo=TZ).astimezone(UTC)
+
+    def on(robot: str, weight: float, days: range) -> list[Visit]:
+        return [
+            Visit(robot, now - timedelta(days=d, hours=h), weight, 80.0, "x")
+            for d in days
+            for h in (2, 9, 15)
+        ]
+
+    def insights_for(visits: list[Visit]):
+        assignments = {v.key: Assignment("splashy", 0.95, "pet_id") for v in visits}
+        return cat_insights("splashy", visits, assignments, now, TZ)
+
+    # Main Level for a month, then the Basement for a month: same cat, same weight.
+    moved = insights_for(on("MAIN", 13.1, range(31, 60)) + on("BASE", 11.0, range(0, 29)))
+    assert moved.weight_change_30d_pct is None
+    assert not {"weight_loss", "weight_gain"} & {a.kind for a in moved.anomalies}
+    assert moved.weight_trend_lbs_per_week in (None, 0)
+
+    # Using both robots throughout, a real 1 lb loss is still found on each.
+    lost = insights_for(
+        on("MAIN", 13.1, range(31, 60))
+        + on("MAIN", 12.1, range(0, 29))
+        + on("BASE", 11.0, range(31, 60))
+        + on("BASE", 10.0, range(0, 29))
+    )
+    assert lost.weight_change_30d_pct == pytest.approx(-8.4, abs=0.5)
+    assert "weight_loss" in {a.kind for a in lost.anomalies}
 
 
 def test_insights_insufficient_data() -> None:

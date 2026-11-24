@@ -34,13 +34,16 @@ Smart Cat is not a diagnostic tool and does not replace veterinary care.
   group outside every band, or one that appeared suddenly, turns on
   `binary_sensor.smart_cat_new_cat_suspected`.
 - **Insights.** Today vs. a 28-day baseline, 30-day time-of-day histogram,
-  7-day weight median, Theil-Sen weight trend, 30-day weight change.
+  7-day weight median, Theil-Sen weight trend, 30-day weight change. Trend and
+  change are measured within each robot and then combined, so a cat moving
+  from Main Level to the Basement is not a 2 lb "loss".
 - **Forecasts.** Per-cycle drawer/litter rate within the current fill period
   (reset when the drawer is emptied or litter added) times recent cycles per
   day; falls back to earlier periods, then level vs. time.
 
 Actions: `smartcat.add_cat` (`name`, optional `weight_lbs`, `active_from`),
-`smartcat.rename_cat`, `smartcat.remove_cat`, `smartcat.backfill` (`days`),
+`smartcat.rename_cat`, `smartcat.remove_cat` (a cat imported from a Whisker pet
+profile stays removed until added again by name), `smartcat.backfill` (`days`),
 `smartcat.get_visits` (returns visits). Events: `smartcat_visit` per new visit
 and `smartcat_new_cat_suspected`.
 

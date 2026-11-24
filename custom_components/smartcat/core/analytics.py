@@ -186,25 +186,42 @@ def cat_insights(
     elif trusted:
         out.weight_lbs = round(median([v.weight_lbs for v in trusted[-WEIGHT_MIN_READINGS:]]), 2)
 
-    daily_weight: dict[date, list[float]] = {}
+    # Robots read the same cat differently (one reads ~2 lb heavier), so trend
+    # and change are measured within each robot and then combined, weighted
+    # by readings. A cat moving between robots does not look like a change.
+    by_robot: dict[str, list[Visit]] = {}
     for v in trusted:
-        if v.timestamp >= now - timedelta(days=WEIGHT_TREND_DAYS):
-            daily_weight.setdefault(_local_date(v.timestamp, tz), []).append(v.weight_lbs)
-    if len(daily_weight) >= 7:
-        points = [((d - today).days, median(ws)) for d, ws in sorted(daily_weight.items())]
-        if (slope := theil_sen(points)) is not None:
-            out.weight_trend_lbs_per_week = round(slope * 7, 3)
+        by_robot.setdefault(v.robot_serial, []).append(v)
+
+    slopes: list[tuple[float, int]] = []
+    for robot_visits in by_robot.values():
+        daily_weight: dict[date, list[float]] = {}
+        for v in robot_visits:
+            if v.timestamp >= now - timedelta(days=WEIGHT_TREND_DAYS):
+                daily_weight.setdefault(_local_date(v.timestamp, tz), []).append(v.weight_lbs)
+        if len(daily_weight) >= 7:
+            points = [((d - today).days, median(ws)) for d, ws in sorted(daily_weight.items())]
+            if (slope := theil_sen(points)) is not None:
+                slopes.append((slope, len(points)))
+    if slopes:
+        slope = sum(s * n for s, n in slopes) / sum(n for _, n in slopes)
+        out.weight_trend_lbs_per_week = round(slope * 7, 3)
 
     cut = now - timedelta(days=WEIGHT_COMPARE_DAYS)
-    last30 = [v.weight_lbs for v in trusted if v.timestamp >= cut]
-    prev30 = [
-        v.weight_lbs
-        for v in trusted
-        if cut - timedelta(days=WEIGHT_COMPARE_DAYS) <= v.timestamp < cut
-    ]
-    if len(last30) >= WEIGHT_MIN_READINGS and len(prev30) >= WEIGHT_MIN_READINGS:
-        before = median(prev30)
-        out.weight_change_30d_pct = round((median(last30) - before) / before * 100, 2)
+    changes: list[tuple[float, int]] = []
+    for robot_visits in by_robot.values():
+        last30 = [v.weight_lbs for v in robot_visits if v.timestamp >= cut]
+        prev30 = [
+            v.weight_lbs
+            for v in robot_visits
+            if cut - timedelta(days=WEIGHT_COMPARE_DAYS) <= v.timestamp < cut
+        ]
+        if len(last30) >= WEIGHT_MIN_READINGS and len(prev30) >= WEIGHT_MIN_READINGS:
+            before = median(prev30)
+            changes.append(((median(last30) - before) / before * 100, len(last30) + len(prev30)))
+    if changes:
+        pct = sum(c * n for c, n in changes) / sum(n for _, n in changes)
+        out.weight_change_30d_pct = round(pct, 2)
 
     # Usual gap between visits (90th percentile over 30 days).
     window = [v.timestamp for v in visits if v.timestamp >= now - timedelta(days=30)]

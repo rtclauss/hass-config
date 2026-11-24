@@ -395,3 +395,26 @@ async def test_statistics_drop_hours_whose_visits_moved_to_another_cat(
     assignments[moved.key] = Assignment("kitten", 0.9, "matched")
     coordinator._publish_statistics(cats, visits, assignments)
     assert hour not in await splashy_hours()
+
+
+async def test_removing_a_whisker_cat_is_not_undone(
+    recorder_mock, hass: HomeAssistant, whisker: FakeAccount, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(NOW)
+    entry = await setup_smartcat(hass, tmp_path)
+    assert "splashy" in entry.runtime_data.data.cats
+
+    await hass.services.async_call(DOMAIN, "remove_cat", {"cat_id": "splashy"}, blocking=True)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    await coordinator.async_refresh()
+    assert "splashy" not in coordinator.data.cats
+    assert await hass.async_add_executor_job(coordinator.store.cats) == []
+
+    # Adding the cat back by name re-links the Whisker pet profile.
+    await hass.services.async_call(
+        DOMAIN, "add_cat", {"name": "Splashy", "weight_lbs": 11.0}, blocking=True, return_response=True
+    )
+    await hass.async_block_till_done()
+    (cat,) = await hass.async_add_executor_job(entry.runtime_data.store.cats)
+    assert cat.whisker_pet_id == "PET-SPLASHY"

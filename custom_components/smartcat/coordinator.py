@@ -84,6 +84,11 @@ class SmartCatData:
     total_visits: int = 0
 
 
+def removed_pet_key(pet_id: str) -> str:
+    """Meta key marking a Whisker pet whose cat was removed by hand."""
+    return f"removed_pet:{pet_id}"
+
+
 def slugify_cat(name: str, taken: set[str]) -> str:
     """Return a unique, statistic-id safe slug for a cat name."""
     base = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "cat"
@@ -178,7 +183,10 @@ class SmartCatCoordinator(DataUpdateCoordinator[SmartCatData]):
             if same:
                 same.whisker_pet_id = pet.id
                 await self._run(self.store.save_cat, same)
+                await self._run(self.store.set_meta, removed_pet_key(pet.id), None)
                 continue
+            if await self._run(self.store.get_meta, removed_pet_key(pet.id)):
+                continue  # removed with smartcat.remove_cat; do not re-import
             try:
                 weight = float(pet.weight) or None
             except (TypeError, ValueError):
