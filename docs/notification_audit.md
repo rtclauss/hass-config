@@ -69,6 +69,7 @@ transport housekeeping, not debug alerts to remove.
 | Diffuser oils (`diffusers`) | 3 | Six-month task is due and not already completed | Already has Replaced and one-cycle latch; preserve approved spec |
 | Plants (`plants`) | 3 | A specific treatable moisture/temperature problem remains | Existing plants link; distinguish sensor outage from a plant-care instruction |
 | Litter-Robot bag / litter (`litter_robot`) | 3 | Waste drawer at threshold or drawer-full status, or litter level low | Once-per-cycle latch with daily recheck; recovery clears by tag; drawer and litter-box buttons |
+| Cat pattern change / new cat (`smartcat`) | 2 or 3 | A cat's visits, visit length or weight changed from its baseline, or weigh-ins show an unknown cat | Push only for a newly appearing kind; ignore unavailable/unknown transitions; recovery and adding the cat clear by tag; insight/weight and details buttons |
 | Mouse caught (`mouse_trap`) | 3 | Trap needs checking/emptying | Reset counter is not the same task; provide trap/counter details and separate emptying from lifetime count |
 | Tire rotation (`car`) | 3 | Rotation is actually due | Add mileage/service information and completion state in a follow-up |
 | 3D print complete (`octoprint`) | 3 or 4 | Print is ready for collection and owner can act | Add printer link; do not repeat normal completion as a fault |

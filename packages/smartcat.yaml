@@ -1,0 +1,156 @@
+# Home Assistant package for Smart Cat (custom integration `smartcat`, installed
+# through HACS). Smart Cat computes Whisker+-style insights from the Litter-Robot
+# activity history locally: per-cat visits, durations, time-of-day pattern,
+# weight trend, outliers, plus waste-drawer-full and litter-refill forecasts.
+# See docs/smartcat.md.
+#
+# Two owner tasks, per docs/notification_policy.md ("only notify me when I need
+# to act"):
+#
+#   * A cat's pattern changed (more/fewer visits, no visits, a long visit,
+#     weight loss/gain): check on the cat. Pushes when a NEW kind of change
+#     appears, so drift in the numbers of an existing one does not re-alert.
+#     When the cat is back to normal the phone notification is removed silently.
+#   * Smart Cat suspects a cat it does not know: add the cat
+#     (smartcat.add_cat). Cleared silently once the cat is added.
+#
+# Startup and integration reloads do not replay pushes: transitions from
+# unavailable/unknown are ignored. Forecasts are not pushed; the existing
+# litter_robot package already handles "empty the drawer" and "add litter".
+#
+# Adding a cat creates a new `binary_sensor.<cat>_needs_attention`; add it to
+# the trigger list below.
+
+################################################################
+## Packages / Smart Cat
+################################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "smartcat"
+
+automation:
+  - id: smartcat_cat_needs_attention
+    alias: Smart Cat — Cat needs attention
+    description: >-
+      Push once per new kind of pattern change for a cat; remove the
+      notification silently when the cat is back to normal.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      # Fires when the list of active kinds changes, including when it
+      # empties (on -> off).
+      - trigger: state
+        entity_id:
+          - binary_sensor.splashy_needs_attention
+        attribute: kinds
+    condition:
+      - alias: "Ignore startup / reload transitions"
+        condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and trigger.from_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.state not in ['unavailable', 'unknown'] }}
+    action:
+      - variables:
+          object_id: "{{ trigger.entity_id.split('.')[1] | replace('_needs_attention', '') }}"
+          cat_name: "{{ device_name(trigger.entity_id) or object_id | replace('_', ' ') | title }}"
+          tag: "smartcat_attention_{{ object_id }}"
+      - choose:
+          - alias: "Back to normal: clear the task"
+            conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state == 'off' and trigger.from_state.state == 'on' }}"
+            sequence:
+              - action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ tag }}"
+          - alias: "New kind of change: push"
+            conditions:
+              - condition: template
+                value_template: &new_kinds >-
+                  {% set before = (trigger.from_state.attributes.kinds or [])
+                     if trigger.from_state.state == 'on' else [] %}
+                  {% set after = (trigger.to_state.attributes.kinds or [])
+                     if trigger.to_state.state == 'on' else [] %}
+                  {{ after | reject('in', before) | list | count > 0 }}
+            sequence:
+              - action: notify.all
+                data:
+                  title: "Check on {{ cat_name }}"
+                  message: >-
+                    {{ (trigger.to_state.attributes.messages or []) | join(' ') }}
+                  data:
+                    tag: "{{ tag }}"
+                    url: "/?more-info-entity-id=sensor.{{ trigger.from_state.entity_id.split('.')[1] | replace('_needs_attention', '') }}_insight"
+                    clickAction: "/?more-info-entity-id=sensor.{{ trigger.from_state.entity_id.split('.')[1] | replace('_needs_attention', '') }}_insight"
+                    actions:
+                      - action: URI
+                        title: Insight
+                        uri: "/?more-info-entity-id=sensor.{{ trigger.from_state.entity_id.split('.')[1] | replace('_needs_attention', '') }}_insight"
+                      - action: URI
+                        title: Weight
+                        uri: "/?more-info-entity-id=sensor.{{ trigger.from_state.entity_id.split('.')[1] | replace('_needs_attention', '') }}_weight"
+
+  - id: smartcat_new_cat_suspected
+    alias: Smart Cat — New cat suspected
+    description: >-
+      Push once when weigh-ins show a cat Smart Cat does not know; remove the
+      notification silently once the cat is added.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.smart_cat_new_cat_suspected
+        from: "off"
+        to: "on"
+        id: suspected
+      - trigger: state
+        entity_id: binary_sensor.smart_cat_new_cat_suspected
+        from: "on"
+        to: "off"
+        id: resolved
+    action:
+      - choose:
+          - alias: "Cat added: clear the task"
+            conditions:
+              - condition: trigger
+                id: resolved
+            sequence:
+              - action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: smartcat_new_cat
+          - alias: "New cat: push"
+            conditions:
+              - condition: trigger
+                id: suspected
+            sequence:
+              - action: notify.all
+                data:
+                  title: A new cat is using the Litter-Robot
+                  message: >-
+                    {{ state_attr('binary_sensor.smart_cat_new_cat_suspected', 'weigh_ins') }}
+                    weigh-ins over
+                    {{ state_attr('binary_sensor.smart_cat_new_cat_suspected', 'days') }}
+                    days at about
+                    {{ state_attr('binary_sensor.smart_cat_new_cat_suspected', 'median_lbs') }} lb
+                    match no known cat. Add the cat with the smartcat.add_cat action
+                    (a name is enough).
+                  data:
+                    tag: smartcat_new_cat
+                    url: "/?more-info-entity-id=binary_sensor.smart_cat_new_cat_suspected"
+                    clickAction: "/?more-info-entity-id=binary_sensor.smart_cat_new_cat_suspected"
+                    actions:
+                      - action: URI
+                        title: Details
+                        uri: "/?more-info-entity-id=binary_sensor.smart_cat_new_cat_suspected"
