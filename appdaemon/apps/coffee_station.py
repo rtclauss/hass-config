@@ -1383,6 +1383,19 @@ def _iso(value: Any) -> Any:
     return value
 
 
+def _attribute(value: Any) -> Any:
+    """Make a diagnostic attribute survive AppDaemon's set_state, which drops
+    falsy values (False, 0, 0.0, None) and stringifies booleans. Booleans and
+    numbers are published as strings, None as "none"; lists/dicts as-is."""
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value
+
+
 REQUIRED_ARGS = ("switch_entity", "power_entity", "bed_entity", "presence_entity", "notify_service")
 
 
@@ -1715,7 +1728,7 @@ class CoffeeStation(_HassBase):  # type: ignore[misc, valid-type]
 
     def _publish(self) -> None:
         snap = self.core.snapshot(self._now())
-        attrs = _iso({k: v for k, v in snap.items() if k not in ("state",)})
+        attrs = {k: _attribute(v) for k, v in _iso(snap).items() if k != "state"}
         def binary(entity_id: str, on: bool, attributes: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             icon_on, icon_off = BINARY_ICONS[entity_id]
             return ("on" if on else "off", {**attributes, "icon": icon_on if on else icon_off})

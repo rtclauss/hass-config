@@ -1192,3 +1192,16 @@ def test_power_drawn_while_plug_reports_off_escalates():
     sim.advance(60)  # retries exhausted with power still high
     assert sim.core.fault_reason == "shutdown_unconfirmed"
     assert sim.notifications[-1]["level"] == "critical"
+
+
+def test_published_attributes_survive_appdaemon_falsy_filtering(monkeypatch, tmp_path):
+    """AppDaemon's set_state drops False/0/None attributes; publish them as strings."""
+    app = make_adapter(monkeypatch, tmp_path, HEALTHY)
+    attrs = [c.kwargs["attributes"] for c in app.set_state.call_args_list
+             if c.args[0] == "sensor.coffee_state"][-1]
+    assert attrs["armed"] == "false"
+    assert attrs["last_power_w"] == "0.0"
+    assert attrs["brews_since_descale"] == "0"
+    assert attrs["fault_reason"] == "none"
+    assert attrs["home"] == "true"
+    assert isinstance(attrs["issues"], list)
