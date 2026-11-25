@@ -28,35 +28,10 @@ homeassistant:
     ## Automations
     ################################################
 
-    automation.uplift_desk_raise_for_guest_mode:
+    automation.uplift_desk_policy:
       <<: *customize
-      friendly_name: "Desk Raise for Guest Mode"
+      friendly_name: "Desk Policy"
       icon: mdi:desk
-
-    automation.uplift_desk_raise_for_trip_mode:
-      <<: *customize
-      friendly_name: "Desk Raise for Trip Mode"
-      icon: mdi:bag-suitcase
-
-    automation.uplift_desk_raise_for_work_camera:
-      <<: *customize
-      friendly_name: "Desk Raise for Work Camera"
-      icon: mdi:camera
-
-    automation.uplift_desk_raise_when_departing:
-      <<: *customize
-      friendly_name: "Desk Raise on Departure"
-      icon: mdi:exit-run
-
-    automation.uplift_desk_raise_in_evening:
-      <<: *customize
-      friendly_name: "Desk Raise in Evening"
-      icon: mdi:clock-outline
-
-    automation.uplift_desk_reset_overnight:
-      <<: *customize
-      friendly_name: "Desk Reset Overnight"
-      icon: mdi:weather-night
 
     ################################################
     ## Scripts
@@ -111,190 +86,153 @@ homeassistant:
 # Automation
 ########################
 automation:
-  - id: uplift_desk_raise_for_guest_mode
-    alias: uplift_desk_raise_for_guest_mode
+  # One policy automation owns every automated desk move so the priority
+  # order lives in one place: guest mode > trip mode > work camera >
+  # presence and timed moves. Manual uplift_desk_manual_* scripts bypass it.
+  - id: uplift_desk_policy
+    alias: uplift_desk_policy
     description: >
-      Raise the desk to its configured maximum height whenever guest mode
-      turns on. Guest mode is the highest-priority desk state.
+      Automated Uplift desk moves in priority order. Guest mode always raises
+      the desk to max. Trip mode raises it to max unless guest mode is on.
+      With guest and trip mode off, the work camera moves it to preset 2. With
+      the camera also off, leaving home, 6 PM, or a laptop asleep for 10
+      minutes raise it to max; arriving home on a workday and the Monday 4 AM
+      reset return it to preset 1.
+    mode: queued
+    max: 5
     trace:
-      stored_traces: 10
+      stored_traces: 50
     trigger:
       - trigger: state
+        id: guest_mode
         entity_id: input_boolean.guest_mode
         to: "on"
-    action:
-      - action: script.uplift_desk_auto_move_max
-
-  - id: uplift_desk_raise_for_trip_mode
-    alias: uplift_desk_raise_for_trip_mode
-    description: >
-      Raise the desk to its configured maximum height whenever trip mode
-      turns on, unless guest mode is already active.
-    trace:
-      stored_traces: 10
-    trigger:
       - trigger: state
+        id: trip_mode
         entity_id: input_boolean.trip
         to: "on"
-    condition:
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-    action:
-      - action: script.uplift_desk_auto_move_max
-
-  - id: uplift_desk_raise_for_work_camera
-    alias: uplift_desk_raise_for_work_camera
-    description: >
-      Move the desk to preset 2 when the work laptop camera turns on,
-      unless guest or trip mode has already taken control.
-    trace:
-      stored_traces: 10
-    trigger:
       - trigger: state
+        id: work_camera
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
         to: "on"
-    condition:
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-    action:
-      - action: script.uplift_desk_auto_move_preset_2
-
-  - id: uplift_desk_raise_when_departing
-    alias: uplift_desk_raise_when_departing
-    description: >
-      Raise the desk when leaving home, using both person and zone tracking.
-      Time-based moves are suppressed whenever guest mode, trip mode, or the
-      work camera has higher priority.
-    trace:
-      stored_traces: 10
-    trigger:
       - trigger: state
+        id: departed
         entity_id: person.@@PRIVATE:owner_person_slug@@
         to: "not_home"
       - trigger: zone
+        id: departed
         entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.home
         event: leave
-    condition:
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        state: "off"
-      - condition: state
-        entity_id: person.@@PRIVATE:owner_person_slug@@
-        state: "not_home"
-      - condition: not
-        conditions:
-          - condition: zone
-            entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-            zone: zone.home
-    action:
-      - action: script.uplift_desk_auto_move_max
-
-  - id: uplift_desk_lower_on_workday_arrival
-    alias: uplift_desk_lower_on_workday_arrival
-    description: >
-      Return the desk to preset 1 when arriving home on workdays. Weekend and
-      holiday arrivals leave the desk raised until the Monday-morning reset.
-    trace:
-      stored_traces: 10
-    trigger:
       - trigger: state
+        id: arrived
         entity_id: person.@@PRIVATE:owner_person_slug@@
         to: "home"
       - trigger: zone
+        id: arrived
         entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.home
         event: enter
-    condition:
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.workday_sensor
-        state: "on"
-      - condition: state
-        entity_id: person.@@PRIVATE:owner_person_slug@@
-        state: "home"
-      - condition: zone
-        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-        zone: zone.home
-    action:
-      - action: script.uplift_desk_auto_move_preset_1
-
-  - id: uplift_desk_raise_in_evening
-    alias: uplift_desk_raise_in_evening
-    description: >
-      Raise the desk to max height at 6 PM or when the work laptop has been
-      inactive long enough to be treated as asleep. These are considered timed
-      moves and are suppressed by guest mode, trip mode, and the work camera
-      rule.
-    trace:
-      stored_traces: 10
-    trigger:
       - trigger: time
         id: evening
         at: "18:00:00"
       - trigger: state
-        id: laptop_sleep
+        id: evening
         entity_id: binary_sensor.f7m69c_5d3d6e76_active
         to: "off"
         for:
           minutes: 10
-    condition:
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        state: "off"
-    action:
-      - action: script.uplift_desk_auto_move_max
-
-  - id: uplift_desk_reset_overnight
-    alias: uplift_desk_reset_overnight
-    description: >
-      Return the desk to preset 1 every Monday at 4 AM, but only when no
-      higher-priority mode is active.
-    trace:
-      stored_traces: 50
-    trigger:
       - trigger: time
+        id: monday_reset
         at: "04:00:00"
-    condition:
-      - condition: time
-        weekday:
-          - mon
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        state: "off"
     action:
-      - action: script.uplift_desk_auto_move_preset_1
+      - choose:
+          - alias: "Guest mode: highest priority"
+            conditions:
+              - condition: trigger
+                id: guest_mode
+            sequence:
+              - action: script.uplift_desk_auto_move_max
+          - alias: "Trip mode unless guest mode"
+            conditions:
+              - condition: trigger
+                id: trip_mode
+              - condition: state
+                entity_id: input_boolean.guest_mode
+                state: "off"
+            sequence:
+              - action: script.uplift_desk_auto_move_max
+          - alias: "Work camera unless guest or trip mode"
+            conditions:
+              - condition: trigger
+                id: work_camera
+              - condition: state
+                entity_id:
+                  - input_boolean.guest_mode
+                  - input_boolean.trip
+                state: "off"
+            sequence:
+              - action: script.uplift_desk_auto_move_preset_2
+          - alias: "Presence and timed moves: no higher-priority mode active"
+            conditions:
+              - condition: trigger
+                id:
+                  - departed
+                  - arrived
+                  - evening
+                  - monday_reset
+              - condition: state
+                entity_id:
+                  - input_boolean.guest_mode
+                  - input_boolean.trip
+                  - binary_sensor.f7m69c_5d3d6e76_camera_in_use
+                state: "off"
+            sequence:
+              - choose:
+                  - alias: "Left home (person and zone agree)"
+                    conditions:
+                      - condition: trigger
+                        id: departed
+                      - condition: state
+                        entity_id: person.@@PRIVATE:owner_person_slug@@
+                        state: "not_home"
+                      - condition: not
+                        conditions:
+                          - condition: zone
+                            entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+                            zone: zone.home
+                    sequence:
+                      - action: script.uplift_desk_auto_move_max
+                  - alias: "Workday arrival (weekends stay raised until the Monday reset)"
+                    conditions:
+                      - condition: trigger
+                        id: arrived
+                      - condition: state
+                        entity_id: binary_sensor.workday_sensor
+                        state: "on"
+                      - condition: state
+                        entity_id: person.@@PRIVATE:owner_person_slug@@
+                        state: "home"
+                      - condition: zone
+                        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+                        zone: zone.home
+                    sequence:
+                      - action: script.uplift_desk_auto_move_preset_1
+                  - alias: "6 PM or laptop asleep"
+                    conditions:
+                      - condition: trigger
+                        id: evening
+                    sequence:
+                      - action: script.uplift_desk_auto_move_max
+                  - alias: "Monday 4 AM reset"
+                    conditions:
+                      - condition: trigger
+                        id: monday_reset
+                      - condition: time
+                        weekday:
+                          - mon
+                    sequence:
+                      - action: script.uplift_desk_auto_move_preset_1
 
 ########################
 # Script

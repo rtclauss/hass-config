@@ -36,10 +36,11 @@ def test_notify_weather_alert_uses_current_nws_alert_payload_shape() -> None:
 
     assert "id: notify_weather_alert" in text
     assert "state_attr('sensor.nws_alerts', 'Alerts')" in text
-    assert "primary_alert.Event" in text
-    assert "primary_alert.Description" in text
-    assert "primary_alert.Headline" in text
-    assert "action: notify.notify_all" in text
+    assert "repeat.item.Event" in text
+    assert "repeat.item.Description" in text
+    assert "repeat.item.Headline" in text
+    assert "action: notify.all" in text
+    assert "notify.notify_all" not in text
     assert "message: >-\n            {{ state_attr('sensor.nws_alerts', 'Description') }}" not in text
 
 

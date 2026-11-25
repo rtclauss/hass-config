@@ -44,5 +44,6 @@ def test_day_mode_switches_keeps_full_brightness_defaults() -> None:
 def test_reset_inovelli_switches_restores_old_single_tap_behavior() -> None:
     block = _script_block("reset_inovelli_switches")
 
-    assert "all_inovelli_switches_singletapbehavior_mode" in block
+    assert "search: singletapbehavior" in block
+    assert "inovelli_bulk_settings" in block
     assert 'option: "Old Behavior"' in block

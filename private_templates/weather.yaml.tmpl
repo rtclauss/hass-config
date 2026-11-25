@@ -52,11 +52,6 @@ homeassistant:
       friendly_name: "Check for open windows"
       icon: mdi:window-open-variant
 
-    automation.notify_tornado_warning_alert:
-      <<: *customize
-      friendly_name: Tornado Warning
-      icon: mdi:alert
-
     automation.notify_weather_alert:
       <<: *customize
       friendly_name: Weather Alerts
@@ -301,29 +296,77 @@ automation:
             ttl: 0
             priority: high
 
-  - id: notify_tornado_warning_alert
-    alias: notify_tornado_warning_alert
-    description: "On an NWS tornado warning, push critical alerts to both phones and turn on lights if the resident is home."
+  # Single NWS push path for everyone (notify.all). Tornado warnings get the
+  # critical shelter alert and house lights; every other alert gets a normal
+  # push. The persistent UI notification below is the in-app record.
+  #
+  # New-alert detection: trigger on every sensor.nws_alerts change (state OR
+  # Alerts attribute) and push only alerts whose ID has not been pushed yet.
+  # A numeric_state "above 0" trigger only fires on the 0 -> N edge, so a
+  # warning that arrives while another alert is active was silently dropped
+  # (2026-10-28: a Tornado Warning arrived as the 3rd active alert and never
+  # pushed). Pushed IDs are kept (12-char UUID prefixes) in
+  # input_text.nws_alerts_notified_ids, which restores across restarts.
+  - id: notify_weather_alert
+    alias: notify_weather_alert
+    description: "Push each new NWS alert to everyone via notify.all: tornado warnings as critical shelter alerts (with lights on if the resident is home), other alerts as a normal push. Alerts already pushed are not repeated."
+    mode: queued
+    max: 10
     trace:
       stored_traces: 10
+    # No to/from/not_to: any of those filters disables attribute-only
+    # triggers, and an expired alert replaced by a new one in the same update
+    # changes only the Alerts attribute, not the count (Codex P1 on #1264).
     trigger:
-      - trigger: numeric_state
+      - trigger: state
         entity_id: sensor.nws_alerts
-        above: 0
     condition:
-      - condition: template
-        value_template: >-
-          {# sensor.nws_alerts only exposes the Alerts list; no top-level TYPE/Description. #}
-          {% set alerts = state_attr('sensor.nws_alerts', 'Alerts') | default([], true) %}
-          {{ alerts | selectattr('NWSCode', 'defined') | selectattr('NWSCode', 'eq', 'TOR') | list | count > 0
-             or alerts | selectattr('Event', 'defined') | selectattr('Event', 'eq', 'Tornado Warning') | list | count > 0 }}
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.nws_alerts
+            state:
+              - unavailable
+              - unknown
     action:
-      - choose:
-          - conditions:
+      - variables:
+          # sensor.nws_alerts only exposes the Alerts list; no top-level TYPE/Description.
+          nws_alerts: "{{ state_attr('sensor.nws_alerts', 'Alerts') | default([], true) }}"
+          notified_ids: "{{ states('input_text.nws_alerts_notified_ids').split(' ') }}"
+          new_alerts: >-
+            {% set ns = namespace(items=[]) %}
+            {% for alert in (nws_alerts if nws_alerts is sequence else []) %}
+              {% set alert_id = (alert.ID | default('', true) | string)[:12] %}
+              {% if alert_id != '' and alert_id not in notified_ids %}
+                {% set ns.items = ns.items + [alert] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+          # Live NWS code for a Tornado Warning is TOW (TOR kept for safety);
+          # a Tornado Watch (TOA) is a normal push.
+          tornado_alerts: >-
+            {% set ns = namespace(items=[]) %}
+            {% for alert in new_alerts %}
+              {% if alert.NWSCode | default('', true) in ['TOR', 'TOW']
+                    or alert.Event | default('', true) == 'Tornado Warning' %}
+                {% set ns.items = ns.items + [alert] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+          other_alerts: "{{ new_alerts | reject('in', tornado_alerts) | list }}"
+      - alias: "Stop unless an alert has not been pushed yet"
+        condition: template
+        value_template: "{{ new_alerts | count > 0 }}"
+      - alias: "Tornado warning: critical shelter alert"
+        if:
+          - condition: template
+            value_template: "{{ tornado_alerts | count > 0 }}"
+        then:
+          - if:
               - condition: state
                 entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "on"
-            sequence:
+            then:
               - action: light.turn_on
                 data:
                   entity_id:
@@ -334,68 +377,54 @@ automation:
               - action: light.turn_on
                 data:
                   entity_id: all
-      - action: @@PRIVATE:mobile_notify_service_02@@
-        data:
-          title: "Tornado Warning"
-          message: "Go to the basement now."
-          data:
-            tag: tornado-warning
-            persistent: true
-            ttl: 0
-            priority: high
-            channel: alarm_stream
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1.0
-      - action: @@PRIVATE:mobile_notify_service_01@@
-        data:
-          title: "Tornado Warning"
-          message: "Go to the basement now."
-          data:
-            tag: tornado-warning
-            persistent: true
-            ttl: 0
-            priority: high
-            channel: alarm_stream
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1.0
-
-  - id: notify_weather_alert
-    alias: notify_weather_alert
-    description: "Notify everyone of non-tornado NWS weather alerts."
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: numeric_state
-        entity_id: sensor.nws_alerts
-        above: 0
-    action:
-      - variables:
-          nws_alerts: "{{ state_attr('sensor.nws_alerts', 'Alerts') | default([], true) }}"
-          primary_alert: "{{ nws_alerts[0] if nws_alerts is sequence and nws_alerts | count > 0 else dict() }}"
-          alert_type: >-
-            {{ primary_alert.Event | default('', true) }}
-          alert_message: >-
-            {% set description = primary_alert.Description | default('', true) %}
-            {% if description | trim != '' %}
-              {{ description }}
-            {% else %}
-              {{ primary_alert.Headline | default('', true) }}
-            {% endif %}
-      - if:
-          - condition: template
-            value_template: >-
-              {{ alert_type not in ['TOR', 'Tornado Warning'] and alert_message | trim != '' }}
-        then:
-          - action: notify.notify_all
+          - action: notify.all
             data:
-              title: "{{ alert_type if alert_type | trim != '' else 'Weather alert' }}"
-              message: "{{ alert_message }}"
+              title: "Tornado Warning"
+              message: "Go to the basement now."
+              data:
+                tag: tornado-warning
+                persistent: true
+                ttl: 0
+                priority: high
+                channel: alarm_stream
+                push:
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+      # One push per new non-tornado alert, each with its own tag so a later
+      # alert never replaces an earlier one on the phone. Every alert gets a
+      # message (description, else headline, else its event name).
+      - alias: "Every other new alert: one normal push each"
+        repeat:
+          for_each: "{{ other_alerts }}"
+          sequence:
+            - variables:
+                alert_type: "{{ repeat.item.Event | default('', true) | trim or 'Weather alert' }}"
+                alert_message: >-
+                  {{ repeat.item.Description | default('', true) | trim
+                     or repeat.item.Headline | default('', true) | trim
+                     or alert_type }}
+            - action: notify.all
+              data:
+                title: "{{ alert_type }}"
+                message: "{{ alert_message }}"
+                data:
+                  tag: "nws-{{ (repeat.item.ID | default('alert', true) | string)[:12] }}"
+      # Record the active alert IDs only after every push above has been sent:
+      # all new alerts were represented, and a failed push aborts the run
+      # before this step so the alert is retried on the next update. Runs are
+      # queued, so the next run always sees this write. Expired IDs drop out.
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.nws_alerts_notified_ids
+        data:
+          value: >-
+            {% set ns = namespace(ids=[]) %}
+            {% for alert in nws_alerts %}
+              {% set ns.ids = ns.ids + [(alert.ID | default('', true) | string)[:12]] %}
+            {% endfor %}
+            {{ (ns.ids | reject('eq', '') | join(' '))[:255] }}
 
   - id: window_open_departure_rain_warning
     alias: window_open_departure_rain_warning
@@ -607,45 +636,32 @@ automation:
             {% else %}
               Weather Alerts
             {% endif %}
+          # Alert 1 shows its full message; alerts 2-5 add a section each. An
+          # alert effective for over an hour collapses to its title only.
           message: >
-            {% if (states('sensor.nws_dakota_county_alerts_alert_1') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_effective'))|float) <= 3600) %}
-              {{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'display_message') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_1') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_effective'))|float) > 3600) %}
-              <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'display_title') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_2') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_effective'))|float) <= 3600) %}
-              <hr>{{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'display_title') }}<br>
-              {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'display_message') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_2') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_effective'))|float) > 3600) %}
-              <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'display_title') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_3') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_effective'))|float) <= 3600) %}
-              <hr>{{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'display_title') }}<br>
-              {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'display_message') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_3') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_effective'))|float) > 3600) %}
-              <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'display_title') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_4') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_effective'))|float) <= 3600) %}
-              <hr>{{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'display_title') }}<br>
-              {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'display_message') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_4') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_effective'))|float) > 3600) %}
-              <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'display_title') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_5') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_effective'))|float) <= 3600) %}
-              <hr>{{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'display_title') }}<br>
-              {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'display_message') }}
-            {% endif %}
-            {% if (states('sensor.nws_dakota_county_alerts_alert_5') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_effective'))|float) > 3600) %}
-              <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'display_title') }}
-            {% endif %}
+            {% for n in range(1, 6) %}
+              {% set e = 'sensor.nws_dakota_county_alerts_alert_' ~ n %}
+              {% if is_state(e, 'on') %}
+                {% set fresh = (as_timestamp(now()) - as_timestamp(state_attr(e, 'alert_effective')) | float(0)) <= 3600 %}
+                {% if fresh and n == 1 %}
+                  {{ state_attr(e, 'display_message') }}
+                {% elif fresh %}
+                  <hr>{{ state_attr(e, 'display_title') }}<br>
+                  {{ state_attr(e, 'display_message') }}
+                {% else %}
+                  <hr>Alert: <br>{{ state_attr(e, 'display_title') }}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
       - action: input_text.set_value
         data:
           entity_id: input_text.nws_dakota_county_alerts_triggered_ui_alert_ids
-          value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
+          value: >-
+            {{ range(1, 6)
+               | map('string')
+               | map('regex_replace', '^', 'sensor.nws_dakota_county_alerts_alert_')
+               | map('state_attr', 'alert_id')
+               | join(' ') }}
 
     ## Automation to dismiss UI notification if there are no active alerts for 30 minutes
     ## Disable or remove this automation if you don't want notifications to auto-dismiss
@@ -670,63 +686,6 @@ automation:
       - action: persistent_notification.dismiss
         data:
           notification_id: "nws_dakota_county_alerts_alert"
-
-  ## Automation to push alerts via Pushbullet service
-  ## Disable or remove this automation if you don't use Pushbullet
-  - id: weather_alerts_pushbullet_notification_1
-    alias: Weather Alerts Pushbullet Notification - 1
-    description: "Push the latest NWS alert to the owner's phone when it changes (legacy alias mentions Pushbullet)."
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id: sensor.nws_dakota_county_alerts_alert_1_last_changed
-    condition:
-      - condition: and
-        conditions:
-          - condition: state
-            entity_id: sensor.nws_dakota_county_alerts_alerts_are_active
-            state: "Yes"
-          - condition: template
-            value_template: "{{ (as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_sent'))) < 3600 }}"
-          - condition: template
-            value_template: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') not in states('input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids') }}"
-          - condition: template
-            value_template: >-
-              {% set alert_type = state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') | default('', true) %}
-              {{ 'Flood' not in alert_type and 'Tornado Warning' not in alert_type }}
-    action:
-      - action: @@PRIVATE:mobile_notify_service_02@@
-        data:
-          message: >
-            Current NWS Weather Alerts:
-
-            {% if states('sensor.nws_dakota_county_alerts_alerts_are_active') == "No" %}
-            No alerts at this time for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}.
-            {% endif %}
-            {% if states.sensor.nws_dakota_county_alerts_alert_1.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_1.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
-
-            {% endif %}
-            {% if states.sensor.nws_dakota_county_alerts_alert_2.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_2.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
-
-            {% endif %}
-            {% if states.sensor.nws_dakota_county_alerts_alert_3.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_3.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
-
-            {% endif %}
-            {% if states.sensor.nws_dakota_county_alerts_alert_4.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_4.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
-
-            {% endif %}
-            {% if states.sensor.nws_dakota_county_alerts_alert_5.state == "on" %}
-            {{ states.sensor.nws_dakota_county_alerts_alert_5.attributes.display_title }} for {{ entity_name('sensor.nws_dakota_county_alerts') | default('sensor.nws_dakota_county_alerts', true) }}
-            {% endif %}
-      - action: input_text.set_value
-        data:
-          entity_id: input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids
-          value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
 
   - id: track_pressure_source_available_since
     alias: track_pressure_source_available_since
@@ -831,11 +790,12 @@ input_text:
     max: 255
     initial: ""
 
-  nws_dakota_county_alerts_triggered_pushbullet_alert_ids:
-    name: Triggered Weather Alert IDs - Pushbullet
+  # No `initial`: the value restores across restarts so active alerts are
+  # not pushed again after a reboot. Written by notify_weather_alert.
+  nws_alerts_notified_ids:
+    name: Pushed NWS Alert IDs
     icon: mdi:information-variant
     max: 255
-    initial: ""
 
 ########################
 # Groups

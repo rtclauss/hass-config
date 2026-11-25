@@ -68,5 +68,7 @@ def test_weather_alert_tracking_helpers_use_blank_initial_values() -> None:
     package = WEATHER_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "nws_dakota_county_alerts_triggered_ui_alert_ids:" in package
-    assert "nws_dakota_county_alerts_triggered_pushbullet_alert_ids:" in package
+    # The legacy owner-only "Pushbullet" push (and its tracking helper) was
+    # folded into notify_weather_alert, which pushes everyone via notify.all.
+    assert "nws_dakota_county_alerts_triggered_pushbullet_alert_ids" not in package
     assert "initial: None" not in package

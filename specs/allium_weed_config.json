@@ -1521,6 +1521,15 @@
       ],
       "classification": "public app allow-line and non-private app config",
       "reason": "Issue #1256 (https://github.com/rtclauss/hass-config/issues/1256), PR #1257 (https://github.com/rtclauss/hass-config/pull/1257): re-includes the hand-written appdaemon/apps/coffee_station.py in .gitignore (one added allow line) and appends the coffee_station app block to the apps template. The block's only private value, the presence entity, uses the existing @@PRIVATE:presence_person_slug@@ marker; every other value is a public entity id, helper, threshold or the shared notify.all service. No manifest entries, private values, renderer behavior, or rendered-output handling change. Only these exact added lines are allowed."
+    },
+    {
+      "spec": "specs/private_runtime_config.allium",
+      "implementation_paths": [
+        "private_templates/desk.yaml.tmpl",
+        "private_templates/weather.yaml.tmpl"
+      ],
+      "classification": "non-privacy automation consolidation and alert-delivery fix",
+      "reason": "PR #1264 (https://github.com/rtclauss/hass-config/pull/1264, issue #1259) consolidates the seven Uplift desk automations into one priority-ordered uplift_desk_policy automation, and merges the NWS tornado/generic/legacy-Pushbullet pushes into one notify_weather_alert on notify.all that pushes every new alert ID (Codex P1s on #1264). No new @@PRIVATE placeholder keys are added (only the existing owner_person_slug and presence_person_slug are reused); three mobile_notify_service_01/02 uses are removed; no literal private value, rendered output, or secret is introduced. specs/private_runtime_config.allium is intentionally not edited."
     }
   ]
 }

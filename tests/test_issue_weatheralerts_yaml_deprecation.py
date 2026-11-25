@@ -119,5 +119,6 @@ def test_nws_alert_reads_use_only_attributes_the_integration_exposes() -> None:
     # Description never existed, so tornado detection must read the list.
     assert "state_attr('sensor.nws_alerts', 'TYPE')" not in text
     assert "state_attr('sensor.nws_alerts', 'Description')" not in text
-    assert "selectattr('NWSCode', 'eq', 'TOR')" in text
-    assert "selectattr('Event', 'eq', 'Tornado Warning')" in text
+    # Live NWS code for a Tornado Warning is TOW (2026-10-28 history); keep TOR too.
+    assert "alert.NWSCode | default('', true) in ['TOR', 'TOW']" in text
+    assert "alert.Event | default('', true) == 'Tornado Warning'" in text
