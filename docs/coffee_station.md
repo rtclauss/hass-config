@@ -395,23 +395,44 @@ the template.
 ## Installation
 
 1. Merge to `develop`. Pull it on the HA host.
-2. **Rename the entities** (Settings → Entities). Nothing referenced the old
-   IDs at the time of writing:
+2. **Rename the entities**: Settings → Entities, or the entity registry
+   WebSocket call `config/entity_registry/update` with `new_entity_id`.
+   Nothing referenced the old IDs at the time of writing. *Done on the live
+   installation 2026-11-24.*
    * `switch.eve_energy_20ebu4101_2` → `switch.coffee_maker`
    * `sensor.eve_energy_20ebu4101_power_3` → `sensor.coffee_maker_power`
    * `sensor.eve_energy_20ebu4101_energy_3` → `sensor.coffee_maker_energy`
    * `sensor.eve_energy_20ebu4101_voltage_3` → `sensor.coffee_maker_voltage`
    * `select.eve_energy_20ebu4101_power_on_behavior_on_startup_2` → `select.coffee_maker_power_on_behavior`
    * In Zigbee2MQTT, rename the RODRET's friendly name to `coffee_station_remote`
-     (with "update Home Assistant entity ID"), giving
-     `sensor.coffee_station_remote_action`.
+     with "update Home Assistant entity ID", giving
+     `sensor.coffee_station_remote_action`. From HA, the equivalent is
+     `mqtt.publish` to `zigbee2mqtt/bridge/request/device/rename` with
+     `{"from": "<ieee>", "to": "coffee_station_remote", "homeassistant_rename": true}`.
 3. Check the configuration, then restart Home Assistant (this adds the
    package and the dashboard).
-4. Render and push AppDaemon: `python3 scripts/render_private_config.py`, then
-   `python3 scripts/render_private_config.py --check`, then
-   `python3 scripts/appdaemon_sync.py push` (see `docs/appdaemon_sync.md`).
+4. Deploy the AppDaemon app. There are two routes:
+   * **Full sync, from the Mac** that holds `.private-runtime-config/values.json`
+     (`appdaemon_sync.py` uses `mount_smbfs`, which only exists on macOS):
+     `python3 scripts/render_private_config.py`, then
+     `python3 scripts/render_private_config.py --check`, then
+     `python3 scripts/appdaemon_sync.py diff`, then
+     `python3 scripts/appdaemon_sync.py push` (see `docs/appdaemon_sync.md`).
+     Review the `diff` first: a push overwrites every live app file with this
+     checkout's copy.
+   * **Targeted, from any machine with `smbclient`** (this is how it was first
+     deployed on 2026-11-24). Use the `addon_configs` share credentials in
+     `AGENTS.local.md`, kept in an owner-only `smbclient -A` auth file:
+     1. Download the live `a0d7b954_appdaemon/apps/apps.yaml` and keep a backup.
+     2. Append the `coffee_station:` block from the template. Replace
+        `@@PRIVATE:presence_person_slug@@` with the slug already used by the
+        live `bayesian_input: binary_sensor.bayesian_<slug>_home` line.
+     3. Check that the YAML parses and that the existing apps are unchanged.
+     4. `put` `coffee_station.py` **first**, then `apps.yaml`. AppDaemon
+        reloads on file change. Later code-only updates need just the `.py`.
 5. Confirm `sensor.coffee_state` shows `idle` (or `unavailable` with a clear
-   `issues` attribute).
+   `issues` attribute). On first start the app switches an energized plug off
+   and sets the plug's power-on behavior to OFF.
 
 ## Commissioning checklist (physical, supervised)
 
@@ -485,6 +506,10 @@ Stay with the brewer for every step.
   getting up.
 * AppDaemon-published entities have no `unique_id`, so they cannot be renamed
   in the UI, and they vanish until the app re-publishes after an HA restart.
+* AppDaemon's `set_state` drops falsy attribute values and stringifies
+  booleans, so `sensor.coffee_state` publishes diagnostic booleans and
+  numbers as strings (`"false"`, `"0.0"`, `"none"`). Templates must compare
+  against strings.
 * The rolling averages skip a brew whose stored value equals the previous one.
 * Brew progress is an estimate from heating time.
 * There is no device-local max-on timer (see *Safety*).
