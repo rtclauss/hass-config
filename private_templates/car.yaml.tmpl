@@ -1572,19 +1572,68 @@ template:
                     - condition: template
                       value_template: "{{ (candidate_coords.pair | default('', true) | string | trim) == '' }}"
                   then:
-                    - action: rest_command.geocode_address
-                      continue_on_error: true
-                      data:
-                        query: "{{ candidate_location }}"
-                      response_variable: candidate_geo_result
+                    # Calendar locations often lead with a place name
+                    # ("Someone's Home" / "Venue, 123 Main St, City"). Nominatim
+                    # returns an empty list for a free-form query that starts
+                    # with a name it does not know, so try progressively
+                    # plainer forms: the whole location, then from the first
+                    # part that starts with a digit (the street), then that
+                    # street without its house number (rural numbers are often
+                    # missing from OSM; street + town is close enough to pick
+                    # a charge tier).
                     - variables:
-                        candidate_coords: >-
-                          {% set body = candidate_geo_result.content if (candidate_geo_result is mapping) else none %}
-                          {% if body is sequence and body is not mapping and (body | count) > 0 and body[0].lat is defined %}
-                            {{ {'pair': (body[0].lat | string ~ ',' ~ body[0].lon | string)} }}
-                          {% else %}
-                            {{ {'pair': ''} }}
-                          {% endif %}
+                        geocode_queries: >-
+                          {%- set raw = candidate_location | replace('\r', '') -%}
+                          {%- set parts = raw.split('\n') if '\n' in raw else raw.split(',') -%}
+                          {%- set parts = parts | map('trim') | reject('eq', '') | list -%}
+                          {%- set queries = [parts | join(', ')] -%}
+                          {%- set ns = namespace(street=-1) -%}
+                          {%- for part in parts -%}
+                            {%- if ns.street < 0 and part[:1] in '0123456789' -%}
+                              {%- set ns.street = loop.index0 -%}
+                            {%- endif -%}
+                          {%- endfor -%}
+                          {%- if ns.street > 0 -%}
+                            {%- set queries = queries + [parts[ns.street:] | join(', ')] -%}
+                          {%- endif -%}
+                          {%- if ns.street >= 0 -%}
+                            {%- set street_tokens = parts[ns.street].split(' ', 1) -%}
+                            {%- if street_tokens | count == 2 and (street_tokens[1] | trim) != '' -%}
+                              {%- set queries = queries + [([street_tokens[1] | trim] + parts[ns.street + 1:]) | join(', ')] -%}
+                            {%- endif -%}
+                          {%- endif -%}
+                          {{ queries | unique | list }}
+                    - repeat:
+                        for_each: "{{ geocode_queries }}"
+                        sequence:
+                          - if:
+                              - condition: template
+                                value_template: "{{ candidate_coords.pair == '' }}"
+                            then:
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ repeat.index > 1 }}"
+                                then:
+                                  # Nominatim's usage policy: at most 1 request/second.
+                                  - delay:
+                                      seconds: 1
+                              # Cleared first so a failed call cannot reuse the
+                              # previous query's (or previous candidate's) result.
+                              - variables:
+                                  candidate_geo_result: null
+                              - action: rest_command.geocode_address
+                                continue_on_error: true
+                                data:
+                                  query: "{{ repeat.item }}"
+                                response_variable: candidate_geo_result
+                              - variables:
+                                  candidate_coords: >-
+                                    {% set body = candidate_geo_result.content if (candidate_geo_result is mapping) else none %}
+                                    {% if body is sequence and body is not mapping and (body | count) > 0 and body[0].lat is defined %}
+                                      {{ {'pair': (body[0].lat | string ~ ',' ~ body[0].lon | string)} }}
+                                    {% else %}
+                                      {{ {'pair': ''} }}
+                                    {% endif %}
                 - variables:
                     candidate_coords: >-
                       {{ {'pair': (candidate_coords.pair | default('', true) | string | trim)} }}

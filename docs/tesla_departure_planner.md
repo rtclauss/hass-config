@@ -44,6 +44,12 @@ Waze routes reliably by coordinate, but in November 2026 Waze blocked the addres
 
 - **Origin** comes from `zone.home`'s own `latitude`/`longitude`. It never needs geocoding.
 - **Destination** is geocoded from the calendar event's `location` via `rest_command.geocode_address` (Nominatim, `format=jsonv2&limit=1`) with a contactable `User-Agent`, as Nominatim's usage policy requires. The error case is a JSON *mapping* and a no-match is an empty list, so the parser requires a non-mapping, non-empty sequence before indexing the first result.
+- Calendar locations often **lead with a place name**. Apple Calendar writes a contact or venue as `Name\nStreet\nCity ST ZIP`, and Google uses `Venue, 123 Main St, City, ST ZIP`. Nominatim returns an empty list (not an error) for a free-form query that starts with a name it does not know, so a real out-of-town drive used to come back "travel time unavailable" and plan as a degraded 0 mi / 60 min trip. The planner now tries up to three queries, stopping at the first hit, spaced 1 s apart for Nominatim's rate limit:
+  1. the whole location
+  2. from the first part that starts with a digit (the street)
+  3. that street without its house number. Rural house numbers are often missing from OpenStreetMap, and street + town is close enough to pick a charge tier.
+
+  The cache key stays the original location string, so a resolved location is still looked up once. An unresolved one costs up to three requests per 15-minute recompute instead of one.
 - Resolved coordinates are cached in `binary_sensor.upcoming_trip_charging`'s own `geo_cache` attribute and carried forward across recomputes, so the same event is not re-geocoded every 15 minutes. The cache is pruned each cycle to the addresses still in the 24-hour window.
 - `input_text.tesla_destination_coords_override` is the manual escape hatch. Set it to `lat,lon` and it wins outright for the **soonest candidate that has a location** — deliberately scoped that way so one entry stays unambiguous when several located events share the window. An override is **never written into `geo_cache`**, so clearing or correcting it restores real geocoding on the next recompute instead of leaving a stale pin that a later event at the same address would inherit.
 
