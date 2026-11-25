@@ -810,7 +810,7 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | --- | --- | --- | --- |
 | `alert_car_windows_open_pressure_dropping` | alert_car_windows_open_pressure_dropping | single | Warn the owner and close the parked car's windows when heavy rain is forecast in the next two hours outside winter, at most once an hour. |
 | `alert_house_windows_open_pressure_dropping` | alert_house_windows_open_pressure_dropping | single | Warn the owner when house windows are open and barometric pressure is falling quickly, at most once every four hours. |
-| `notify_weather_alert` | notify_weather_alert | single | Push NWS alerts to everyone via notify.all: tornado warnings as critical shelter alerts (with lights on if the resident is home), other alerts as a normal push. |
+| `notify_weather_alert` | notify_weather_alert | queued | Push each new NWS alert to everyone via notify.all: tornado warnings as critical shelter alerts (with lights on if the resident is home), other alerts as a normal push. Alerts already pushed are not repeated. |
 | `window_open_departure_rain_warning` | window_open_departure_rain_warning | single | Warn the owner when leaving home or starting a trip with windows open and rain forecast in the next 12 hours, at most once an hour. |
 | `window_open_home_rain_warning` | window_open_home_rain_warning | single | Warn the owner when home with windows open and rain is expected in the next 15 minutes, at most once an hour. |
 | `window_open_cool_weather_reminder` | window_open_cool_weather_reminder | single | Remind the owner to close windows when it is cool outside and the thermostat is working hard (aux heat or long time to target) while windows are open. |

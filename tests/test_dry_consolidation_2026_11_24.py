@@ -112,8 +112,41 @@ def test_weather_alerts_use_one_notify_all_path() -> None:
     assert "notify.notify_all" not in text
 
     alert = _automation(WEATHER_TEMPLATE, "notify_weather_alert")
-    options = alert["action"][1]["choose"]
+    options = next(step for step in alert["action"] if "choose" in step)["choose"]
     tornado, other = options
     assert tornado["sequence"][-1]["action"] == "notify.all"
     assert tornado["sequence"][-1]["data"]["data"]["push"]["sound"]["critical"] == 1
     assert other["sequence"][0]["action"] == "notify.all"
+
+
+def test_weather_alert_pushes_each_new_alert_id_not_just_the_first() -> None:
+    """Codex P1 on #1264: a numeric_state "above 0" trigger only fires on the
+    0 -> N edge, so a warning arriving while another alert was active (the
+    2026-10-28 Tornado Warning, 3rd active alert) never pushed."""
+    alert = _automation(WEATHER_TEMPLATE, "notify_weather_alert")
+
+    assert alert["mode"] == "queued"
+    assert alert["trigger"] == [
+        {
+            "trigger": "state",
+            "entity_id": "sensor.nws_alerts",
+            "not_to": ["unavailable", "unknown"],
+        }
+    ]
+    variables = alert["action"][0]["variables"]
+    assert "input_text.nws_alerts_notified_ids" in variables["notified_ids"]
+    assert "not in notified_ids" in variables["new_alerts"]
+    # Live NWS code for a Tornado Warning is TOW; only *new* alerts can escalate.
+    assert "['TOR', 'TOW']" in variables["tornado_alerts"]
+    assert variables["tornado_alerts"].count("new_alerts") == 2
+
+    # Stop before pushing unless something is new; record IDs before the push.
+    steps = alert["action"]
+    assert steps[1]["condition"] == "template"
+    assert "new_alerts | count > 0" in steps[1]["value_template"]
+    assert steps[2]["action"] == "input_text.set_value"
+    assert steps[2]["target"]["entity_id"] == "input_text.nws_alerts_notified_ids"
+
+    helper = _load(WEATHER_TEMPLATE)["input_text"]["nws_alerts_notified_ids"]
+    assert helper["max"] == 255
+    assert "initial" not in helper  # restores across restarts: no re-push on reboot
