@@ -167,8 +167,9 @@ sensor:
       days: 180
     precision: 0
 
+
 ################################################
-## Scripts
+## Scripts (shared by the safety layer below)
 ################################################
 script:
   coffee_unplug_alert:
@@ -214,6 +215,97 @@ script:
               - action: URI
                 title: Coffee
                 uri: /db-coffee/coffee
+
+  coffee_fault_notice:
+    alias: Coffee Fault Notice
+    description: >-
+      Time-sensitive (not critical) coffee-station notice from the
+      AppDaemon-independent safety layer, under the shared fault tag with a
+      link to the Coffee dashboard.
+    mode: queued
+    icon: mdi:coffee-maker
+    fields:
+      title:
+        description: Notification title.
+        example: Coffee maker switched off
+        required: true
+        selector:
+          text:
+      message:
+        description: Notification text.
+        example: The Home Assistant watchdog switched the coffee maker off.
+        required: true
+        selector:
+          text:
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: notify.all
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          data:
+            tag: coffee_station_fault
+            url: /db-coffee/coffee
+            clickAction: /db-coffee/coffee
+            push:
+              interruption-level: time-sensitive
+            actions:
+              - action: URI
+                title: Coffee
+                uri: /db-coffee/coffee
+
+  coffee_confirm_off:
+    alias: Coffee Confirm Off
+    description: >-
+      After an OFF command (sent inline by the caller, so the OFF itself never
+      depends on this script), wait up to 30 s for the coffee maker plug to
+      report off. Confirmed: send the optional time-sensitive notice. Not
+      confirmed: send the critical unplug alert.
+    mode: queued
+    icon: mdi:power-plug-off-outline
+    fields:
+      unconfirmed_message:
+        description: Critical alert text when the plug does not report off.
+        example: The coffee maker plug could not be confirmed off.
+        required: true
+        selector:
+          text:
+      confirmed_title:
+        description: Optional notice title once the plug reports off.
+        example: Coffee maker switched off
+        selector:
+          text:
+      confirmed_message:
+        description: Optional notice text once the plug reports off (no notice when empty).
+        example: The watchdog switched the coffee maker off.
+        selector:
+          text:
+    trace:
+      stored_traces: 50
+    sequence:
+      - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
+        timeout: "00:00:30"
+        continue_on_timeout: true
+      - if:
+          - condition: state
+            entity_id: switch.coffee_maker
+            state: "off"
+        then:
+          - if:
+              - condition: template
+                value_template: "{{ confirmed_message | default('') | length > 0 }}"
+            then:
+              - action: script.coffee_fault_notice
+                data:
+                  title: "{{ confirmed_title | default('Coffee maker switched off') }}"
+                  message: "{{ confirmed_message }}"
+        else:
+          - action: script.coffee_unplug_alert
+            data:
+              message: >-
+                {{ unconfirmed_message }} (The plug reports
+                {{ states('switch.coffee_maker') }}.)
 
 ################################################
 ## Automation (independent safety layer - never turns the plug on)
@@ -262,22 +354,11 @@ automation:
         action: switch.turn_off
         target:
           entity_id: switch.coffee_maker
-      - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
-        timeout: "00:00:30"
-        continue_on_timeout: true
-      - if:
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: switch.coffee_maker
-                state: "off"
-        then:
-          - action: script.coffee_unplug_alert
-            data:
-              message: >-
-                Stop was pressed but the coffee maker plug did not report off
-                within 30 seconds (it reports {{ states('switch.coffee_maker') }}).
-                Unplug the coffee maker now.
+      - action: script.coffee_confirm_off
+        data:
+          unconfirmed_message: >-
+            Stop was pressed but the coffee maker plug did not report off
+            within 30 seconds. Unplug the coffee maker now.
 
   - id: coffee_max_on_watchdog
     alias: coffee_max_on_watchdog
@@ -321,37 +402,16 @@ automation:
                 action: switch.turn_off
                 target:
                   entity_id: switch.coffee_maker
-              - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
-                timeout: "00:00:30"
-                continue_on_timeout: true
-              - if:
-                  - condition: state
-                    entity_id: switch.coffee_maker
-                    state: "off"
-                then:
-                  - action: notify.all
-                    data:
-                      title: Coffee maker switched off
-                      message: >-
-                        The coffee maker plug was on for 15 minutes and the
-                        Home Assistant watchdog switched it off. Check the
-                        Coffee station.
-                      data:
-                        tag: coffee_station_fault
-                        url: /db-coffee/coffee
-                        clickAction: /db-coffee/coffee
-                        push:
-                          interruption-level: time-sensitive
-                        actions:
-                          - action: URI
-                            title: Coffee
-                            uri: /db-coffee/coffee
-                else:
-                  - action: script.coffee_unplug_alert
-                    data:
-                      message: >-
-                        The coffee maker plug has been on for 15 minutes and
-                        could not be confirmed off. Unplug the coffee maker now.
+              - action: script.coffee_confirm_off
+                data:
+                  unconfirmed_message: >-
+                    The coffee maker plug has been on for 15 minutes and could
+                    not be confirmed off. Unplug the coffee maker now.
+                  confirmed_title: Coffee maker switched off
+                  confirmed_message: >-
+                    The coffee maker plug was on for 15 minutes and the Home
+                    Assistant watchdog switched it off. Check the Coffee
+                    station.
           - conditions:
               - condition: trigger
                 id: dropped_while_on
@@ -409,34 +469,17 @@ automation:
                 action: switch.turn_off
                 target:
                   entity_id: switch.coffee_maker
-              - wait_template: "{{ is_state('switch.coffee_maker', 'off') }}"
-                timeout: "00:00:30"
-                continue_on_timeout: true
-              - if:
-                  - condition: state
-                    entity_id: switch.coffee_maker
-                    state: "off"
-                then:
-                  - action: notify.all
-                    data:
-                      title: Coffee maker switched off
-                      message: >-
-                        Home Assistant restarted while the coffee maker plug
-                        was on, so it was switched off. Arm again if you still
-                        want coffee.
-                      data:
-                        tag: coffee_station_fault
-                        url: /db-coffee/coffee
-                        clickAction: /db-coffee/coffee
-                        push:
-                          interruption-level: time-sensitive
-                else:
-                  - action: script.coffee_unplug_alert
-                    data:
-                      message: >-
-                        Home Assistant restarted while the coffee maker plug
-                        was on and it could not be confirmed off. Unplug the
-                        coffee maker now.
+              - action: script.coffee_confirm_off
+                data:
+                  unconfirmed_message: >-
+                    Home Assistant restarted while the coffee maker plug was on
+                    and it could not be confirmed off. Unplug the coffee maker
+                    now.
+                  confirmed_title: Coffee maker switched off
+                  confirmed_message: >-
+                    Home Assistant restarted while the coffee maker plug was
+                    on, so it was switched off. Arm again if you still want
+                    coffee.
           - conditions:
               - condition: not
                 conditions:
@@ -444,16 +487,11 @@ automation:
                     entity_id: switch.coffee_maker
                     state: "off"
             sequence:
-              - action: notify.all
+              - action: script.coffee_fault_notice
                 data:
                   title: Coffee maker state unknown
                   message: >-
                     After a Home Assistant restart the coffee maker plug has
-                    not reported for 2 minutes ({{ states('switch.coffee_maker') }}).
-                    Check that it is off.
-                  data:
-                    tag: coffee_station_fault
-                    url: /db-coffee/coffee
-                    clickAction: /db-coffee/coffee
-                    push:
-                      interruption-level: time-sensitive
+                    not reported for 2 minutes
+                    ({{ states('switch.coffee_maker') }}). Check that it is
+                    off.

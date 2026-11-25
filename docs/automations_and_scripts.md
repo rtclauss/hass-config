@@ -7,7 +7,7 @@ Every Home Assistant automation and script defined in this repo, with the
 `private_templates/*.tmpl` source and rendered with the synthetic example
 values, so placeholder names such as `example_zone_05` stand in for private ones.
 
-Totals: **254 automations** and **164 scripts** across 51 files.
+Totals: **254 automations** and **166 scripts** across 51 files.
 
 To keep this current, add a `description:` to every new automation or script
 and regenerate:
@@ -234,6 +234,8 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | Script | Alias | Mode | Description |
 | --- | --- | --- | --- |
 | `script.coffee_unplug_alert` | Coffee Unplug Alert | queued | Critical "unplug the coffee maker" alert from the AppDaemon-independent safety layer, sent to the phones (critical on iOS, alarm stream on Android) and kept as a local persistent notification. |
+| `script.coffee_fault_notice` | Coffee Fault Notice | queued | Time-sensitive (not critical) coffee-station notice from the AppDaemon-independent safety layer, under the shared fault tag with a link to the Coffee dashboard. |
+| `script.coffee_confirm_off` | Coffee Confirm Off | queued | After an OFF command (sent inline by the caller, so the OFF itself never depends on this script), wait up to 30 s for the coffee maker plug to report off. Confirmed: send the optional time-sensitive notice. Not confirmed: send the critical unplug alert. |
 
 
 ## `private_templates/curling.yaml.tmpl`

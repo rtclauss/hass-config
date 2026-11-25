@@ -1180,10 +1180,17 @@ class CoffeeCore:
         return None
 
     def _timer_startup(self, now: datetime) -> None:
-        if self.state == STARTING and self.brew is not None and self.brew.heat_above_since is None:
-            self._fault("failed_to_start",
-                        f"The coffee maker did not start heating within {self.cfg.startup_timeout_s:.0f} s "
-                        "(check the brewer's own switch and the plug). The plug was switched off.", now)
+        if self.state != STARTING or self.brew is None:
+            return
+        if self.brew.heat_above_since is not None:
+            # Heating began near the deadline and is still being confirmed.
+            # Re-arm the startup check for one confirmation interval instead of
+            # consuming it, so a pulse that fails confirmation still faults.
+            self._schedule("startup", self.cfg.heating_confirm_s + 1)
+            return
+        self._fault("failed_to_start",
+                    f"The coffee maker did not start heating within {self.cfg.startup_timeout_s:.0f} s "
+                    "(check the brewer's own switch and the plug). The plug was switched off.", now)
 
     def _timer_heat_confirm(self, now: datetime) -> None:
         brew = self.brew
@@ -1380,6 +1387,19 @@ def _iso(value: Any) -> Any:
         return {k: _iso(v) for k, v in value.items()}
     if isinstance(value, list):
         return [_iso(v) for v in value]
+    return value
+
+
+def _attribute(value: Any) -> Any:
+    """Make a diagnostic attribute survive AppDaemon's set_state, which drops
+    falsy values (False, 0, 0.0, None) and stringifies booleans. Booleans and
+    numbers are published as strings, None as "none"; lists/dicts as-is."""
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
     return value
 
 
@@ -1715,7 +1735,7 @@ class CoffeeStation(_HassBase):  # type: ignore[misc, valid-type]
 
     def _publish(self) -> None:
         snap = self.core.snapshot(self._now())
-        attrs = _iso({k: v for k, v in snap.items() if k not in ("state",)})
+        attrs = {k: _attribute(v) for k, v in _iso(snap).items() if k != "state"}
         def binary(entity_id: str, on: bool, attributes: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             icon_on, icon_off = BINARY_ICONS[entity_id]
             return ("on" if on else "off", {**attributes, "icon": icon_on if on else icon_off})
