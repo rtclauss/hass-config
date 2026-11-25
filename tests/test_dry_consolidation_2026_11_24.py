@@ -112,40 +112,51 @@ def test_weather_alerts_use_one_notify_all_path() -> None:
     assert "notify.notify_all" not in text
 
     alert = _automation(WEATHER_TEMPLATE, "notify_weather_alert")
-    options = next(step for step in alert["action"] if "choose" in step)["choose"]
-    tornado, other = options
-    assert tornado["sequence"][-1]["action"] == "notify.all"
-    assert tornado["sequence"][-1]["data"]["data"]["push"]["sound"]["critical"] == 1
-    assert other["sequence"][0]["action"] == "notify.all"
+    steps = {step.get("alias"): step for step in alert["action"]}
+    tornado = steps["Tornado warning: critical shelter alert"]["then"][-1]
+    assert tornado["action"] == "notify.all"
+    assert tornado["data"]["data"]["push"]["sound"]["critical"] == 1
+    other = steps["Every other new alert: one normal push each"]["repeat"]["sequence"][-1]
+    assert other["action"] == "notify.all"
 
 
 def test_weather_alert_pushes_each_new_alert_id_not_just_the_first() -> None:
-    """Codex P1 on #1264: a numeric_state "above 0" trigger only fires on the
-    0 -> N edge, so a warning arriving while another alert was active (the
-    2026-10-28 Tornado Warning, 3rd active alert) never pushed."""
+    """Codex P1s on #1264.
+
+    1. A numeric_state "above 0" trigger only fires on the 0 -> N edge, so a
+       warning arriving while another alert was active (the 2026-10-28
+       Tornado Warning, 3rd active alert) never pushed.
+    2. Any to/from/not_to filter disables attribute-only triggers, so an
+       expired alert replaced by a new one at the same count never fired.
+    3. Only the first new alert was pushed but every active ID was recorded.
+    """
     alert = _automation(WEATHER_TEMPLATE, "notify_weather_alert")
 
     assert alert["mode"] == "queued"
-    assert alert["trigger"] == [
-        {
-            "trigger": "state",
-            "entity_id": "sensor.nws_alerts",
-            "not_to": ["unavailable", "unknown"],
-        }
-    ]
+    assert alert["trigger"] == [{"trigger": "state", "entity_id": "sensor.nws_alerts"}]
+    guard = alert["condition"][0]
+    assert guard["condition"] == "not"
+    assert guard["conditions"][0]["state"] == ["unavailable", "unknown"]
+
     variables = alert["action"][0]["variables"]
     assert "input_text.nws_alerts_notified_ids" in variables["notified_ids"]
     assert "not in notified_ids" in variables["new_alerts"]
     # Live NWS code for a Tornado Warning is TOW; only *new* alerts can escalate.
     assert "['TOR', 'TOW']" in variables["tornado_alerts"]
-    assert variables["tornado_alerts"].count("new_alerts") == 2
+    assert "for alert in new_alerts" in variables["tornado_alerts"]
+    assert "reject('in', tornado_alerts)" in variables["other_alerts"]
 
-    # Stop before pushing unless something is new; record IDs before the push.
     steps = alert["action"]
     assert steps[1]["condition"] == "template"
     assert "new_alerts | count > 0" in steps[1]["value_template"]
-    assert steps[2]["action"] == "input_text.set_value"
-    assert steps[2]["target"]["entity_id"] == "input_text.nws_alerts_notified_ids"
+    # Every non-tornado alert gets its own push with a per-alert tag.
+    loop = next(step for step in steps if "repeat" in step)["repeat"]
+    assert loop["for_each"] == "{{ other_alerts }}"
+    assert "repeat.item.ID" in loop["sequence"][-1]["data"]["data"]["tag"]
+    # IDs are recorded only after every push has been sent.
+    assert steps[-1]["action"] == "input_text.set_value"
+    assert steps[-1]["target"]["entity_id"] == "input_text.nws_alerts_notified_ids"
+    assert steps.index(next(s for s in steps if "repeat" in s)) < len(steps) - 1
 
     helper = _load(WEATHER_TEMPLATE)["input_text"]["nws_alerts_notified_ids"]
     assert helper["max"] == 255

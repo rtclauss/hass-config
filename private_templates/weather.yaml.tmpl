@@ -314,12 +314,20 @@ automation:
     max: 10
     trace:
       stored_traces: 10
+    # No to/from/not_to: any of those filters disables attribute-only
+    # triggers, and an expired alert replaced by a new one in the same update
+    # changes only the Alerts attribute, not the count (Codex P1 on #1264).
     trigger:
       - trigger: state
         entity_id: sensor.nws_alerts
-        not_to:
-          - unavailable
-          - unknown
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.nws_alerts
+            state:
+              - unavailable
+              - unknown
     action:
       - variables:
           # sensor.nws_alerts only exposes the Alerts list; no top-level TYPE/Description.
@@ -337,24 +345,76 @@ automation:
           # Live NWS code for a Tornado Warning is TOW (TOR kept for safety);
           # a Tornado Watch (TOA) is a normal push.
           tornado_alerts: >-
-            {{ new_alerts | selectattr('NWSCode', 'defined') | selectattr('NWSCode', 'in', ['TOR', 'TOW']) | list
-               + new_alerts | selectattr('Event', 'defined') | selectattr('Event', 'eq', 'Tornado Warning') | list }}
-          tornado_warning: "{{ tornado_alerts | count > 0 }}"
-          primary_alert: "{{ new_alerts[0] if new_alerts | count > 0 else dict() }}"
-          alert_type: >-
-            {{ primary_alert.Event | default('', true) }}
-          alert_message: >-
-            {% set description = primary_alert.Description | default('', true) %}
-            {% if description | trim != '' %}
-              {{ description }}
-            {% else %}
-              {{ primary_alert.Headline | default('', true) }}
-            {% endif %}
+            {% set ns = namespace(items=[]) %}
+            {% for alert in new_alerts %}
+              {% if alert.NWSCode | default('', true) in ['TOR', 'TOW']
+                    or alert.Event | default('', true) == 'Tornado Warning' %}
+                {% set ns.items = ns.items + [alert] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+          other_alerts: "{{ new_alerts | reject('in', tornado_alerts) | list }}"
       - alias: "Stop unless an alert has not been pushed yet"
         condition: template
         value_template: "{{ new_alerts | count > 0 }}"
-      # Record every currently active alert (expired ones drop out) before
-      # pushing, so a queued run for the same change can't push it twice.
+      - alias: "Tornado warning: critical shelter alert"
+        if:
+          - condition: template
+            value_template: "{{ tornado_alerts | count > 0 }}"
+        then:
+          - if:
+              - condition: state
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+                state: "on"
+            then:
+              - action: light.turn_on
+                data:
+                  entity_id:
+                    - light.dining_room_all
+                    - light.basement_great_room
+                    - light.owner_suite_lamps
+                  flash: long
+              - action: light.turn_on
+                data:
+                  entity_id: all
+          - action: notify.all
+            data:
+              title: "Tornado Warning"
+              message: "Go to the basement now."
+              data:
+                tag: tornado-warning
+                persistent: true
+                ttl: 0
+                priority: high
+                channel: alarm_stream
+                push:
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+      # One push per new non-tornado alert, each with its own tag so a later
+      # alert never replaces an earlier one on the phone. Every alert gets a
+      # message (description, else headline, else its event name).
+      - alias: "Every other new alert: one normal push each"
+        repeat:
+          for_each: "{{ other_alerts }}"
+          sequence:
+            - variables:
+                alert_type: "{{ repeat.item.Event | default('', true) | trim or 'Weather alert' }}"
+                alert_message: >-
+                  {{ repeat.item.Description | default('', true) | trim
+                     or repeat.item.Headline | default('', true) | trim
+                     or alert_type }}
+            - action: notify.all
+              data:
+                title: "{{ alert_type }}"
+                message: "{{ alert_message }}"
+                data:
+                  tag: "nws-{{ (repeat.item.ID | default('alert', true) | string)[:12] }}"
+      # Record the active alert IDs only after every push above has been sent:
+      # all new alerts were represented, and a failed push aborts the run
+      # before this step so the alert is retried on the next update. Runs are
+      # queued, so the next run always sees this write. Expired IDs drop out.
       - action: input_text.set_value
         target:
           entity_id: input_text.nws_alerts_notified_ids
@@ -365,53 +425,6 @@ automation:
               {% set ns.ids = ns.ids + [(alert.ID | default('', true) | string)[:12]] %}
             {% endfor %}
             {{ (ns.ids | reject('eq', '') | join(' '))[:255] }}
-      - choose:
-          - alias: "Tornado warning: critical shelter alert"
-            conditions:
-              - condition: template
-                value_template: "{{ tornado_warning }}"
-            sequence:
-              - if:
-                  - condition: state
-                    entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
-                    state: "on"
-                then:
-                  - action: light.turn_on
-                    data:
-                      entity_id:
-                        - light.dining_room_all
-                        - light.basement_great_room
-                        - light.owner_suite_lamps
-                      flash: long
-                  - action: light.turn_on
-                    data:
-                      entity_id: all
-              - action: notify.all
-                data:
-                  title: "Tornado Warning"
-                  message: "Go to the basement now."
-                  data:
-                    tag: tornado-warning
-                    persistent: true
-                    ttl: 0
-                    priority: high
-                    channel: alarm_stream
-                    push:
-                      sound:
-                        name: default
-                        critical: 1
-                        volume: 1.0
-          - alias: "Any other alert with a message"
-            conditions:
-              - condition: template
-                value_template: "{{ alert_message | trim != '' }}"
-            sequence:
-              - action: notify.all
-                data:
-                  title: "{{ alert_type if alert_type | trim != '' else 'Weather alert' }}"
-                  message: "{{ alert_message }}"
-                  data:
-                    tag: nws-weather-alert
 
   - id: window_open_departure_rain_warning
     alias: window_open_departure_rain_warning
