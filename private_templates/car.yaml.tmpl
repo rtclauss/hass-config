@@ -1425,6 +1425,22 @@ template:
           # normalization would yield a parenthesized "(40.001, -80.001)".
           destination_coords_override: >-
             {{ {'pair': (states('input_text.tesla_destination_coords_override') | default('', true) | string | trim)} }}
+          # Known places resolve without the geocoder. Every zone except
+          # zone.home (the origin) is a possible destination, matched by its
+          # friendly name or object id, normalized to lowercase words. The
+          # "lat,lon" strings stay inside mappings for the native-typing reason
+          # above.
+          zone_destinations: >-
+            {%- set ns = namespace(items=[]) -%}
+            {%- for z in states.zone -%}
+              {%- if z.entity_id != 'zone.home' and z.attributes.latitude is number and z.attributes.longitude is number -%}
+                {%- set names = [z.name | string, z.object_id | replace('_', ' ')]
+                    | map('lower') | map('regex_replace', '[^a-z0-9]+', ' ') | map('trim')
+                    | reject('eq', '') | unique | list -%}
+                {%- set ns.items = ns.items + [{'entity_id': z.entity_id, 'names': names, 'pair': (z.attributes.latitude | string ~ ',' ~ z.attributes.longitude | string)}] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.items }}
           # Carry last cycle's address -> "lat,lon" map forward. During this
           # action the sensor still holds its previous attributes, so repeat
           # recomputes of the same event reuse the cached coordinates.
@@ -1548,6 +1564,41 @@ template:
                 # location would inherit it despite the documented
                 # soonest-candidate-only scope (Codex P2 on #1199).
                 candidate_coords_from_override: false
+                # Zone-derived coordinates stay out of the address cache too,
+                # so moving or renaming a zone takes effect on the next
+                # recompute.
+                candidate_coords_from_zone: false
+                # A zone the location *names*: one whole line or comma part of
+                # the location equals a zone's name ("St Paul Curling Club").
+                # Whole-part equality, not substring, so "Mayo Clinic,
+                # Rochester MN" still geocodes to the clinic, not the city
+                # zone's center.
+                candidate_location_zone: >-
+                  {%- set raw = candidate_location | replace('\r', '') -%}
+                  {%- set parts = raw.split('\n') if '\n' in raw else raw.split(',') -%}
+                  {%- set parts = parts | map('lower') | map('regex_replace', '[^a-z0-9]+', ' ') | map('trim') | reject('eq', '') | list -%}
+                  {%- set ns = namespace(pair='') -%}
+                  {%- for z in zone_destinations -%}
+                    {%- if ns.pair == '' and (z.names | select('in', parts) | list | count) > 0 -%}
+                      {%- set ns.pair = z.pair -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                  {{ {'pair': ns.pair} }}
+                # A zone the title points at with "to <zone>" / "at <zone>"
+                # ("Drive to parents"). Only a fallback for a location that
+                # could not be geocoded: a bare word match would let titles
+                # like "Work trip to Chicago" pin a long drive to zone.work.
+                candidate_title_zone: >-
+                  {%- set title = ' ' ~ (repeat.item.message | default('', true) | string | lower | regex_replace('[^a-z0-9]+', ' ') | trim) ~ ' ' -%}
+                  {%- set ns = namespace(pair='') -%}
+                  {%- for z in zone_destinations -%}
+                    {%- for name in z.names -%}
+                      {%- if ns.pair == '' and ((' to ' ~ name ~ ' ') in title or (' at ' ~ name ~ ' ') in title) -%}
+                        {%- set ns.pair = z.pair -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  {%- endfor -%}
+                  {{ {'pair': ns.pair} }}
                 candidate_distance_mi: 0
                 candidate_duration_min: 0
                 # An event with no location is legitimately not a trip, so it
@@ -1562,9 +1613,16 @@ template:
                     candidate_scored: false
                     candidate_coords_from_override: >-
                       {{ destination_coords_override.pair != '' and repeat.item.start == override_target_start }}
+                    candidate_coords_from_zone: >-
+                      {{ not (destination_coords_override.pair != '' and repeat.item.start == override_target_start)
+                         and candidate_location_zone.pair != '' }}
+                    # Precedence: manual override, then a zone the location
+                    # names, then the address cache / geocoder below.
                     candidate_coords: >-
                       {% if destination_coords_override.pair != '' and repeat.item.start == override_target_start %}
                         {{ {'pair': destination_coords_override.pair} }}
+                      {% elif candidate_location_zone.pair != '' %}
+                        {{ {'pair': candidate_location_zone.pair} }}
                       {% else %}
                         {{ {'pair': geo_cache.get(candidate_location, '')} }}
                       {% endif %}
@@ -1637,6 +1695,15 @@ template:
                 - variables:
                     candidate_coords: >-
                       {{ {'pair': (candidate_coords.pair | default('', true) | string | trim)} }}
+                # The address could not be found: fall back to a zone the
+                # title points at, rather than a degraded 0 mi guess.
+                - if:
+                    - condition: template
+                      value_template: "{{ candidate_coords.pair == '' and candidate_title_zone.pair != '' }}"
+                  then:
+                    - variables:
+                        candidate_coords: "{{ {'pair': candidate_title_zone.pair} }}"
+                        candidate_coords_from_zone: true
                 - if:
                     - condition: template
                       value_template: "{{ candidate_coords.pair != '' and planner_home_coords.pair != '' }}"
@@ -1662,13 +1729,15 @@ template:
                           {{ (candidate_waze_result.routes[0].duration | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
             - variables:
                 # Only geocoder-derived coordinates are cached. A manual
-                # override stays out, so clearing it restores real geocoding
-                # immediately instead of leaving a stale pin behind.
+                # override or a zone match stays out, so clearing the override
+                # or editing the zone takes effect immediately instead of
+                # leaving a stale pin behind.
                 geo_cache: >-
                   {{ (geo_cache | combine({candidate_location: candidate_coords.pair}))
                      if (candidate_location != ''
                          and candidate_coords.pair != ''
-                         and not (candidate_coords_from_override in [true, 'true', 'True', 1, '1']))
+                         and not (candidate_coords_from_override in [true, 'true', 'True', 1, '1'])
+                         and not (candidate_coords_from_zone in [true, 'true', 'True', 1, '1']))
                      else geo_cache }}
                 scored_candidates: >-
                   {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min, scored=candidate_scored) ] }}
