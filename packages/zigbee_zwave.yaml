@@ -2241,58 +2241,43 @@ script:
     variables:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
-      all_inovelli_switches_energy_report_rate: >
-        {%- for device in states.number
-          | selectattr('entity_id', 'search', 'periodicpowerandenergyreports')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_active_energy_report_rate: >
-        {%- for device in states.number
-          | selectattr('entity_id', 'search', 'activeenergyreports')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_active_power_report_rate: >
-        {%- for device in states.number
-          | selectattr('entity_id', 'search', 'activepowerreports')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_double_tap_up_mode: >
-        {%- for device in states.select
-          | selectattr('entity_id', 'search', '_doubletapuptoparam55')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_double_tap_up_brightness: >
-        {%- for device in states.number
-          | selectattr('entity_id', 'search', 'brightnesslevelfordoubletapup')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_bindingofftoonsynclevel_mode: >
-        {%- for device in states.select
-          | selectattr('entity_id', 'search', 'bindingofftoonsynclevel')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true) -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
-      all_inovelli_switches_singletapbehavior_mode: >
-        {%- for device in states.select
-          | selectattr('entity_id', 'search', 'singletapbehavior')
-          | rejectattr('state', 'in', ['unknown', 'unavailable'])
-          | rejectattr('attributes.restored', 'eq', true)
-          | rejectattr('entity_id', 'search', 'exhaust')
-          | rejectattr('entity_id', 'search', 'fan_switch')
-          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
+      # Bulk settings applied to every live Inovelli entity whose ID contains
+      # `search`. Restored/unavailable entities are skipped; `exclude` lists
+      # ID substrings to leave alone (single-tap stays "New Behavior" on the
+      # exhaust fans, fan switches and the overhead outlet).
+      inovelli_bulk_settings:
+        - name: active_energy_report_rate
+          domain: number
+          search: activeenergyreports
+          value: 0
+        - name: active_power_report_rate
+          domain: number
+          search: activepowerreports
+          value: 0
+        - name: energy_report_rate
+          domain: number
+          search: periodicpowerandenergyreports
+          value: 0 # default; 623 = enhanced reporting
+        - name: double_tap_up_mode
+          domain: select
+          search: _doubletapuptoparam55
+          option: "Enabled"
+        - name: double_tap_up_brightness
+          domain: number
+          search: brightnesslevelfordoubletapup
+          value: 254
+        - name: singletapbehavior_mode
+          domain: select
+          search: singletapbehavior
+          exclude:
+            - exhaust
+            - fan_switch
+            - overhead_outlet
+          option: "Old Behavior"
+        - name: bindingofftoonsynclevel_mode
+          domain: select
+          search: bindingofftoonsynclevel
+          option: "Enabled"
       inovelli_smart_bulb_mode_replay:
         - option: "Smart Bulb Mode"
           entities:
@@ -2670,51 +2655,39 @@ script:
           name: Exclude log
           message: "Replaying saved Inovelli Zigbee2MQTT config after switch resets"
           domain: script
-      - action: number.set_value
-        target:
-          entity_id: >
-            {{all_inovelli_switches_active_energy_report_rate}}
-        data:
-          value: "0"
-      - delay: "{{ ha_write_delay }}"
-      - action: number.set_value
-        target:
-          entity_id: >
-            {{all_inovelli_switches_active_power_report_rate}}
-        data:
-          value: "0"
-      - action: number.set_value
-        target:
-          entity_id: >
-            {{all_inovelli_switches_energy_report_rate}}
-        data:
-          value: 0 # default
-          # value: "623" # enhanced reporting
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            {{all_inovelli_switches_double_tap_up_mode}}
-          option: "Enabled"
-      - delay: "{{ ha_write_delay }}"
-      - action: number.set_value
-        target:
-          entity_id: >
-            {{all_inovelli_switches_double_tap_up_brightness}}
-        data:
-          value: "254"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            {{all_inovelli_switches_singletapbehavior_mode}}
-          option: "Old Behavior"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            {{all_inovelli_switches_bindingofftoonsynclevel_mode}}
-          option: "Enabled"
+      - repeat:
+          for_each: "{{ inovelli_bulk_settings }}"
+          sequence:
+            - variables:
+                setting: "{{ repeat.item }}"
+                setting_entities: >-
+                  {{ states[setting.domain]
+                     | selectattr('entity_id', 'search', setting.search)
+                     | rejectattr('state', 'in', ['unknown', 'unavailable'])
+                     | rejectattr('attributes.restored', 'eq', true)
+                     | map(attribute='entity_id')
+                     | reject('search', (setting.exclude | default([]) | join('|')) or '^$')
+                     | list }}
+            - if:
+                - condition: template
+                  value_template: "{{ setting_entities | count > 0 }}"
+              then:
+                - if:
+                    - condition: template
+                      value_template: "{{ setting.domain == 'number' }}"
+                  then:
+                    - action: number.set_value
+                      target:
+                        entity_id: "{{ setting_entities }}"
+                      data:
+                        value: "{{ setting.value }}"
+                  else:
+                    - action: select.select_option
+                      target:
+                        entity_id: "{{ setting_entities }}"
+                      data:
+                        option: "{{ setting.option }}"
+            - delay: "{{ ha_write_delay }}"
       - delay: "{{ mqtt_bind_delay }}"
       - repeat:
           for_each: >

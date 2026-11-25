@@ -127,18 +127,40 @@ def test_all_watch_scripts_are_exposed_to_siri_and_voice_integrations() -> None:
 def test_watch_f1_script_uses_basement_apple_tv_path() -> None:
     f1_block = _script_block("watch_f1")
 
-    assert "entity_id: media_player.basement_great_room_basement_atv" in f1_block
+    assert "action: script.basement_tv_launch_app" in f1_block
     assert 'source: "F1 TV"' in f1_block
-    assert "action: script.music_assistant_pause_house_audio" in f1_block
+    assert "pause_house_audio: true" in f1_block
 
-    # Startup steps may be inlined or delegated to watch_basement_tv_startup
-    if "action: script.watch_basement_tv_startup" in f1_block:
-        startup_block = _script_block("watch_basement_tv_startup")
-        assert 'source: "HDMI 3"' in startup_block
-        assert "action: script.wait_for_basement_media_player_ready" in startup_block
-    else:
-        assert 'source: "HDMI 3"' in f1_block
-        assert "action: script.wait_for_basement_media_player_ready" in f1_block
+    launcher = _script_block("basement_tv_launch_app")
+    assert "action: script.watch_basement_tv_startup" in launcher
+    assert "entity_id: media_player.basement_great_room_basement_atv" in launcher
+    assert "action: script.music_assistant_pause_house_audio" in launcher
+
+    startup_block = _script_block("watch_basement_tv_startup")
+    assert 'source: "HDMI 3"' in startup_block
+    assert "action: script.wait_for_basement_media_player_ready" in startup_block
+
+
+def test_basement_app_watch_scripts_share_one_launcher() -> None:
+    expected = {
+        "watch_tv": ("YouTube TV", "false"),
+        "watch_youtube": ("YouTube", "false"),
+        "watch_netflix": ("Netflix", "true"),
+        "watch_plex": ("Plex", "true"),
+        "watch_f1": ("F1 TV", "true"),
+    }
+    for script_id, (source, pause) in expected.items():
+        block = _script_block(script_id)
+        assert "action: script.basement_tv_launch_app" in block
+        assert f'source: "{source}"' in block
+        assert f"pause_house_audio: {pause}" in block
+        assert "media_player.select_source" not in block
+
+    plex_show = _script_block("watch_plex_show")
+    assert "action: script.basement_tv_launch_app" in plex_show
+    assert "pause_house_audio: false" in plex_show
+    # watch_plex_show pauses house audio itself after playback starts.
+    assert plex_show.count("action: script.music_assistant_pause_house_audio") == 1
 
 
 def test_tv_paused_scene_only_restores_basement_great_room_lighting() -> None:

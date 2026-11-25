@@ -7,7 +7,7 @@ Every Home Assistant automation and script defined in this repo, with the
 `private_templates/*.tmpl` source and rendered with the synthetic example
 values, so placeholder names such as `example_zone_05` stand in for private ones.
 
-Totals: **262 automations** and **163 scripts** across 51 files.
+Totals: **254 automations** and **164 scripts** across 51 files.
 
 To keep this current, add a `description:` to every new automation or script
 and regenerate:
@@ -260,13 +260,7 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 
 | ID | Alias | Mode | Description |
 | --- | --- | --- | --- |
-| `uplift_desk_raise_for_guest_mode` | uplift_desk_raise_for_guest_mode | single | Raise the desk to its configured maximum height whenever guest mode turns on. Guest mode is the highest-priority desk state. |
-| `uplift_desk_raise_for_trip_mode` | uplift_desk_raise_for_trip_mode | single | Raise the desk to its configured maximum height whenever trip mode turns on, unless guest mode is already active. |
-| `uplift_desk_raise_for_work_camera` | uplift_desk_raise_for_work_camera | single | Move the desk to preset 2 when the work laptop camera turns on, unless guest or trip mode has already taken control. |
-| `uplift_desk_raise_when_departing` | uplift_desk_raise_when_departing | single | Raise the desk when leaving home, using both person and zone tracking. Time-based moves are suppressed whenever guest mode, trip mode, or the work camera has higher priority. |
-| `uplift_desk_lower_on_workday_arrival` | uplift_desk_lower_on_workday_arrival | single | Return the desk to preset 1 when arriving home on workdays. Weekend and holiday arrivals leave the desk raised until the Monday-morning reset. |
-| `uplift_desk_raise_in_evening` | uplift_desk_raise_in_evening | single | Raise the desk to max height at 6 PM or when the work laptop has been inactive long enough to be treated as asleep. These are considered timed moves and are suppressed by guest mode, trip mode, and the work camera rule. |
-| `uplift_desk_reset_overnight` | uplift_desk_reset_overnight | single | Return the desk to preset 1 every Monday at 4 AM, but only when no higher-priority mode is active. |
+| `uplift_desk_policy` | uplift_desk_policy | queued | Automated Uplift desk moves in priority order. Guest mode always raises the desk to max. Trip mode raises it to max unless guest mode is on. With guest and trip mode off, the work camera moves it to preset 2. With the camera also off, leaving home, 6 PM, or a laptop asleep for 10 minutes raise it to max; arriving home on a workday and the Monday 4 AM reset return it to preset 1. |
 
 ### Scripts
 
@@ -733,6 +727,7 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | `script.wait_for_basement_plex_client_ready` | Wait for Basement Plex Client | parallel | Wait until the basement Plex client is discoverable and ready before callers start Plex playback. |
 | `script.watch_basement_tv_startup` | Basement TV Startup | parallel | Shared startup for basement watch scripts: power on the Apple TV, wait for it, and switch the LG TV to the Apple TV input. |
 | `script.watch_plex_show` | Watch Plex Show | parallel | Start the basement TV, open Plex, find the Apple TV Plex client, and play the requested show shuffled while pausing house audio. |
+| `script.basement_tv_launch_app` | Basement TV Launch App | parallel | Start the basement TV, open the given Apple TV app, and optionally pause house audio. |
 | `script.watch_tv` | Watch TV | single | Start the basement TV on the live TV app. |
 | `script.watch_youtube` | Watch YouTube | single | Start the basement TV on YouTube. |
 | `script.watch_netflix` | Watch Netflix | single | Start the basement TV on Netflix and pause house audio. |
@@ -815,14 +810,12 @@ missing or this file is stale. Topic docs in `docs/` and the Allium specs in
 | --- | --- | --- | --- |
 | `alert_car_windows_open_pressure_dropping` | alert_car_windows_open_pressure_dropping | single | Warn the owner and close the parked car's windows when heavy rain is forecast in the next two hours outside winter, at most once an hour. |
 | `alert_house_windows_open_pressure_dropping` | alert_house_windows_open_pressure_dropping | single | Warn the owner when house windows are open and barometric pressure is falling quickly, at most once every four hours. |
-| `notify_tornado_warning_alert` | notify_tornado_warning_alert | single | On an NWS tornado warning, push critical alerts to both phones and turn on lights if the resident is home. |
-| `notify_weather_alert` | notify_weather_alert | single | Notify everyone of non-tornado NWS weather alerts. |
+| `notify_weather_alert` | notify_weather_alert | single | Push NWS alerts to everyone via notify.all: tornado warnings as critical shelter alerts (with lights on if the resident is home), other alerts as a normal push. |
 | `window_open_departure_rain_warning` | window_open_departure_rain_warning | single | Warn the owner when leaving home or starting a trip with windows open and rain forecast in the next 12 hours, at most once an hour. |
 | `window_open_home_rain_warning` | window_open_home_rain_warning | single | Warn the owner when home with windows open and rain is expected in the next 15 minutes, at most once an hour. |
 | `window_open_cool_weather_reminder` | window_open_cool_weather_reminder | single | Remind the owner to close windows when it is cool outside and the thermostat is working hard (aux heat or long time to target) while windows are open. |
 | `weather_alert_ui_notification_1` | Weather Alert UI Notification - 1 | single | Show a persistent UI notification for the latest NWS alert at startup and whenever the alert changes. |
 | `weather_alert_ui_notification_auto_dismiss_1` | Weather Alert UI Notification Auto-dismiss - 1 | single | Dismiss the NWS alert UI notification after 30 minutes with no active alerts. |
-| `weather_alerts_pushbullet_notification_1` | Weather Alerts Pushbullet Notification - 1 | single | Push the latest NWS alert to the owner's phone when it changes (legacy alias mentions Pushbullet). |
 | `track_pressure_source_available_since` | track_pressure_source_available_since | single | Record when the house pressure sources last became available so falling-pressure trend sensors are ignored until their sample windows refill. |
 
 ### Scripts

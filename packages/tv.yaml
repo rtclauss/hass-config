@@ -527,12 +527,10 @@ script:
         selector:
           text:
     sequence:
-      - action: script.watch_basement_tv_startup
-      - action: media_player.select_source
-        target:
-          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.basement_tv_launch_app
         data:
           source: "Plex"
+          pause_house_audio: false
       - delay:
           seconds: 2
       - action: button.press
@@ -551,18 +549,53 @@ script:
       - action: script.music_assistant_pause_house_audio
         continue_on_error: true
 
-  watch_tv:
-    alias: "Watch TV"
-    description: "Start the basement TV on the live TV app."
+  # Shared app launcher: basement TV startup, open an Apple TV app, and
+  # optionally pause house audio. The watch_* app scripts are thin
+  # wrappers so Siri/voice/dashboards keep calling them by name.
+  basement_tv_launch_app:
+    alias: "Basement TV Launch App"
+    description: "Start the basement TV, open the given Apple TV app, and optionally pause house audio."
+    mode: parallel
     trace:
       stored_traces: 50
+    fields:
+      source:
+        description: "Apple TV app/source name to open"
+        required: true
+        example: "Netflix"
+        selector:
+          text:
+      pause_house_audio:
+        description: "Pause house audio after the app opens"
+        default: true
+        selector:
+          boolean:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
         target:
           entity_id: media_player.basement_great_room_basement_atv
         data:
+          source: "{{ source }}"
+      - if:
+          - condition: template
+            value_template: "{{ pause_house_audio | default(true) | bool(true) }}"
+        then:
+          - delay:
+              seconds: 2
+          - action: script.music_assistant_pause_house_audio
+            continue_on_error: true
+
+  watch_tv:
+    alias: "Watch TV"
+    description: "Start the basement TV on the live TV app."
+    trace:
+      stored_traces: 50
+    sequence:
+      - action: script.basement_tv_launch_app
+        data:
           source: "YouTube TV"
+          pause_house_audio: false
 
   watch_youtube:
     alias: "Watch YouTube"
@@ -570,12 +603,10 @@ script:
     trace:
       stored_traces: 50
     sequence:
-      - action: script.watch_basement_tv_startup
-      - action: media_player.select_source
-        target:
-          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.basement_tv_launch_app
         data:
           source: "YouTube"
+          pause_house_audio: false
 
   watch_netflix:
     alias: "Watch Netflix"
@@ -583,16 +614,10 @@ script:
     trace:
       stored_traces: 50
     sequence:
-      - action: script.watch_basement_tv_startup
-      - action: media_player.select_source
-        target:
-          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.basement_tv_launch_app
         data:
           source: "Netflix"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-        continue_on_error: true
+          pause_house_audio: true
 
   watch_plex:
     alias: "Watch Plex"
@@ -600,16 +625,10 @@ script:
     trace:
       stored_traces: 50
     sequence:
-      - action: script.watch_basement_tv_startup
-      - action: media_player.select_source
-        target:
-          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.basement_tv_launch_app
         data:
           source: "Plex"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-        continue_on_error: true
+          pause_house_audio: true
 
   watch_f1:
     alias: "Watch F1"
@@ -617,16 +636,10 @@ script:
     trace:
       stored_traces: 50
     sequence:
-      - action: script.watch_basement_tv_startup
-      - action: media_player.select_source
-        target:
-          entity_id: media_player.basement_great_room_basement_atv
+      - action: script.basement_tv_launch_app
         data:
           source: "F1 TV"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-        continue_on_error: true
+          pause_house_audio: true
 
   watch_letterkenny:
     alias: "Watch Letterkenny"

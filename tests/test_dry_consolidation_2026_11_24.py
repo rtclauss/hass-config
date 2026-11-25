@@ -1,0 +1,119 @@
+"""Regression tests for the 2026-11-24 DRY consolidation (desk, Inovelli, weather)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+DESK_TEMPLATE = ROOT / "private_templates" / "desk.yaml.tmpl"
+ZIGBEE = ROOT / "packages" / "zigbee_zwave.yaml"
+WEATHER_TEMPLATE = ROOT / "packages" / "weather.yaml"  # rendered from private_templates
+
+
+class _Loader(yaml.SafeLoader):
+    pass
+
+
+_Loader.add_constructor("!secret", lambda loader, node: f"!secret {node.value}")
+_Loader.add_multi_constructor("!include", lambda loader, suffix, node: None)
+
+
+def _load(path: Path) -> dict:
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)
+
+
+def _automation(path: Path, automation_id: str) -> dict:
+    for automation in _load(path)["automation"]:
+        if automation.get("id") == automation_id:
+            return automation
+    raise AssertionError(f"{automation_id} not found in {path.name}")
+
+
+def _choose_aliases(choose: list[dict]) -> list[str]:
+    return [option["alias"] for option in choose]
+
+
+def test_desk_has_one_policy_automation_in_priority_order() -> None:
+    automations = _load(DESK_TEMPLATE)["automation"]
+    assert [a["id"] for a in automations] == ["uplift_desk_policy"]
+
+    policy = automations[0]
+    assert policy["mode"] == "queued"
+    trigger_ids = {t["id"] for t in policy["trigger"]}
+    assert trigger_ids == {
+        "guest_mode",
+        "trip_mode",
+        "work_camera",
+        "departed",
+        "arrived",
+        "evening",
+        "monday_reset",
+    }
+
+    options = policy["action"][0]["choose"]
+    assert _choose_aliases(options) == [
+        "Guest mode: highest priority",
+        "Trip mode unless guest mode",
+        "Work camera unless guest or trip mode",
+        "Presence and timed moves: no higher-priority mode active",
+    ]
+    # Guest mode is unconditional; each lower tier is blocked by every higher one.
+    assert options[0]["conditions"] == [{"condition": "trigger", "id": "guest_mode"}]
+    assert options[1]["conditions"][1]["entity_id"] == "input_boolean.guest_mode"
+    assert options[2]["conditions"][1]["entity_id"] == [
+        "input_boolean.guest_mode",
+        "input_boolean.trip",
+    ]
+    assert options[3]["conditions"][1]["entity_id"] == [
+        "input_boolean.guest_mode",
+        "input_boolean.trip",
+        "binary_sensor.f7m69c_5d3d6e76_camera_in_use",
+    ]
+    targets = [opt["sequence"][0]["action"] for opt in options[3]["sequence"][0]["choose"]]
+    assert targets == [
+        "script.uplift_desk_auto_move_max",
+        "script.uplift_desk_auto_move_preset_1",
+        "script.uplift_desk_auto_move_max",
+        "script.uplift_desk_auto_move_preset_1",
+    ]
+
+
+def test_inovelli_reset_bulk_settings_are_table_driven() -> None:
+    script = _load(ZIGBEE)["script"]["reset_inovelli_switches"]
+    settings = {s["name"]: s for s in script["variables"]["inovelli_bulk_settings"]}
+
+    assert set(settings) == {
+        "active_energy_report_rate",
+        "active_power_report_rate",
+        "energy_report_rate",
+        "double_tap_up_mode",
+        "double_tap_up_brightness",
+        "singletapbehavior_mode",
+        "bindingofftoonsynclevel_mode",
+    }
+    assert settings["double_tap_up_brightness"]["value"] == 254
+    assert settings["singletapbehavior_mode"]["option"] == "Old Behavior"
+    assert settings["singletapbehavior_mode"]["exclude"] == [
+        "exhaust",
+        "fan_switch",
+        "overhead_outlet",
+    ]
+    assert not any(k.startswith("all_inovelli_switches_") for k in script["variables"])
+
+
+def test_weather_alerts_use_one_notify_all_path() -> None:
+    text = WEATHER_TEMPLATE.read_text(encoding="utf-8")
+    ids = [a["id"] for a in _load(WEATHER_TEMPLATE)["automation"]]
+
+    assert "notify_tornado_warning_alert" not in ids
+    assert "weather_alerts_pushbullet_notification_1" not in ids
+    assert "notify.notify_all" not in text
+
+    alert = _automation(WEATHER_TEMPLATE, "notify_weather_alert")
+    options = alert["action"][1]["choose"]
+    tornado, other = options
+    assert tornado["sequence"][-1]["action"] == "notify.all"
+    assert tornado["sequence"][-1]["data"]["data"]["push"]["sound"]["critical"] == 1
+    assert other["sequence"][0]["action"] == "notify.all"
